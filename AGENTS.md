@@ -44,6 +44,14 @@ Do not broaden scope beyond API regression automation.
 
 Favor minimal diffs over cleanup work.
 Do not change working behavior just to make the code look more abstract or more "complete."
+Use `httpx` for HTTP client work.
+
+## Multi-Agent Workflow
+- Keep one patch per branch.
+- Start each branch from `main`.
+- Do not edit the same branch as another agent at the same time.
+- Keep diffs narrow and avoid opportunistic cleanup.
+- Before handoff or merge, validate with the protected baseline command.
 
 ## Response Format
 When reporting work, return results in this order:

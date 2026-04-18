@@ -36,7 +36,7 @@ Do not add:
 - local file-path fallback
 - alternate non-GCS happy-path fixture mode
 
-## Working Rules
+## Change Rules
 - Patch narrowly.
 - Do not refactor, redesign, generalize, or reorganize unless explicitly asked.
 - Do not modify app logic, test logic, fixtures, auth flow, config behavior, or architecture unless the task requires it.
