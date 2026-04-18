@@ -50,6 +50,12 @@ Do not add:
 - Keep diffs narrow and avoid opportunistic cleanup.
 - Before handoff or merge, use the protected `/parse` baseline command when validation is needed.
 
+## Debugging Expectations
+- Start triage from the latest terminal output, not from assumptions.
+- For matrix failures, inspect the actual response body, status code, headers, fixture metadata, and registry mapping before proposing root cause.
+- Use response-body contract clues to distinguish likely endpoint regression, auth/proxy interception, fixture mismatch, and staging instability.
+- If the available evidence does not support a confident conclusion, say what is missing and keep the diagnosis narrow.
+
 ## Output Rules
 Return results in this order:
 1. diagnosis

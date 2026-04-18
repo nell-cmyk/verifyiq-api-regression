@@ -27,6 +27,13 @@ If terminal output conflicts with assumptions or docs, trust the terminal output
 Preserve already-working behavior.
 Do not change passing behavior unless explicitly asked.
 
+## Debugging Rule
+Use evidence-first debugging for any triage work.
+
+Start with the latest terminal output and the actual failing response details before proposing causes or fixes.
+Inspect response-body contract clues, status codes, headers, and fixture metadata before escalating to broader theories.
+If evidence is incomplete, say so plainly instead of guessing.
+
 ## Fixture Rules
 GCS-backed fixtures are required for `/parse`.
 `PARSE_FIXTURE_FILE` must be a `gs://` URI.
