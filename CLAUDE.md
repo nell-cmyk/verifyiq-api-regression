@@ -53,6 +53,8 @@ Do not add:
 ## Debugging Expectations
 - Start triage from the latest terminal output, not from assumptions.
 - For matrix failures, inspect the actual response body, status code, headers, fixture metadata, and registry mapping before proposing root cause.
+- When a matrix case fails on `fileType`, check whether the registry label and the API-accepted request label differ before calling it an endpoint regression.
+- If label mismatch is relevant, state the observed registry label, the API label used or expected, and why that changes the diagnosis.
 - Use response-body contract clues to distinguish likely endpoint regression, auth/proxy interception, fixture mismatch, and staging instability.
 - If the available evidence does not support a confident conclusion, say what is missing and keep the diagnosis narrow.
 

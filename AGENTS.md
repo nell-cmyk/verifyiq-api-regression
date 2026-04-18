@@ -32,6 +32,8 @@ Use evidence-first debugging for any triage work.
 
 Start with the latest terminal output and the actual failing response details before proposing causes or fixes.
 Inspect response-body contract clues, status codes, headers, and fixture metadata before escalating to broader theories.
+When a matrix failure involves `fileType`, check whether the registry label matches the API-accepted request label before concluding the endpoint failed.
+Treat registry-to-API fileType remapping as evidence to inspect, not as an assumption to invent.
 If evidence is incomplete, say so plainly instead of guessing.
 
 ## Fixture Rules
