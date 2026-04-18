@@ -36,6 +36,10 @@ When a matrix failure involves `fileType`, check whether the registry label matc
 Treat registry-to-API fileType remapping as evidence to inspect, not as an assumption to invent.
 If evidence is incomplete, say so plainly instead of guessing.
 
+## Session Continuity
+Use curated session notes only as restart context.
+Current code, terminal output, and Git state override any saved session log or prior summary.
+
 ## Fixture Rules
 GCS-backed fixtures are required for `/parse`.
 `PARSE_FIXTURE_FILE` must be a `gs://` URI.

@@ -6,3 +6,4 @@ __pycache__/
 .python-version
 .claude/
 qa-api-tester-key.json
+reports/

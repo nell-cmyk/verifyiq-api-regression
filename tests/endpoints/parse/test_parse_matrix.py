@@ -12,7 +12,7 @@ Windows (cmd/PowerShell):
   set RUN_PARSE_MATRIX=1
   pytest tests/endpoints/parse/test_parse_matrix.py -v
 
-Generic contract assertions only. No fileType-specific checks — those belong
+Generic contract assertions only. No fileType-specific checks - those belong
 in dedicated tests if/when a fileType's behavior warrants it.
 """
 from __future__ import annotations
@@ -21,38 +21,30 @@ import httpx
 import pytest
 
 from tests.diagnostics import diagnose
+from tests.endpoints.parse.file_types import api_file_type_for
 from tests.endpoints.parse.registry import load_canonical_fixtures
 
 ENDPOINT = "/v1/documents/parse"
-_EXPECTED_FIELDS = ("fileType", "documentQuality", "summaryOCR", "summaryResult", "calculatedFields")
+_EXPECTED_FIELDS = (
+    "fileType",
+    "documentQuality",
+    "summaryOCR",
+    "summaryResult",
+    "calculatedFields",
+)
 _PARSE_TIMEOUT_SECS = 300.0
-
-# Registry → live API fileType aliases.
-# Registry labels come from the QA spreadsheet and in a few cases do not match
-# the labels the /parse API actually accepts. Normalize here only — do not
-# mutate the generator, the YAML, or the spreadsheet. Keep this list narrow
-# and append-only; each entry is an observed mismatch confirmed against staging.
-_API_FILE_TYPE_ALIASES: dict[str, str] = {
-    "TIN": "TINID",
-    "ACR": "ACRICard",
-    "WaterBill": "WaterUtilityBillingStatement",
-}
-
-
-def _api_file_type(registry_file_type: str) -> str:
-    return _API_FILE_TYPE_ALIASES.get(registry_file_type, registry_file_type)
 
 
 def _matrix_context(fixture: dict, api_file_type: str) -> str:
     """Traceability block for matrix-level failures. Sibling to diagnose()."""
     return (
-        "\n── matrix fixture ──\n"
+        "\n-- matrix fixture --\n"
         f"  registry fileType:  {fixture.get('file_type')!r}\n"
         f"  api fileType:       {api_file_type!r}\n"
         f"  source_row:         {fixture.get('source_row')}\n"
         f"  verification_status:{fixture.get('verification_status')!r}\n"
         f"  gcs_uri:            {fixture.get('gcs_uri')!r}\n"
-        "────────────────────"
+        "--------------------"
     )
 
 
@@ -67,7 +59,7 @@ _CANONICAL = load_canonical_fixtures()
 def test_parse_fixture_contract(client, fixture):
     """Generic /parse contract: 200 JSON, echoed fileType, required fields present."""
     registry_file_type = fixture["file_type"]
-    api_file_type = _api_file_type(registry_file_type)
+    api_file_type = api_file_type_for(registry_file_type)
     payload = {
         "file": fixture["gcs_uri"],
         "fileType": api_file_type,
@@ -85,7 +77,7 @@ def test_parse_fixture_contract(client, fixture):
         )
     except httpx.RequestError as exc:
         # Connect errors, DNS failures, TLS issues, RemoteProtocolError, etc.
-        # — classify transport-layer failures instead of raising a raw traceback.
+        # Classify transport-layer failures instead of raising a raw traceback.
         pytest.fail(
             f"Matrix parse transport error ({type(exc).__name__}).\n"
             f"  underlying: {exc!r}"

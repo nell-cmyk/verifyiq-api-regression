@@ -1,0 +1,4 @@
+interface:
+  display_name: "Regression Run Summary"
+  short_description: "Summarize completed regression test runs"
+  default_prompt: "Use $regression-run-summary to summarize a completed regression run and draft follow-up findings."

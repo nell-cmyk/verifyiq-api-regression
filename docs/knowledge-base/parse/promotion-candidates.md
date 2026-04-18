@@ -8,6 +8,7 @@ Rules:
 - Generated YAML remains derived data.
 - Pytest execution must stay side-effect free.
 - Candidate status does not mean promoted status.
+- Use the generated run summary under `reports/parse/matrix/` as draft source material, not as repo truth.
 
 ## Entry Template
 

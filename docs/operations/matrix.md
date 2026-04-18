@@ -4,6 +4,30 @@ Use evidence-first triage for opt-in `/parse` matrix failures.
 
 See also: [Repo Roadmap](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/knowledge-base/repo-roadmap.md)
 
+## Post-Run Summary
+Preferred wrapper:
+
+```powershell
+python .codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py
+```
+
+This wrapper:
+- runs the opt-in `/parse` matrix
+- saves terminal output to `reports/parse/matrix/latest-terminal.txt`
+- generates `reports/parse/matrix/latest-summary.md`
+
+Direct manual flow if you need to separate the steps:
+
+PowerShell example:
+
+```powershell
+$env:RUN_PARSE_MATRIX='1'
+pytest tests/endpoints/parse/test_parse_matrix.py -v 2>&1 | Tee-Object -FilePath reports/parse/matrix/latest-terminal.txt
+python .codex/skills/regression-run-summary/scripts/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
+```
+
+Use `--mode apply` only after reviewing the generated draft summary.
+
 ## Decision Flow
 1. Start with the latest terminal output.
 2. Identify the failing `fileType`, pytest node ID, status code, and fixture metadata.
