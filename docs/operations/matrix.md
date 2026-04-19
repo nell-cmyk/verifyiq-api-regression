@@ -11,7 +11,7 @@ without `RUN_PARSE_MATRIX=1` raises a collection error.
 Preferred wrapper:
 
 ```powershell
-python .codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py
+python tools/reporting/run_parse_matrix_with_summary.py
 ```
 
 This wrapper:
@@ -27,7 +27,7 @@ python tools/run_parse_full_regression.py
 
 This runs:
 - protected baseline: `pytest tests/endpoints/parse/ -v`
-- matrix wrapper: `python .codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py`
+- matrix wrapper: `python tools/reporting/run_parse_matrix_with_summary.py`
 
 Direct manual flow if you need to separate the steps:
 
@@ -36,10 +36,13 @@ PowerShell example:
 ```powershell
 $env:RUN_PARSE_MATRIX='1'
 pytest tests/endpoints/parse/test_parse_matrix.py -v 2>&1 | Tee-Object -FilePath reports/parse/matrix/latest-terminal.txt
-python .codex/skills/regression-run-summary/scripts/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
+python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
 ```
 
 Use `--mode apply` only after reviewing the generated draft summary.
+
+Legacy compatibility note:
+- The older `.codex/skills/regression-run-summary/scripts/...` paths still work during the transition, but `tools/reporting/` is the canonical repo-facing home for reporting commands.
 
 ## Decision Flow
 1. Start with the latest terminal output.

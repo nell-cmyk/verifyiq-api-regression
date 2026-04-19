@@ -9,10 +9,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MATRIX_WRAPPER = (
     REPO_ROOT
-    / ".codex"
-    / "skills"
-    / "regression-run-summary"
-    / "scripts"
+    / "tools"
+    / "reporting"
     / "run_parse_matrix_with_summary.py"
 )
 

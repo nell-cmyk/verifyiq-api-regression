@@ -45,7 +45,7 @@ _PARSE_TIMEOUT_SECS = 300.0
 if os.getenv("RUN_PARSE_MATRIX") != "1":
     raise RuntimeError(
         "The /parse matrix is opt-in only. Use "
-        "`python .codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py` "
+        "`python tools/reporting/run_parse_matrix_with_summary.py` "
         "or set RUN_PARSE_MATRIX=1 explicitly before running "
         "`tests/endpoints/parse/test_parse_matrix.py`."
     )

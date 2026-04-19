@@ -23,7 +23,7 @@ DEFAULT_PROMOTION_CANDIDATES = (
 )
 DEFAULT_MATRIX_COMMAND = (
     f"{sys.executable} "
-    ".codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py"
+    "tools/reporting/run_parse_matrix_with_summary.py"
 )
 
 

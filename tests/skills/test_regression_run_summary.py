@@ -9,10 +9,8 @@ from tests.endpoints.parse.registry import load_canonical_fixtures
 
 SCRIPT_PATH = (
     Path(__file__).resolve().parents[2]
-    / ".codex"
-    / "skills"
-    / "regression-run-summary"
-    / "scripts"
+    / "tools"
+    / "reporting"
     / "render_regression_summary.py"
 )
 
@@ -46,7 +44,7 @@ def _run_summary(
     generated_at: str = "2026-04-19T12:00:00Z",
     command: str = (
         f"{sys.executable} "
-        ".codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py"
+        "tools/reporting/run_parse_matrix_with_summary.py"
     ),
 ) -> tuple[str, str, Path]:
     input_path = tmp_path / "terminal.txt"
@@ -104,7 +102,7 @@ def test_draft_summary_includes_registry_api_and_candidate_suggestions(tmp_path)
     assert "### Candidate: `2026-04-19 TIN" in summary_text
     assert (
         "Matrix run command: "
-        f"`{sys.executable} .codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py`"
+        f"`{sys.executable} tools/reporting/run_parse_matrix_with_summary.py`"
         in summary_text
     )
     assert "Request fileType used: `TINID`" in summary_text

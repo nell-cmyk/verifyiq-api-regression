@@ -6,10 +6,8 @@ from pathlib import Path
 
 WRAPPER_PATH = (
     Path(__file__).resolve().parents[2]
-    / ".codex"
-    / "skills"
-    / "regression-run-summary"
-    / "scripts"
+    / "tools"
+    / "reporting"
     / "run_parse_matrix_with_summary.py"
 )
 

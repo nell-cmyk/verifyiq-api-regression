@@ -25,7 +25,7 @@ Protected baseline:
 - Current expected result: `10 passed, 2 warnings`
 
 Additional explicit tier commands:
-- Matrix only: `python .codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py`
+- Matrix only: `python tools/reporting/run_parse_matrix_with_summary.py`
 - Full regression: `python tools/run_parse_full_regression.py`
 
 Preserve already-working behavior.
@@ -47,6 +47,14 @@ Do not add:
 - Do not modify app logic, test logic, fixtures, auth flow, config behavior, or architecture unless the task requires it.
 - Prefer minimal diffs over cleanup work.
 - Use `httpx` for HTTP client work.
+
+## Canonical Homes
+- Repo-owned executable commands live under `tools/`.
+- Human-facing reporting entrypoints live under `tools/reporting/`.
+- `.codex/skills/` is for agent packaging and adapters, not the primary home for shared repo utilities.
+- `docs/operations/` holds runbooks and commands.
+- `docs/knowledge-base/` holds durable findings.
+- `reports/` is generated output only.
 
 ## Multi-Agent Workflow
 - Keep one patch per branch.

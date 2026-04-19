@@ -22,7 +22,7 @@ Protected baseline:
 - Current expected result: `10 passed, 2 warnings`
 
 Additional explicit tier commands:
-- Matrix only: `python .codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py`
+- Matrix only: `python tools/reporting/run_parse_matrix_with_summary.py`
 - Full regression: `python tools/run_parse_full_regression.py`
 
 Use the latest terminal output as the source of truth for status, regressions, and validation results.
@@ -65,6 +65,14 @@ Favor minimal diffs over cleanup work.
 Do not change working behavior just to make the code look more abstract or more "complete."
 Use `httpx` for HTTP client work.
 
+## Canonical Homes
+- Repo-owned executable commands live under `tools/`.
+- Human-facing reporting entrypoints live under `tools/reporting/`.
+- `.codex/skills/` is for agent packaging and adapters, not the primary home for shared repo utilities.
+- `docs/operations/` holds runbooks and commands.
+- `docs/knowledge-base/` holds durable findings.
+- `reports/` is generated output only.
+
 ## Multi-Agent Workflow
 - Keep one patch per branch.
 - Start each branch from `main`.
@@ -93,6 +101,9 @@ Guardrails:
 - The script refuses to continue if unstaged or untracked files remain after optional staging.
 - `--auto-message` is explicit and generates a short message from the staged file paths.
 - The script does not auto-push on ordinary file changes.
+
+Reporting note:
+- Prefer `python tools/reporting/run_parse_matrix_with_summary.py` over the older deep `.codex/.../scripts/...` path when documenting or running the matrix workflow.
 
 ## Response Format
 When reporting work, return results in this order:

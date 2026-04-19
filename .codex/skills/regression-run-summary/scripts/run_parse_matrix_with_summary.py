@@ -14,6 +14,7 @@ DEFAULT_SUMMARY_OUTPUT = REPO_ROOT / "reports" / "parse" / "matrix" / "latest-su
 DEFAULT_PROMOTION_CANDIDATES = (
     REPO_ROOT / "docs" / "knowledge-base" / "parse" / "promotion-candidates.md"
 )
+CANONICAL_WRAPPER = REPO_ROOT / "tools" / "reporting" / "run_parse_matrix_with_summary.py"
 
 
 def _default_pytest_command() -> list[str]:
@@ -40,7 +41,7 @@ def _reported_command(*, mode: str, custom_command: list[str]) -> str:
     if custom_command:
         return _command_display(custom_command)
 
-    wrapper_command = [sys.executable, str(Path(__file__).resolve())]
+    wrapper_command = [sys.executable, str(CANONICAL_WRAPPER)]
     if mode == "apply":
         wrapper_command.extend(["--mode", "apply"])
     return _command_display(wrapper_command)
