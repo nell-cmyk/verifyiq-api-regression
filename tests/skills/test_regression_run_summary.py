@@ -105,6 +105,7 @@ def test_draft_summary_includes_registry_api_and_candidate_suggestions(tmp_path)
         f"`{sys.executable} tools/reporting/run_parse_matrix_with_summary.py`"
         in summary_text
     )
+    assert ".codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py" not in summary_text
     assert "Request fileType used: `TINID`" in summary_text
     assert promotion_path.read_text(encoding="utf-8").strip() == "# Promotion Candidates\n\n## Entries"
 

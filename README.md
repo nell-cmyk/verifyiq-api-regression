@@ -38,4 +38,4 @@ Python-first API regression automation for VerifyIQ, currently centered on the p
 ## Notes
 - The protected baseline behavior must stay unchanged: `pytest tests/endpoints/parse/ -v`
 - The matrix remains opt-in and separate from the default baseline.
-- The human-facing reporting commands now live under `tools/reporting/`. The older `.codex/.../scripts/...` paths remain compatible during the transition.
+- The human-facing reporting commands live under `tools/reporting/`.

@@ -74,7 +74,7 @@ Do not add:
 - If the available evidence does not support a confident conclusion, say what is missing and keep the diagnosis narrow.
 
 ## Startup Workflow
-- On a resumed session, read the current session context note if it exists, then verify it against the current repo state.
+- On a resumed session, read `docs/operations/current-handoff.md` if it exists, then verify it against the current repo state.
 - Re-check Git status, current branch, and latest terminal evidence before acting on saved context.
 - If saved context conflicts with code, terminal output, or Git state, trust the live repo state and update the diagnosis accordingly.
 
