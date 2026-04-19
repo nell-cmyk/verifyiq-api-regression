@@ -1,14 +1,17 @@
 # /parse Promotion Candidates
 
-Use this file to record manual promotion candidates for canonical fixtures that were `unverified` in the registry and later passed in the opt-in `/parse` matrix.
+Use this file to record reviewed promotion candidates for canonical fixtures that were `unverified` in the registry and later passed in the opt-in `/parse` matrix.
+
+See also: [Fixtures and Promotion](fixtures-and-promotion.md), [Triage Patterns](triage-patterns.md)
 
 Rules:
-- This file is a knowledge-base record only.
+- This file is the reviewed candidate ledger only.
 - The spreadsheet remains the human source of truth.
 - Generated YAML remains derived data.
 - Pytest execution must stay side-effect free.
 - Candidate status does not mean promoted status.
 - Use the generated run summary under `reports/parse/matrix/` as draft source material, not as repo truth.
+- Do not turn this page into a run-by-run session log.
 
 ## Entry Template
 
