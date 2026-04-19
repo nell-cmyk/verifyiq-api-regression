@@ -18,7 +18,7 @@ Rules:
 - Environment:
 - Matrix run command:
 - Registry fileType:
-- API fileType used:
+- Request fileType used:
 - Registry row:
 - Fixture name:
 - GCS URI:

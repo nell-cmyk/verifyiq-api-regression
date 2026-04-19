@@ -4,7 +4,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tests.endpoints.parse.file_types import api_file_type_for
+from tests.endpoints.parse.file_types import request_file_type_for
 from tests.endpoints.parse.registry import load_canonical_fixtures
 
 SCRIPT_PATH = (
@@ -44,6 +44,10 @@ def _run_summary(
     *,
     mode: str = "draft",
     generated_at: str = "2026-04-19T12:00:00Z",
+    command: str = (
+        f"{sys.executable} "
+        ".codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py"
+    ),
 ) -> tuple[str, str, Path]:
     input_path = tmp_path / "terminal.txt"
     output_path = tmp_path / "summary.md"
@@ -67,7 +71,7 @@ def _run_summary(
         "--generated-at",
         generated_at,
         "--command",
-        "pytest tests/endpoints/parse/test_parse_matrix.py -v",
+        command,
     ]
     completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
     return completed.stdout, output_path.read_text(encoding="utf-8"), promotion_path
@@ -91,14 +95,19 @@ def test_draft_summary_includes_registry_api_and_candidate_suggestions(tmp_path)
 
     assert "Draft mode only" in stdout
     assert "Registry fileType" in summary_text
+    assert "Request fileType" in summary_text
     assert "`TIN`" in summary_text
-    assert f"`{api_file_type_for('TIN')}`" in summary_text
+    assert f"`{request_file_type_for('TIN')}`" in summary_text
     assert str(tin_fixture["source_row"]) in summary_text
     assert bank_fixture["name"] in summary_text
     assert "Passed unverified canonicals: TIN." in summary_text
     assert "### Candidate: `2026-04-19 TIN" in summary_text
-    assert "Matrix run command: `pytest tests/endpoints/parse/test_parse_matrix.py -v`" in summary_text
-    assert "API fileType used: `TINID`" in summary_text
+    assert (
+        "Matrix run command: "
+        f"`{sys.executable} .codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py`"
+        in summary_text
+    )
+    assert "Request fileType used: `TINID`" in summary_text
     assert promotion_path.read_text(encoding="utf-8").strip() == "# Promotion Candidates\n\n## Entries"
 
 
@@ -136,7 +145,7 @@ def test_summary_classifies_timeout_and_proxy_like_failures(tmp_path):
     _, summary_text, _ = _run_summary(tmp_path, terminal_text, mode="draft")
 
     assert "| FAILED | timeout | TIN | TINID |" in summary_text
-    assert f"| FAILED | auth-proxy | ACR | {api_file_type_for('ACR')} |" in summary_text
+    assert f"| FAILED | auth-proxy | ACR | {request_file_type_for('ACR')} |" in summary_text
     assert str(tin_fixture["source_row"]) in summary_text
     assert acr_fixture["name"] in summary_text
     assert "Failure classes observed: auth-proxy, timeout." in summary_text
@@ -158,5 +167,5 @@ def test_apply_mode_appends_promotion_candidates_only(tmp_path):
     assert "Applied 1 promotion candidate entry" in stdout
     assert "### Candidate: `2026-04-19 TIN" in promotion_text
     assert "Registry fileType: `TIN`" in promotion_text
-    assert "API fileType used: `TINID`" in promotion_text
+    assert "Request fileType used: `TINID`" in promotion_text
     assert "No passed unverified canonical fixtures" not in summary_text

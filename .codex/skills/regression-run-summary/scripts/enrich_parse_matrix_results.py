@@ -10,7 +10,7 @@ REPO_ROOT = SCRIPT_DIR.parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from tests.endpoints.parse.file_types import api_file_type_for
+from tests.endpoints.parse.file_types import request_file_type_for
 from tests.endpoints.parse.registry import load_canonical_fixtures
 
 from parse_pytest_terminal import ParsedTerminalRun
@@ -25,7 +25,7 @@ class EnrichedParseResult:
     failure_class: str
     note: str
     registry_file_type: str
-    api_file_type: str
+    request_file_type: str
     fixture_name: str | None
     registry_row: int | None
     verification_status: str | None
@@ -82,7 +82,7 @@ def enrich_parse_matrix_results(parsed_run: ParsedTerminalRun) -> list[EnrichedP
     for result in parsed_run.results:
         fixture = canonical_by_file_type.get(result.test_id, {})
         registry_file_type = result.test_id
-        api_file_type = api_file_type_for(registry_file_type)
+        request_file_type = request_file_type_for(registry_file_type)
         failure_class, note = classify_failure(result.status, result.failure_text)
         enriched.append(
             EnrichedParseResult(
@@ -91,7 +91,7 @@ def enrich_parse_matrix_results(parsed_run: ParsedTerminalRun) -> list[EnrichedP
                 failure_class=failure_class,
                 note=note,
                 registry_file_type=registry_file_type,
-                api_file_type=api_file_type,
+                request_file_type=request_file_type,
                 fixture_name=fixture.get("name"),
                 registry_row=fixture.get("source_row"),
                 verification_status=fixture.get("verification_status"),

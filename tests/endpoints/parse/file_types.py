@@ -1,13 +1,16 @@
-"""Shared registry-to-API fileType mapping for /parse matrix-style flows."""
+"""Registry-to-request fileType policy for /parse."""
 from __future__ import annotations
 
-API_FILE_TYPE_ALIASES: dict[str, str] = {
+REQUEST_FILE_TYPE_ALIASES: dict[str, str] = {
     "TIN": "TINID",
     "ACR": "ACRICard",
     "WaterBill": "WaterUtilityBillingStatement",
 }
 
 
-def api_file_type_for(registry_file_type: str) -> str:
-    """Return the API-accepted fileType for a registry fileType label."""
-    return API_FILE_TYPE_ALIASES.get(registry_file_type, registry_file_type)
+def request_file_type_for(registry_file_type: str) -> str:
+    """Return the request fileType for a registry fileType label."""
+    value = registry_file_type.strip()
+    if not value:
+        raise ValueError("registry file_type must be a non-empty string")
+    return REQUEST_FILE_TYPE_ALIASES.get(value, value)

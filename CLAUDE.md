@@ -24,12 +24,17 @@ Protected baseline:
 - Command: `pytest tests/endpoints/parse/ -v`
 - Current expected result: `10 passed, 2 warnings`
 
+Additional explicit tier commands:
+- Matrix only: `python .codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py`
+- Full regression: `python tools/run_parse_full_regression.py`
+
 Preserve already-working behavior.
 Do not change passing behavior unless explicitly asked.
 
 ## Fixture Rules
 GCS-backed fixtures are required for `/parse`.
 `PARSE_FIXTURE_FILE` must be a `gs://` URI.
+Request `fileType` follows the explicit repo mapping in `tests/endpoints/parse/file_types.py`.
 
 Do not add:
 - local fixture fallback
@@ -49,12 +54,14 @@ Do not add:
 - Do not let multiple agents edit the same branch at the same time.
 - Keep diffs narrow and avoid opportunistic cleanup.
 - Before handoff or merge, use the protected `/parse` baseline command when validation is needed.
+- The `/parse` matrix is opt-in and hard-gated in code; direct module execution without `RUN_PARSE_MATRIX=1` is an error.
 
 ## Debugging Expectations
 - Start triage from the latest terminal output, not from assumptions.
 - For matrix failures, inspect the actual response body, status code, headers, fixture metadata, and registry mapping before proposing root cause.
-- When a matrix case fails on `fileType`, check whether the registry label and the API-accepted request label differ before calling it an endpoint regression.
-- If label mismatch is relevant, state the observed registry label, the API label used or expected, and why that changes the diagnosis.
+- Under the current repo policy, request `fileType` comes from the explicit repo mapping in `tests/endpoints/parse/file_types.py`.
+- Current aliases: `TIN -> TINID`, `ACR -> ACRICard`, `WaterBill -> WaterUtilityBillingStatement`.
+- When a matrix case fails on `fileType`, state the registry label, the mapped request label, and the response label that came back.
 - Use response-body contract clues to distinguish likely endpoint regression, auth/proxy interception, fixture mismatch, and staging instability.
 - If the available evidence does not support a confident conclusion, say what is missing and keep the diagnosis narrow.
 

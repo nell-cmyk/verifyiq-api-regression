@@ -1,6 +1,6 @@
 ---
 name: regression-run-summary
-description: Summarize completed API regression runs and draft follow-up findings. Use when a pytest-based regression run has already finished and you want a terminal-first summary, failure classification, remap-aware /parse matrix triage, or copy-ready promotion-candidate text without mutating suite state during the run.
+description: Summarize completed API regression runs and draft follow-up findings. Use when a pytest-based regression run has already finished and you want a terminal-first summary, failure classification, mapped-fileType /parse matrix triage, or copy-ready promotion-candidate text without mutating suite state during the run.
 ---
 
 # Regression Run Summary
@@ -20,7 +20,7 @@ Generate a post-run summary after a completed regression run. Default to safe dr
 - For `/parse`, treat the terminal output as the run record and enrich results with:
   - canonical registry metadata
   - registry `fileType`
-  - API `fileType`
+  - request `fileType`
   - promotion-candidate eligibility
 
 ## Safety Rules

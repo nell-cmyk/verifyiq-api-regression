@@ -36,6 +36,16 @@ def _command_display(command: list[str]) -> str:
     return subprocess.list2cmdline(command)
 
 
+def _reported_command(*, mode: str, custom_command: list[str]) -> str:
+    if custom_command:
+        return _command_display(custom_command)
+
+    wrapper_command = [sys.executable, str(Path(__file__).resolve())]
+    if mode == "apply":
+        wrapper_command.extend(["--mode", "apply"])
+    return _command_display(wrapper_command)
+
+
 def run_matrix_and_capture(command: list[str], terminal_output: Path) -> int:
     terminal_output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -111,9 +121,9 @@ def main() -> int:
     terminal_output = Path(args.terminal_output).resolve()
     summary_output = Path(args.summary_output).resolve()
     promotion_candidates_path = Path(args.promotion_candidates_path).resolve()
-    command_display = _command_display(command)
+    command_display = _reported_command(mode=args.mode, custom_command=custom_command)
 
-    print(f"Running matrix command: {command_display}")
+    print(f"Running matrix command: {_command_display(command)}")
     pytest_rc = run_matrix_and_capture(command, terminal_output)
 
     summary_rc = render_summary(

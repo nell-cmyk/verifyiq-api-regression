@@ -4,12 +4,13 @@ Use this reference when summarizing completed `/parse` runs.
 
 ## Inputs
 - Saved pytest terminal output from a completed run.
-- Live repo state for canonical fixture metadata and current registry-to-API fileType remaps.
+- Live repo state for canonical fixture metadata and the current registry-to-request fileType mapping.
 
 ## Triage Rules
 - Treat terminal output as the run record.
-- For matrix runs, include both registry `fileType` and API `fileType`.
-- Check registry-to-API fileType remaps before concluding endpoint failure.
+- For matrix runs, include both registry `fileType` and request `fileType`.
+- Under the current repo policy, request `fileType` comes from the explicit repo mapping in `tests/endpoints/parse/file_types.py`.
+- Current aliases: `TIN -> TINID`, `ACR -> ACRICard`, `WaterBill -> WaterUtilityBillingStatement`.
 - Treat passed `unverified` canonical fixtures as promotion candidates, not promoted facts.
 
 ## Draft Mode

@@ -6,9 +6,13 @@ collection so the protected baseline command
 by pointing pytest at the matrix module with `RUN_PARSE_MATRIX=1` set:
 
   RUN_PARSE_MATRIX=1 pytest tests/endpoints/parse/test_parse_matrix.py -v
+
+Direct module execution without `RUN_PARSE_MATRIX=1` also fails inside the
+matrix module so accidental live collection is blocked even when `collect_ignore`
+does not apply.
 """
 import os
 
 collect_ignore: list[str] = []
-if not os.getenv("RUN_PARSE_MATRIX"):
+if os.getenv("RUN_PARSE_MATRIX") != "1":
     collect_ignore.append("test_parse_matrix.py")

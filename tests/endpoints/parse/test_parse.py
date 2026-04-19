@@ -13,7 +13,12 @@ import pytest
 
 from tests.client import platform_auth_headers
 from tests.config import BASE_URL
-from tests.diagnostics import diagnose
+from tests.diagnostics import (
+    diagnose,
+    parse_json_or_fail,
+    request_error_diagnostics,
+    timeout_diagnostics,
+)
 from tests.endpoints.parse.fixtures import (
     PARSE_FIXTURE_FILE,
     PARSE_FIXTURE_FILE_TYPE,
@@ -23,17 +28,6 @@ from tests.endpoints.parse.fixtures import (
 ENDPOINT = "/v1/documents/parse"
 
 _EXPECTED_FIELDS = ("fileType", "documentQuality", "summaryOCR", "summaryResult", "calculatedFields")
-
-
-def _json(resp: httpx.Response) -> dict:
-    """Parse JSON defensively so non-JSON 200s (e.g. IAP HTML) fail with a classifiable message."""
-    try:
-        return resp.json()
-    except ValueError as exc:
-        pytest.fail(
-            f"Response was not valid JSON: {exc}"
-            + diagnose(resp, fixture_file=PARSE_FIXTURE_FILE)
-        )
 
 
 # ── Shared response fixture ───────────────────────────────────────────────────
@@ -54,18 +48,28 @@ def parse_response(client):
             json=PARSE_REQUEST_BASE,
             timeout=PARSE_HAPPY_TIMEOUT_SECS,
         )
-    except httpx.ReadTimeout as exc:
+    except httpx.TimeoutException as exc:
         pytest.fail(
-            f"Parse happy-path request timed out after "
-            f"{PARSE_HAPPY_TIMEOUT_SECS:.0f}s.\n"
-            f"  fixture:      {PARSE_FIXTURE_FILE!r}\n"
-            f"  fileType:     {PARSE_FIXTURE_FILE_TYPE!r}\n"
-            "The staging parse endpoint did not respond within the allotted time. "
-            "Consider: (a) raising PARSE_HAPPY_TIMEOUT_SECS if this fixture is "
+            timeout_diagnostics(
+                exc,
+                context="Parse happy-path request",
+                timeout_secs=PARSE_HAPPY_TIMEOUT_SECS,
+                fixture_file=PARSE_FIXTURE_FILE,
+                file_type=PARSE_FIXTURE_FILE_TYPE,
+            )
+            + "\nConsider: (a) raising PARSE_HAPPY_TIMEOUT_SECS if this fixture is "
             "legitimately heavy, (b) switching PARSE_FIXTURE_FILE to a lighter "
             "document for the regression baseline, (c) checking staging health / "
-            "LLM latency upstream.\n"
-            f"  underlying: {exc!r}"
+            "LLM latency upstream."
+        )
+    except httpx.RequestError as exc:
+        pytest.fail(
+            request_error_diagnostics(
+                exc,
+                context="Parse happy-path request",
+                fixture_file=PARSE_FIXTURE_FILE,
+                file_type=PARSE_FIXTURE_FILE_TYPE,
+            )
         )
 
 
@@ -81,7 +85,11 @@ class TestParseHappyPath:
         assert parse_response.status_code == 200, diagnose(
             parse_response, fixture_file=PARSE_FIXTURE_FILE
         )
-        body = _json(parse_response)
+        body = parse_json_or_fail(
+            parse_response,
+            context="Parse happy-path response",
+            fixture_file=PARSE_FIXTURE_FILE,
+        )
         missing = [f for f in _EXPECTED_FIELDS if f not in body]
         assert not missing, (
             f"Missing fields in parse response: {missing}"
@@ -92,7 +100,11 @@ class TestParseHappyPath:
         assert parse_response.status_code == 200, diagnose(
             parse_response, fixture_file=PARSE_FIXTURE_FILE
         )
-        body = _json(parse_response)
+        body = parse_json_or_fail(
+            parse_response,
+            context="Parse happy-path response",
+            fixture_file=PARSE_FIXTURE_FILE,
+        )
         assert body.get("fileType") == PARSE_FIXTURE_FILE_TYPE, (
             f"fileType mismatch: expected {PARSE_FIXTURE_FILE_TYPE!r}, "
             f"got {body.get('fileType')!r}"
@@ -104,7 +116,11 @@ class TestParseHappyPath:
         assert parse_response.status_code == 200, diagnose(
             parse_response, fixture_file=PARSE_FIXTURE_FILE
         )
-        cf = _json(parse_response).get("calculatedFields")
+        cf = parse_json_or_fail(
+            parse_response,
+            context="Parse happy-path response",
+            fixture_file=PARSE_FIXTURE_FILE,
+        ).get("calculatedFields")
         assert cf != {"pageNumber": 1}, (
             "calculatedFields is the config-missing stub value — "
             "computed_fields config may be absent or misconfigured for this fileType"
@@ -125,17 +141,31 @@ _AUTH_NEGATIVE_TIMEOUT_SECS = 10.0
 def _assert_auth_rejection(client: httpx.Client, *, context: str) -> None:
     try:
         resp = client.post(ENDPOINT, json=PARSE_REQUEST_BASE)
-    except httpx.ReadTimeout:
+    except httpx.TimeoutException as exc:
         warnings.warn(
-            f"Auth-negative '{context}': request hung past "
-            f"{_AUTH_NEGATIVE_TIMEOUT_SECS}s (no fast-reject on staging). "
-            "Treating timeout as valid negative outcome — server did not "
+            timeout_diagnostics(
+                exc,
+                context=f"Auth-negative '{context}'",
+                timeout_secs=_AUTH_NEGATIVE_TIMEOUT_SECS,
+                fixture_file=PARSE_FIXTURE_FILE,
+                file_type=PARSE_FIXTURE_FILE_TYPE,
+            )
+            + "\nTreating timeout as valid negative outcome — server did not "
             "successfully process the request.",
             stacklevel=2,
         )
         return
+    except httpx.RequestError as exc:
+        pytest.fail(
+            request_error_diagnostics(
+                exc,
+                context=f"Auth-negative '{context}'",
+                fixture_file=PARSE_FIXTURE_FILE,
+                file_type=PARSE_FIXTURE_FILE_TYPE,
+            )
+        )
     assert resp.status_code in (401, 403), (
-        f"Auth-negative '{context}': expected 401/403 or ReadTimeout, "
+        f"Auth-negative '{context}': expected 401/403 or timeout, "
         f"got {resp.status_code}"
         + diagnose(resp, fixture_file=PARSE_FIXTURE_FILE)
     )
@@ -197,7 +227,7 @@ class TestParseValidation:
         assert resp.status_code == 422, (
             f"Expected 422, got {resp.status_code}" + diagnose(resp)
         )
-        body = _json(resp)
+        body = parse_json_or_fail(resp, context="Parse validation response")
         assert "detail" in body, "Missing 'detail' in 422 response" + diagnose(resp)
         assert isinstance(body["detail"], list), "'detail' must be a list" + diagnose(resp)
         if body["detail"]:

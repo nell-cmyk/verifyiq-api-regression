@@ -7,6 +7,7 @@ Goal: when an assertion fails, output enough context to classify the failure
 from __future__ import annotations
 
 import httpx
+import pytest
 
 
 def diagnose(resp: httpx.Response, *, fixture_file: str | None = None) -> str:
@@ -66,3 +67,94 @@ def diagnose(resp: httpx.Response, *, fixture_file: str | None = None) -> str:
         lines.extend(f"    - {h}" for h in hints)
     lines.append("──────────────")
     return "\n".join(lines)
+
+
+def _request_failure_block(
+    exc: Exception,
+    *,
+    fixture_file: str | None = None,
+    file_type: str | None = None,
+    timeout_secs: float | None = None,
+    extra_context: str = "",
+) -> str:
+    request = getattr(exc, "request", None)
+    method = getattr(request, "method", "<unknown>")
+    url = getattr(request, "url", "<unknown>")
+
+    lines = [
+        "",
+        "── request failure ──",
+        f"  exception:          {type(exc).__name__}",
+        f"  method:             {method}",
+        f"  url:                {url}",
+    ]
+    if timeout_secs is not None:
+        lines.append(f"  timeout_secs:       {timeout_secs:.0f}")
+    if file_type is not None:
+        lines.append(f"  fileType:           {file_type}")
+    if fixture_file is not None:
+        lines.append(f"  fixture:            {fixture_file}")
+    lines.append(f"  underlying:         {exc!r}")
+    lines.append("──────────────")
+    details = "\n".join(lines)
+    if extra_context:
+        details += extra_context
+    return details
+
+
+def timeout_diagnostics(
+    exc: httpx.TimeoutException,
+    *,
+    context: str,
+    timeout_secs: float,
+    fixture_file: str | None = None,
+    file_type: str | None = None,
+    extra_context: str = "",
+) -> str:
+    return (
+        f"{context} timed out after {timeout_secs:.0f}s."
+        + _request_failure_block(
+            exc,
+            fixture_file=fixture_file,
+            file_type=file_type,
+            timeout_secs=timeout_secs,
+            extra_context=extra_context,
+        )
+    )
+
+
+def request_error_diagnostics(
+    exc: httpx.RequestError,
+    *,
+    context: str,
+    fixture_file: str | None = None,
+    file_type: str | None = None,
+    extra_context: str = "",
+) -> str:
+    return (
+        f"{context} transport error ({type(exc).__name__})."
+        + _request_failure_block(
+            exc,
+            fixture_file=fixture_file,
+            file_type=file_type,
+            extra_context=extra_context,
+        )
+    )
+
+
+def parse_json_or_fail(
+    resp: httpx.Response,
+    *,
+    context: str,
+    fixture_file: str | None = None,
+    extra_context: str = "",
+) -> dict:
+    """Parse JSON defensively so non-JSON responses fail with classifiable output."""
+    try:
+        return resp.json()
+    except ValueError as exc:
+        pytest.fail(
+            f"{context} was not valid JSON: {exc}"
+            + diagnose(resp, fixture_file=fixture_file)
+            + extra_context
+        )

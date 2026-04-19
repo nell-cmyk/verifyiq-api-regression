@@ -1,5 +1,7 @@
 import os
 
+from tests.endpoints.parse.file_types import request_file_type_for
+
 
 def _require_fixture(name: str) -> str:
     value = os.getenv(name, "").strip()
@@ -13,7 +15,7 @@ def _require_fixture(name: str) -> str:
 
 
 PARSE_FIXTURE_FILE: str = _require_fixture("PARSE_FIXTURE_FILE")
-PARSE_FIXTURE_FILE_TYPE: str = _require_fixture("PARSE_FIXTURE_FILE_TYPE")
+PARSE_FIXTURE_FILE_TYPE: str = request_file_type_for(_require_fixture("PARSE_FIXTURE_FILE_TYPE"))
 
 if not PARSE_FIXTURE_FILE.startswith("gs://"):
     raise RuntimeError(

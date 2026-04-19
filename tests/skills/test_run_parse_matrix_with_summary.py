@@ -82,6 +82,7 @@ def test_wrapper_runs_command_and_generates_summary(tmp_path):
     assert "PASSED [100%]" in terminal_output.read_text(encoding="utf-8")
     summary_text = summary_output.read_text(encoding="utf-8")
     assert "Registry fileType" in summary_text
+    assert "Request fileType" in summary_text
     assert "TINID" in summary_text
     assert promotion_path.read_text(encoding="utf-8").strip() == "# Promotion Candidates\n\n## Entries"
 

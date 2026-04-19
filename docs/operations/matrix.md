@@ -4,6 +4,9 @@ Use evidence-first triage for opt-in `/parse` matrix failures.
 
 See also: [Repo Roadmap](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/knowledge-base/repo-roadmap.md)
 
+The matrix is hard-gated in code. Running `pytest tests/endpoints/parse/test_parse_matrix.py -v`
+without `RUN_PARSE_MATRIX=1` raises a collection error.
+
 ## Post-Run Summary
 Preferred wrapper:
 
@@ -15,6 +18,16 @@ This wrapper:
 - runs the opt-in `/parse` matrix
 - saves terminal output to `reports/parse/matrix/latest-terminal.txt`
 - generates `reports/parse/matrix/latest-summary.md`
+
+Full regression wrapper:
+
+```powershell
+python tools/run_parse_full_regression.py
+```
+
+This runs:
+- protected baseline: `pytest tests/endpoints/parse/ -v`
+- matrix wrapper: `python .codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py`
 
 Direct manual flow if you need to separate the steps:
 
@@ -32,7 +45,7 @@ Use `--mode apply` only after reviewing the generated draft summary.
 1. Start with the latest terminal output.
 2. Identify the failing `fileType`, pytest node ID, status code, and fixture metadata.
 3. Inspect the actual response body and headers for contract clues before guessing cause.
-4. Check whether the failing registry `fileType` matches the API-accepted request label or needs a remap.
+4. Under the current repo policy, request `fileType` comes from the explicit mapping in `tests/endpoints/parse/file_types.py`.
 5. Map the failing case back to the canonical fixture and registry row.
 6. Classify narrowly:
    - endpoint regression
@@ -42,15 +55,7 @@ Use `--mode apply` only after reviewing the generated draft summary.
    - unclear, needs more evidence
 7. Only propose fixes after the failure class is supported by the evidence.
 
-## FileType Mapping Example
-Example: matrix failure for `TIN`
-
-- Read the terminal failure first.
-- Confirm the response body and `diagnose(...)` output.
-- Check whether the registry label `TIN` matches the API-accepted request label.
-- If the API expects `TINID`, treat `TIN -> TINID` as a live remapping check before blaming the endpoint.
-- Then map the case back to the canonical registry row and review fixture status.
-
-Interpretation:
-- If the response body suggests unsupported or mismatched `fileType` and the registry label differs from the API label, prioritize remapping diagnosis first.
-- If the API label is already correct and the failure remains on a stable confirmed canonical fixture, treat endpoint regression as stronger evidence.
+## FileType Policy
+- Request `fileType` comes from the explicit repo mapping in `tests/endpoints/parse/file_types.py`.
+- Current aliases: `TIN -> TINID`, `ACR -> ACRICard`, `WaterBill -> WaterUtilityBillingStatement`.
+- If the response reports a different `fileType` than the mapped request, treat that as live endpoint evidence and diagnose from the registry label, mapped request label, and response pair.

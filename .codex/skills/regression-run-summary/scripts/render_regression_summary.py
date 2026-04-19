@@ -21,11 +21,15 @@ DEFAULT_OUTPUT = REPO_ROOT / "reports" / "parse" / "matrix" / "latest-summary.md
 DEFAULT_PROMOTION_CANDIDATES = (
     REPO_ROOT / "docs" / "knowledge-base" / "parse" / "promotion-candidates.md"
 )
+DEFAULT_MATRIX_COMMAND = (
+    f"{sys.executable} "
+    ".codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py"
+)
 
 
 def _markdown_table(rows: list[EnrichedParseResult]) -> str:
     header = (
-        "| Result | Failure Class | Registry fileType | API fileType | "
+        "| Result | Failure Class | Registry fileType | Request fileType | "
         "Verification | Row | Fixture | Note |\n"
         "| --- | --- | --- | --- | --- | --- | --- | --- |"
     )
@@ -34,12 +38,12 @@ def _markdown_table(rows: list[EnrichedParseResult]) -> str:
         note = row.note.replace("\n", " ").replace("|", "\\|")
         fixture_name = (row.fixture_name or "").replace("|", "\\|")
         lines.append(
-            "| {result} | {failure} | {registry_ft} | {api_ft} | {verification} | "
+            "| {result} | {failure} | {registry_ft} | {request_ft} | {verification} | "
             "{rownum} | {fixture} | {note} |".format(
                 result=row.pytest_status,
                 failure=row.failure_class,
                 registry_ft=row.registry_file_type,
-                api_ft=row.api_file_type,
+                request_ft=row.request_file_type,
                 verification=row.verification_status or "",
                 rownum=row.registry_row or "",
                 fixture=fixture_name,
@@ -58,7 +62,7 @@ def _candidate_block(result: EnrichedParseResult, today: str, command: str) -> s
             "- Environment:",
             f"- Matrix run command: `{command}`",
             f"- Registry fileType: `{result.registry_file_type}`",
-            f"- API fileType used: `{result.api_file_type}`",
+            f"- Request fileType used: `{result.request_file_type}`",
             f"- Registry row: `{result.registry_row}`",
             f"- Fixture name: `{result.fixture_name or ''}`",
             f"- GCS URI: `{result.gcs_uri or ''}`",
@@ -88,15 +92,6 @@ def _promotion_candidates(
 
 def _highlights(rows: list[EnrichedParseResult]) -> list[str]:
     highlights: list[str] = []
-    remapped = [
-        row for row in rows if row.registry_file_type != row.api_file_type
-    ]
-    if remapped:
-        joined = ", ".join(
-            f"{row.registry_file_type}->{row.api_file_type}" for row in remapped
-        )
-        highlights.append(f"Remapped fileTypes exercised: {joined}.")
-
     passed_unverified = [
         row.registry_file_type
         for row in rows
@@ -228,7 +223,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--command",
-        default="pytest tests/endpoints/parse/test_parse_matrix.py -v",
+        default=DEFAULT_MATRIX_COMMAND,
     )
     parser.add_argument("--generated-at")
     args = parser.parse_args()
