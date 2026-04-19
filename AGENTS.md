@@ -82,6 +82,19 @@ Use `httpx` for HTTP client work.
 - `reports/` is generated output only.
 - Do not reintroduce removed root `.codex` reporting entrypoints; translate historical references to `tools/reporting/*`.
 
+## Documentation Maintenance
+When a change affects a canonical command, workflow step, validation tier, source-of-truth location, or other durable repo behavior, update the appropriate markdown documentation in the same pass.
+
+Routing:
+- command surface changes -> `docs/operations/command-registry.md`
+- workflow/run-sequence changes -> `docs/operations/workflow.md`
+- matrix-specific behavior -> `docs/operations/matrix.md`
+- durable `/parse` findings -> `docs/knowledge-base/parse/*`
+- transient active-state only -> `docs/operations/current-handoff.md`
+- repo-wide planning/priorities -> `docs/knowledge-base/repo-roadmap.md`
+
+Do not promote one-off debugging notes, temporary implementation details, or task-specific context into durable docs.
+
 ## Multi-Agent Workflow
 - Keep one patch per branch.
 - Start each branch from `main`.
