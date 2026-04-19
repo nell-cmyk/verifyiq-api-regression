@@ -5,8 +5,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-REPO_ROOT = SCRIPT_DIR.parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -32,7 +31,7 @@ class EnrichedParseResult:
     gcs_uri: str | None
 
 
-def _first_note(failure_text: str) -> str:
+def first_note(failure_text: str) -> str:
     for raw_line in failure_text.splitlines():
         line = raw_line.strip()
         if not line:
@@ -50,7 +49,7 @@ def classify_failure(pytest_status: str, failure_text: str) -> tuple[str, str]:
     if pytest_status == "PASSED":
         return "passed", "passed"
 
-    note = _first_note(failure_text) or pytest_status.lower()
+    note = first_note(failure_text) or pytest_status.lower()
     lowered = failure_text.lower()
 
     if "matrix parse timed out" in lowered:

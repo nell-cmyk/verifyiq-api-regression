@@ -82,6 +82,7 @@ def test_wrapper_runs_command_and_generates_summary(tmp_path):
     assert "Registry fileType" in summary_text
     assert "Request fileType" in summary_text
     assert "TINID" in summary_text
+    assert ".codex/skills/regression-run-summary/scripts/run_parse_matrix_with_summary.py" not in summary_text
     assert promotion_path.read_text(encoding="utf-8").strip() == "# Promotion Candidates\n\n## Entries"
 
 

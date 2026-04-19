@@ -103,7 +103,7 @@ Guardrails:
 - The script does not auto-push on ordinary file changes.
 
 Reporting note:
-- Prefer `python tools/reporting/run_parse_matrix_with_summary.py` over the older deep `.codex/.../scripts/...` path when documenting or running the matrix workflow.
+- Use `python tools/reporting/run_parse_matrix_with_summary.py` as the reporting entrypoint when documenting or running the matrix workflow.
 
 ## Response Format
 When reporting work, return results in this order:

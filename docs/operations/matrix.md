@@ -3,6 +3,8 @@
 Use evidence-first triage for opt-in `/parse` matrix failures.
 
 See also: [Repo Roadmap](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/knowledge-base/repo-roadmap.md)
+See also: [Command Registry](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/operations/command-registry.md)
+See also: [Workflow](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/operations/workflow.md)
 
 The matrix is hard-gated in code. Running `pytest tests/endpoints/parse/test_parse_matrix.py -v`
 without `RUN_PARSE_MATRIX=1` raises a collection error.
@@ -51,10 +53,10 @@ pytest tests/endpoints/parse/test_parse_matrix.py -v 2>&1 | Tee-Object -FilePath
 python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
 ```
 
-5. Compatibility-only internal paths:
-- The older `.codex/skills/regression-run-summary/scripts/...` commands still run during the transition.
-- Treat them as compatibility-only internal implementation, not as normal operator entrypoints.
-- Prefer `tools/reporting/` in repo docs, handoffs, and human-facing workflows.
+5. `tools/reporting/` is the only supported reporting surface:
+- Use `python tools/reporting/run_parse_matrix_with_summary.py` for matrix runs and saved summaries.
+- Use `python tools/reporting/render_regression_summary.py ...` for rerendering from saved terminal output.
+- Do not document or rely on `.codex/.../scripts/...` reporting entrypoints.
 
 ## Decision Flow
 1. Start with the latest terminal output.
