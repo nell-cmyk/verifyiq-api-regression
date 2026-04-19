@@ -47,7 +47,7 @@ This repo should grow into a maintainable API regression suite and a pragmatic o
   - Opt-in matrix path exists
   - Matrix triage doc exists at `docs/operations/matrix.md`
 - Next:
-  - Add the remaining `docs/operations/` pages
+  - Add the remaining `docs/operations/` pages (`command-registry.md` landed; `workflow.md`, `session-handoff-template.md` outstanding)
   - Add endpoint-first knowledge-base pages for `/parse`
   - Add small reporting/support utilities under `tools/`
 - Later:
