@@ -51,7 +51,7 @@ def platform_auth_headers() -> dict[str, str]:
 
 
 def make_client(timeout: float = 60.0) -> httpx.Client:
-    return httpx.Client(
+    client = httpx.Client(
         base_url=BASE_URL,
         headers={
             **platform_auth_headers(),
@@ -59,3 +59,9 @@ def make_client(timeout: float = 60.0) -> httpx.Client:
         },
         timeout=timeout,
     )
+    # Opt-in regression reporter hooks. No-op unless REGRESSION_REPORT=1.
+    from tests.reporting import is_enabled
+    if is_enabled():
+        from tests.reporting.httpx_hooks import attach
+        attach(client)
+    return client

@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-"""Run the protected /parse baseline, then the opt-in matrix wrapper."""
+"""Run the protected /parse baseline, then the opt-in matrix wrapper.
+
+Default behavior is unchanged. Pass `--report` to also emit a structured
+per-case regression report under `reports/regression/<timestamp>/`.
+"""
 from __future__ import annotations
 
+import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -21,23 +27,52 @@ BASELINE_COMMAND = [
     "tests/endpoints/parse/",
     "-v",
 ]
-MATRIX_COMMAND = [sys.executable, str(MATRIX_WRAPPER)]
 
 
-def _run_step(label: str, command: list[str]) -> int:
+def _run_step(label: str, command: list[str], env: dict[str, str] | None = None) -> int:
     print(f"== {label} ==")
     print(subprocess.list2cmdline(command))
-    completed = subprocess.run(command, cwd=REPO_ROOT)
+    completed = subprocess.run(command, cwd=REPO_ROOT, env=env)
     return completed.returncode
 
 
 def main() -> int:
-    baseline_rc = _run_step("Protected baseline", BASELINE_COMMAND)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="Emit structured per-case regression report for both baseline and matrix.",
+    )
+    parser.add_argument(
+        "--file-types",
+        default="",
+        help="Forwarded to the matrix wrapper as --file-types.",
+    )
+    parser.add_argument(
+        "--k",
+        dest="k_expr",
+        default="",
+        help="Forwarded to the matrix wrapper as --k.",
+    )
+    args = parser.parse_args()
+
+    baseline_env = os.environ.copy()
+    if args.report:
+        baseline_env["REGRESSION_REPORT"] = "1"
+        baseline_env.setdefault("REGRESSION_REPORT_TIER", "baseline")
+    baseline_rc = _run_step("Protected baseline", BASELINE_COMMAND, env=baseline_env)
     if baseline_rc != 0:
         print(f"Stopped after protected baseline failed with exit code {baseline_rc}.")
         return baseline_rc
 
-    matrix_rc = _run_step("Parse matrix", MATRIX_COMMAND)
+    matrix_cmd = [sys.executable, str(MATRIX_WRAPPER)]
+    if args.report:
+        matrix_cmd.append("--report")
+    if args.file_types:
+        matrix_cmd.extend(["--file-types", args.file_types])
+    if args.k_expr:
+        matrix_cmd.extend(["--k", args.k_expr])
+    matrix_rc = _run_step("Parse matrix", matrix_cmd)
     if matrix_rc != 0:
         print(f"Full regression failed in matrix step with exit code {matrix_rc}.")
     return matrix_rc

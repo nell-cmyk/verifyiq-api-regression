@@ -17,14 +17,31 @@ DEFAULT_PROMOTION_CANDIDATES = (
 CANONICAL_WRAPPER = REPO_ROOT / "tools" / "reporting" / "run_parse_matrix_with_summary.py"
 
 
-def _default_pytest_command() -> list[str]:
-    return [
+def _default_pytest_command(
+    *,
+    k_expr: str | None = None,
+    file_types: list[str] | None = None,
+    extra: list[str] | None = None,
+) -> list[str]:
+    cmd = [
         sys.executable,
         "-m",
         "pytest",
         "tests/endpoints/parse/test_parse_matrix.py",
         "-v",
     ]
+    # Combine --file-types (mapped to -k "A or B or ...") with an explicit --k EXPR.
+    k_parts: list[str] = []
+    if file_types:
+        k_parts.append(" or ".join(ft.strip() for ft in file_types if ft.strip()))
+    if k_expr:
+        k_parts.append(f"({k_expr})")
+    combined_k = " and ".join(p for p in k_parts if p)
+    if combined_k:
+        cmd += ["-k", combined_k]
+    if extra:
+        cmd += list(extra)
+    return cmd
 
 
 def _normalize_remainder(remainder: list[str]) -> list[str]:
@@ -47,11 +64,19 @@ def _reported_command(*, mode: str, custom_command: list[str]) -> str:
     return _command_display(wrapper_command)
 
 
-def run_matrix_and_capture(command: list[str], terminal_output: Path) -> int:
+def run_matrix_and_capture(
+    command: list[str],
+    terminal_output: Path,
+    *,
+    report: bool = False,
+) -> int:
     terminal_output.parent.mkdir(parents=True, exist_ok=True)
 
     env = os.environ.copy()
     env["RUN_PARSE_MATRIX"] = "1"
+    if report:
+        env["REGRESSION_REPORT"] = "1"
+        env.setdefault("REGRESSION_REPORT_TIER", "matrix")
 
     process = subprocess.Popen(
         command,
@@ -111,6 +136,22 @@ def main() -> int:
         default=str(DEFAULT_PROMOTION_CANDIDATES),
     )
     parser.add_argument(
+        "--report",
+        action="store_true",
+        help="Also emit a structured per-case regression report under reports/regression/.",
+    )
+    parser.add_argument(
+        "--file-types",
+        default="",
+        help="Comma-separated registry fileTypes to subset the matrix (e.g. 'Payslip,TIN').",
+    )
+    parser.add_argument(
+        "--k",
+        dest="k_expr",
+        default="",
+        help="Extra pytest -k expression applied on top of --file-types.",
+    )
+    parser.add_argument(
         "pytest_cmd",
         nargs=argparse.REMAINDER,
         help="Optional custom command to run instead of the default pytest matrix command.",
@@ -118,14 +159,21 @@ def main() -> int:
     args = parser.parse_args()
 
     custom_command = _normalize_remainder(args.pytest_cmd)
-    command = custom_command or _default_pytest_command()
+    file_types = [ft for ft in (args.file_types or "").split(",") if ft.strip()]
+    if custom_command:
+        command = custom_command
+    else:
+        command = _default_pytest_command(
+            k_expr=args.k_expr or None,
+            file_types=file_types or None,
+        )
     terminal_output = Path(args.terminal_output).resolve()
     summary_output = Path(args.summary_output).resolve()
     promotion_candidates_path = Path(args.promotion_candidates_path).resolve()
     command_display = _reported_command(mode=args.mode, custom_command=custom_command)
 
     print(f"Running matrix command: {_command_display(command)}")
-    pytest_rc = run_matrix_and_capture(command, terminal_output)
+    pytest_rc = run_matrix_and_capture(command, terminal_output, report=args.report)
 
     summary_rc = render_summary(
         terminal_output=terminal_output,
