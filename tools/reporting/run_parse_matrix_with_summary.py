@@ -91,7 +91,9 @@ def run_matrix_and_capture(
     with terminal_output.open("w", encoding="utf-8", newline="\n") as log_file:
         for chunk in process.stdout:
             sys.stdout.write(chunk)
+            sys.stdout.flush()
             log_file.write(chunk)
+            log_file.flush()
 
     return process.wait()
 

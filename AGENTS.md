@@ -25,6 +25,11 @@ Additional explicit tier commands:
 - Matrix only: `python tools/reporting/run_parse_matrix_with_summary.py`
 - Full regression: `python tools/run_parse_full_regression.py`
 
+Validation stance:
+- `pytest tests/endpoints/parse/ -v` is the default validation surface.
+- The matrix remains opt-in and separate from the default baseline.
+- Full regression remains an explicit stronger gate.
+
 Use the latest terminal output as the source of truth for status, regressions, and validation results.
 If terminal output conflicts with assumptions or docs, trust the terminal output.
 
@@ -44,6 +49,8 @@ If evidence is incomplete, say so plainly instead of guessing.
 ## Session Continuity
 Use curated session notes only as restart context.
 Current code, terminal output, and Git state override any saved session log or prior summary.
+Verify current repo reality from live files, docs, terminal output, and Git state before acting.
+If the current repo context is already established in the session, continue from that context instead of restarting planning from scratch; re-check only the facts that may have changed.
 
 ## Fixture Rules
 GCS-backed fixtures are required for `/parse`.
@@ -62,6 +69,7 @@ Do not refactor, redesign, generalize, or reorganize the suite unless explicitly
 Do not broaden scope beyond API regression automation.
 
 Favor minimal diffs over cleanup work.
+Keep patches surgical and low-churn, including doc-only tasks.
 Do not change working behavior just to make the code look more abstract or more "complete."
 Use `httpx` for HTTP client work.
 
@@ -72,6 +80,7 @@ Use `httpx` for HTTP client work.
 - `docs/operations/` holds runbooks and commands.
 - `docs/knowledge-base/` holds durable findings.
 - `reports/` is generated output only.
+- Do not reintroduce removed root `.codex` reporting entrypoints; translate historical references to `tools/reporting/*`.
 
 ## Multi-Agent Workflow
 - Keep one patch per branch.
