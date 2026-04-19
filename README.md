@@ -8,6 +8,10 @@ Python-first API regression automation for VerifyIQ, currently centered on the p
 - Full regression: `python tools/run_parse_full_regression.py`
 - Safe Git commit flow: `python tools/safe_git_commit.py --message "Describe the reviewed change"`
 
+## Reporting Outputs
+- Matrix summary lane: `reports/parse/matrix/latest-terminal.txt` and `reports/parse/matrix/latest-summary.md`
+- Structured per-run lane: `reports/regression/<timestamp>/report.json`, `report.md`, and `LATEST.txt` when `--report` is enabled
+
 ## Repo Map
 - `tests/`
   Endpoint coverage plus test infrastructure for the regression suite. `/parse` remains the protected baseline.

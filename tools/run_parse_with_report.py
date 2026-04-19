@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Run a /parse tier with the regression reporter enabled.
+"""Advanced/internal helper for targeted /parse reporting runs.
 
 Emits a structured per-case JSON + Markdown report under
-`reports/regression/<timestamp>/`. Designed for targeted iteration on the
-reporter itself — supports nodeid selection, -k expressions, and fileType
-subsetting so you don't have to run the full suite.
+`reports/regression/<timestamp>/`. This utility is for focused reporter
+iteration and targeted inspection, not the default operator workflow.
+
+Prefer these canonical commands for normal use:
+- `python tools/reporting/run_parse_matrix_with_summary.py`
+- `python tools/run_parse_full_regression.py`
 
 Examples:
 
@@ -27,14 +30,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MATRIX_WRAPPER = (
-    REPO_ROOT
-    / ".codex"
-    / "skills"
-    / "regression-run-summary"
-    / "scripts"
-    / "run_parse_matrix_with_summary.py"
-)
+MATRIX_WRAPPER = REPO_ROOT / "tools" / "reporting" / "run_parse_matrix_with_summary.py"
 FULL_WRAPPER = REPO_ROOT / "tools" / "run_parse_full_regression.py"
 
 
@@ -93,7 +89,6 @@ def main() -> int:
         print(subprocess.list2cmdline(cmd))
         return subprocess.run(cmd, cwd=REPO_ROOT).returncode
 
-    # full
     cmd = _full_cmd(args)
     print(subprocess.list2cmdline(cmd))
     return subprocess.run(cmd, cwd=REPO_ROOT).returncode

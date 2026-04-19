@@ -8,18 +8,29 @@ The matrix is hard-gated in code. Running `pytest tests/endpoints/parse/test_par
 without `RUN_PARSE_MATRIX=1` raises a collection error.
 
 ## Post-Run Summary
-Preferred wrapper:
+Use these commands in this order:
+
+1. Canonical matrix wrapper and summary:
 
 ```powershell
 python tools/reporting/run_parse_matrix_with_summary.py
 ```
 
-This wrapper:
+This canonical operator path:
 - runs the opt-in `/parse` matrix
 - saves terminal output to `reports/parse/matrix/latest-terminal.txt`
 - generates `reports/parse/matrix/latest-summary.md`
+- accepts `--report` to also emit structured per-run artifacts under `reports/regression/<timestamp>/`
 
-Full regression wrapper:
+2. Canonical re-render from existing saved terminal output:
+
+```powershell
+python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
+```
+
+Use `--mode apply` only after reviewing the generated draft summary.
+
+3. Full regression wrapper when you want the stronger gate:
 
 ```powershell
 python tools/run_parse_full_regression.py
@@ -28,8 +39,9 @@ python tools/run_parse_full_regression.py
 This runs:
 - protected baseline: `pytest tests/endpoints/parse/ -v`
 - matrix wrapper: `python tools/reporting/run_parse_matrix_with_summary.py`
+- add `--report` to also emit structured per-run artifacts under `reports/regression/<timestamp>/`
 
-Direct manual flow if you need to separate the steps:
+4. Advanced/manual flow if you need to separate the steps for debugging:
 
 PowerShell example:
 
@@ -39,10 +51,10 @@ pytest tests/endpoints/parse/test_parse_matrix.py -v 2>&1 | Tee-Object -FilePath
 python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
 ```
 
-Use `--mode apply` only after reviewing the generated draft summary.
-
-Legacy compatibility note:
-- The older `.codex/skills/regression-run-summary/scripts/...` paths still work during the transition, but `tools/reporting/` is the canonical repo-facing home for reporting commands.
+5. Compatibility-only internal paths:
+- The older `.codex/skills/regression-run-summary/scripts/...` commands still run during the transition.
+- Treat them as compatibility-only internal implementation, not as normal operator entrypoints.
+- Prefer `tools/reporting/` in repo docs, handoffs, and human-facing workflows.
 
 ## Decision Flow
 1. Start with the latest terminal output.
