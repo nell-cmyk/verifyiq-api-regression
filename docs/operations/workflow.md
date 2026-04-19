@@ -10,7 +10,7 @@ Use it for the normal end-to-end flow:
 - review artifacts
 - use the guarded Git flow
 
-Use [Command Registry](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/operations/command-registry.md) for command classification and [Matrix Triage](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/operations/matrix.md) for deeper matrix-specific triage details.
+Use [Command Registry](command-registry.md) for command classification and [Matrix Triage](matrix.md) for deeper matrix-specific triage details.
 
 ## Prerequisites
 ### Python deps
@@ -101,7 +101,7 @@ Optional structured reporting:
 python tools/reporting/run_parse_matrix_with_summary.py --report
 ```
 
-Use [Matrix Triage](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/operations/matrix.md) for deeper matrix-specific debugging guidance.
+Use [Matrix Triage](matrix.md) for deeper matrix-specific debugging guidance.
 
 ## Full Regression Flow
 Canonical stronger gate:
@@ -132,7 +132,7 @@ Optional structured report artifacts when `--report` is enabled:
 
 Default operator expectation:
 - normal matrix runs should use `python tools/reporting/run_parse_matrix_with_summary.py`
-- deeper rerendering and targeted reporting commands are secondary; see the [Command Registry](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/operations/command-registry.md)
+- deeper rerendering and targeted reporting commands are secondary; see the [Command Registry](command-registry.md)
 
 ## Registry Refresh Rules
 Run fixture-registry generation only when the source spreadsheet has intentionally changed:
@@ -153,7 +153,7 @@ Do not use it:
 - Start from the latest terminal output, not from assumptions.
 - Use the protected baseline first unless the issue is clearly matrix-scoped.
 - If the issue is matrix-scoped, use the canonical matrix wrapper and review the saved artifacts.
-- For matrix-specific evidence rules and fileType triage, use [Matrix Triage](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/operations/matrix.md).
+- For matrix-specific evidence rules and fileType triage, use [Matrix Triage](matrix.md).
 
 ## Safe Git Flow
 - Review the diff first.

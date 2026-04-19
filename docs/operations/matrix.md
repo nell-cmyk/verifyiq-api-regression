@@ -2,9 +2,9 @@
 
 Use evidence-first triage for opt-in `/parse` matrix failures.
 
-See also: [Repo Roadmap](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/knowledge-base/repo-roadmap.md)
-See also: [Command Registry](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/operations/command-registry.md)
-See also: [Workflow](C:/Users/v_nel/Documents/verifyiq-api-regression/docs/operations/workflow.md)
+See also: [Repo Roadmap](../knowledge-base/repo-roadmap.md)
+See also: [Command Registry](command-registry.md)
+See also: [Workflow](workflow.md)
 
 The matrix is hard-gated in code. Running `pytest tests/endpoints/parse/test_parse_matrix.py -v`
 without `RUN_PARSE_MATRIX=1` raises a collection error.
