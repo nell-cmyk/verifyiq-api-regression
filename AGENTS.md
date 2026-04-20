@@ -47,7 +47,9 @@ When a matrix failure involves `fileType`, diagnose the registry label, the mapp
 If evidence is incomplete, say so plainly instead of guessing.
 
 ## Session Continuity
-Use curated session notes only as restart context.
+Use curated session notes in the external Obsidian vault at `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/` only as restart context.
+The active note may be auto-updated from local Codex and Claude Code transcripts by `tools/session_capture_pipeline.py`; treat those generated sections as helpful context, not a replacement for live repo verification.
+On this Mac, the normal daily startup command is `python3 tools/start_ai_session.py`; it resolves or opens today's canonical note and hands off to the same foreground watcher command `python3 tools/session_capture_pipeline.py --watch --quiet` when needed, while Claude Code continues to use installed stop hooks.
 Current code, terminal output, and Git state override any saved session log or prior summary.
 Verify current repo reality from live files, docs, terminal output, and Git state before acting.
 If the current repo context is already established in the session, continue from that context instead of restarting planning from scratch; re-check only the facts that may have changed.
@@ -80,6 +82,8 @@ Use `httpx` for HTTP client work.
 - `docs/operations/` holds runbooks and commands.
 - `docs/knowledge-base/` holds durable findings.
 - `reports/` is generated output only.
+- External active session/handoff notes live under `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/`.
+- Project-owned transcript sync artifacts live under `reports/conversation-captures/`.
 - Do not reintroduce removed root `.codex` reporting entrypoints; translate historical references to `tools/reporting/*`.
 
 ## Documentation Maintenance
@@ -90,7 +94,7 @@ Routing:
 - workflow/run-sequence changes -> `docs/operations/workflow.md`
 - matrix-specific behavior -> `docs/operations/matrix.md`
 - durable `/parse` findings -> `docs/knowledge-base/parse/*`
-- transient active-state only -> `docs/operations/current-handoff.md`
+- transient active-state only -> external Obsidian session notes under `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/` (`docs/operations/current-handoff.md` is pointer-only)
 - repo-wide planning/priorities -> `docs/knowledge-base/repo-roadmap.md`
 
 Do not promote one-off debugging notes, temporary implementation details, or task-specific context into durable docs.

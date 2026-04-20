@@ -74,7 +74,9 @@ Do not add:
 - If the available evidence does not support a confident conclusion, say what is missing and keep the diagnosis narrow.
 
 ## Startup Workflow
-- On a resumed session, read `docs/operations/current-handoff.md` if it exists, then verify it against the current repo state.
+- On a resumed session, read the latest external Obsidian session note via `python3 tools/obsidian_session.py --latest` if it exists, then verify it against the current repo state.
+- When the local automation is installed, expect the note's automated sections to be refreshed from Codex and Claude transcripts by `tools/session_capture_pipeline.py`.
+- On this Mac, use `python3 tools/start_ai_session.py` as the normal daily startup command; it resolves or opens today's note and hands off to the same foreground watcher when needed, while Claude stop hooks update the same note automatically.
 - Re-check Git status, current branch, and latest terminal evidence before acting on saved context.
 - If saved context conflicts with code, terminal output, or Git state, trust the live repo state and update the diagnosis accordingly.
 

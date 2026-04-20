@@ -42,28 +42,47 @@ At a high level, the repo expects:
 
 ## Normal Development Flow
 1. Install deps and configure `.env` for the current target.
-2. Make a narrow repo change.
-3. Run the protected baseline:
+2. Install the transcript-to-Obsidian automation once on this machine:
+
+```powershell
+python3 tools/install_session_capture_automation.py
+```
+
+3. Start the normal daily AI session flow in a spare terminal tab:
+
+```powershell
+python3 tools/start_ai_session.py
+```
+
+4. The startup wrapper resolves or opens today's canonical Obsidian note, prints concise status, and starts the existing foreground watcher only if it is not already running.
+5. Do normal work in Codex or Claude Code. Claude stop hooks update the note automatically, and the foreground watcher keeps Codex transcripts synced into the same note with near-zero manual note-taking.
+6. Make a narrow repo change.
+7. Run the protected baseline:
 
 ```powershell
 pytest tests/endpoints/parse/ -v
 ```
 
-4. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix wrapper:
+8. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix wrapper:
 
 ```powershell
 python tools/reporting/run_parse_matrix_with_summary.py
 ```
 
-5. If you want the stronger explicit gate, run full regression:
+9. If you want the stronger explicit gate, run full regression:
 
 ```powershell
 python tools/run_parse_full_regression.py
 ```
 
-6. Review generated artifacts if the matrix or reporting surfaces were used.
-7. If the work will be resumed or handed off, update `docs/operations/current-handoff.md` with the active task state.
-8. Review the diff, stage the intended files, and use the guarded Git flow:
+10. Review generated artifacts from the validation surface you used.
+11. If you want an immediate manual refresh outside the watcher, run the sync pipeline directly:
+
+```powershell
+python3 tools/session_capture_pipeline.py --sync
+```
+
+12. Review the diff, stage the intended files, and use the guarded Git flow:
 
 ```powershell
 python tools/safe_git_commit.py --message "Describe the reviewed change"
@@ -82,6 +101,10 @@ Use it:
 - as the default validation gate unless a task explicitly calls for broader coverage
 
 Do not replace this with the matrix or full regression by default.
+
+Baseline response artifacts:
+- `reports/parse/responses/<run-id>/*.json`
+- one structured JSON file per executed `/parse` test case, preserved under a new run-specific folder each time
 
 ## Matrix Flow
 Canonical opt-in matrix surface:
@@ -121,6 +144,9 @@ python tools/run_parse_full_regression.py --report
 ```
 
 ## Reporting And Artifact Review
+Baseline artifacts:
+- `reports/parse/responses/<run-id>/*.json`
+
 Default matrix/reporting artifacts:
 - `reports/parse/matrix/latest-terminal.txt`
 - `reports/parse/matrix/latest-summary.md`
@@ -162,10 +188,30 @@ Do not use it:
 - Use `--validation full` only when the stronger full-regression gate is intentionally required.
 - Use `--push` only when you are ready to push to the current branch's matching upstream.
 
-## Handoff State
-- Use `docs/operations/current-handoff.md` only for lightweight active task state.
-- Keep it focused on the current branch/task, not as a historical running log.
-- Durable findings belong in `docs/knowledge-base/`, not in the handoff file.
+## Active Session State
+- Obsidian now replaces `docs/operations/current-handoff.md` for active state, handoff, working context, and ongoing task tracking.
+- Canonical active state lives outside the repo at `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/YYYY-MM-DD - verifyiq-api-regression.md`.
+- Use `python3 tools/start_ai_session.py` as the normal daily startup command; it resolves or opens today's note and hands off to the same foreground watcher when needed.
+- Resolve or open today's note directly with `python3 tools/obsidian_session.py --today --open` only when you want the note helper without starting the wrapper.
+- Find the latest active context when resuming older work with `python3 tools/obsidian_session.py --latest`.
+- `tools/session_capture_pipeline.py` rebuilds the note's automated sections from local Codex transcripts in `~/.codex/sessions/` and Claude Code transcripts in `~/.claude/projects/`.
+- After `python3 tools/install_session_capture_automation.py`, Claude Code updates the note on `Stop`, `StopFailure`, and `SessionEnd`.
+- On this Mac, keep `python3 tools/session_capture_pipeline.py --watch --quiet` running in a foreground terminal tab for Codex live syncing and Claude backfill. The repo lives under `~/Documents`, so the foreground watcher is more reliable than a background launch agent.
+- Keep active status, working context, blockers, validation state, and next step in the external session note, not in repo docs. Manual note edits are optional when the automation is running.
+- Promote only durable truth into the repo: governance to `AGENTS.md`, stable runbooks to `docs/operations/*`, and validated findings to `docs/knowledge-base/*`.
+- `docs/operations/current-handoff.md` is a pointer-only deprecation file and must not hold live task state.
+
+## Session Lifecycle
+1. Start: run `python3 tools/start_ai_session.py` in a spare terminal tab.
+2. Continue: rely on the automated `Automated active state` and `Automated session log` sections for near-zero-manual session capture; Claude hooks update on stop events, and the foreground watcher keeps Codex and Claude transcripts normalized into the same note.
+3. End: confirm the latest `Next step`, blockers, and promotion targets look correct in the automated note sections, then promote any durable truths into repo docs in the same pass.
+
+## AI Session Startup Troubleshooting
+- Watcher already running: if `python3 tools/start_ai_session.py` says a watcher is already running, leave that watcher tab in place and keep working. If you intentionally want a fresh watcher, stop the old watcher with `Ctrl-C` in its tab, then rerun `python3 tools/start_ai_session.py`.
+- Obsidian does not open: the command still resolves today's note first. Rerun `python3 tools/obsidian_session.py --today --open` or open `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/YYYY-MM-DD - verifyiq-api-regression.md` directly in Obsidian.
+- Claude hooks are not installed: run `python3 tools/install_session_capture_automation.py` once, then rerun `python3 tools/start_ai_session.py`. The startup wrapper reports hook status but does not install hooks for you.
+- Today's note does not update: first confirm the `python3 tools/start_ai_session.py` watcher tab is still running. If you need an immediate refresh, run `python3 tools/session_capture_pipeline.py --sync`.
+- Duplicate watcher concerns: use `python3 tools/start_ai_session.py` as the only normal startup command. Do not start a second manual `python3 tools/session_capture_pipeline.py --watch --quiet` tab unless you have already stopped the original watcher.
 
 ## What Not To Use By Default
 - Do not use direct matrix pytest with manual `RUN_PARSE_MATRIX=1` as the normal operator path; use the matrix wrapper instead.

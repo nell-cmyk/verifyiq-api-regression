@@ -17,8 +17,12 @@ This is a classification document, not a workflow guide:
 
 ## Prerequisites / Environment Notes
 - `/parse` baseline, matrix, full-regression, and reporting commands all assume the repo env is configured for live API access.
+- The external Obsidian session helper expects the vault to exist at `/Users/nellvalenzuela/Documents/QA Workbench`.
+- The transcript sync automation depends on local Codex transcripts under `~/.codex/sessions/` and local Claude Code transcripts under `~/.claude/projects/`.
+- Because this repo and the external vault live under `~/Documents`, macOS background agents may not have reliable permission to read/write them. Use the foreground watcher command for Codex live syncing on this machine.
 - Protected `/parse` happy-path coverage still depends on the repo's configured `PARSE_FIXTURE_FILE` and related auth settings.
 - `PARSE_FIXTURE_FILE` must remain a `gs://` URI.
+- The protected baseline creates a new `reports/parse/responses/<run-id>/` folder per run and writes one structured response artifact per executed `/parse` test case there.
 - The matrix wrapper sets `RUN_PARSE_MATRIX=1` for you. Direct matrix pytest commands require that env var explicitly.
 - Structured reporting under `reports/regression/<timestamp>/` is opt-in via `--report` on the wrapper surfaces that support it.
 - Fixture-registry regeneration depends on `tools/fixture_registry_source/qa_fixture_registry.xlsx` plus the deps in `tools/requirements.txt`.
@@ -27,18 +31,28 @@ This is a classification document, not a workflow guide:
 ## Canonical Commands
 | Command | Normal Use | High-Level Prereqs | Artifacts | Mutation Scope |
 | --- | --- | --- | --- | --- |
-| `pytest tests/endpoints/parse/ -v` | Protected `/parse` baseline validation | Live repo env for `/parse`; no matrix opt-in | none by default | no repo mutation |
+| `python3 tools/install_session_capture_automation.py` | One-time install of Claude hook automation and any safe local automation helpers | Local Codex/Claude transcript stores exist | user-level Claude settings; optional launch agent only when path permissions allow | external local config only |
+| `python3 tools/start_ai_session.py` | One-command daily startup: resolve or open today's canonical note, print concise status, and start the foreground watcher only if it is not already running | External Obsidian vault exists; run from a terminal tab you can leave open if the watcher starts here | external note `Sessions/YYYY-MM-DD - verifyiq-api-regression.md`; same watcher artifacts as the live sync command when it starts the watcher | external vault markdown only when a note is created or opened; otherwise it hands off to the same generated-artifact flow as the watcher |
+| `python3 tools/obsidian_session.py --today --open` | Start or resume the canonical external active session note for this project | External Obsidian vault exists at `/Users/nellvalenzuela/Documents/QA Workbench` | external note `Sessions/YYYY-MM-DD - verifyiq-api-regression.md` | external vault markdown only |
+| `python3 tools/session_capture_pipeline.py --watch --quiet` | Keep Codex and Claude transcripts normalized into today’s note while you work | Foreground terminal tab; local transcript stores exist | refreshed automated note sections plus `reports/conversation-captures/**/*` | generated artifacts plus external note |
+| `pytest tests/endpoints/parse/ -v` | Protected `/parse` baseline validation | Live repo env for `/parse`; no matrix opt-in | `reports/parse/responses/<run-id>/*.json` | generated artifacts only under `reports/parse/responses/` |
 | `python tools/reporting/run_parse_matrix_with_summary.py` | Default opt-in `/parse` matrix run plus saved summary | Live repo env for `/parse`; wrapper handles `RUN_PARSE_MATRIX=1` | `reports/parse/matrix/latest-terminal.txt`, `reports/parse/matrix/latest-summary.md` | generated artifacts only in draft mode |
 | `python tools/run_parse_full_regression.py` | Stronger gate: baseline first, then matrix wrapper | Same env as baseline + matrix | same matrix artifacts; optional structured reports with `--report` | generated artifacts only |
 | `python tools/safe_git_commit.py --message "Describe the reviewed change"` | Guarded commit flow after review | Staged changes, clean worktree, branch configured | none | Git state only |
 
 Notes:
+- `python3 tools/start_ai_session.py` is the recommended day-to-day startup command on this Mac. It preserves the existing architecture by calling the same note helper and foreground watcher underneath, and it leaves Claude hook-based capture untouched.
+- If `python3 tools/start_ai_session.py` finds an existing foreground watcher for this repo, it only resolves or opens today's note, prints status, and exits without starting a duplicate watcher.
+- `python3 tools/obsidian_session.py --latest` returns the most recently modified session note for this project, and `--open` prefers opening the resolved note in Obsidian on macOS before falling back to the default app.
+- `python3 tools/install_session_capture_automation.py` installs Claude hooks and prints the foreground watch command. It skips the launch agent by default when the repo lives under a macOS-protected folder such as `~/Documents`.
+- `python3 tools/session_capture_pipeline.py --sync` is the manual catch-up command behind the live automation; it syncs Codex and Claude transcripts into `reports/conversation-captures/` and refreshes today's automated note sections.
 - `python tools/reporting/run_parse_matrix_with_summary.py --report` also writes `reports/regression/<timestamp>/report.json`, `report.md`, and `LATEST.txt`.
 - `python tools/reporting/run_parse_matrix_with_summary.py --mode apply` additionally appends reviewed promotion candidates to `docs/knowledge-base/parse/promotion-candidates.md`.
 
 ## Advanced/Internal Commands
 | Command | Why It Is Not Primary | Artifacts | Mutation Scope |
 | --- | --- | --- | --- |
+| `python3 tools/session_capture_pipeline.py --sync` | Useful for manual backfill and debugging because the watcher or Claude hooks usually keep things current for you | `reports/conversation-captures/raw/**/*`, `reports/conversation-captures/normalized/**/*`, state JSON, and refreshed external note sections | generated artifacts plus external Obsidian note |
 | `python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt` | Re-renders from saved terminal output; useful after a completed run, not as the primary run surface | `reports/parse/matrix/latest-summary.md` by default | generated summary only in draft mode |
 | `python tools/run_parse_with_report.py --tier baseline|matrix|full ...` | Focused reporter iteration and targeted structured-report inspection, not the normal operator workflow | `reports/regression/<timestamp>/report.json`, `report.md`, `LATEST.txt` | generated artifacts only |
 | `python tools/generate_fixture_registry.py` | Maintenance command for fixture-registry refresh, not a normal regression run | `tests/endpoints/parse/fixture_registry.yaml` | mutates tracked generated YAML |
@@ -63,7 +77,13 @@ Removed historical reporting paths:
 ## Artifact-producing Commands
 | Command | Primary Outputs |
 | --- | --- |
+| `python3 tools/install_session_capture_automation.py` | user-level Claude settings; optional launch-agent plist only when allowed |
+| `python3 tools/start_ai_session.py` | external note `Sessions/YYYY-MM-DD - verifyiq-api-regression.md`, plus the same live-sync outputs as the watcher when it starts the watcher |
+| `python3 tools/obsidian_session.py --today --open` | external note `Sessions/YYYY-MM-DD - verifyiq-api-regression.md` |
+| `python3 tools/session_capture_pipeline.py --watch --quiet` | refreshed automated note sections plus `reports/conversation-captures/raw/**/*`, `reports/conversation-captures/normalized/**/*`, and sync state |
+| `python3 tools/session_capture_pipeline.py --sync` | `reports/conversation-captures/raw/**/*`, `reports/conversation-captures/normalized/**/*`, and refreshed automated note sections |
 | `python tools/reporting/run_parse_matrix_with_summary.py` | `reports/parse/matrix/latest-terminal.txt`, `reports/parse/matrix/latest-summary.md` |
+| `pytest tests/endpoints/parse/ -v` | `reports/parse/responses/<run-id>/*.json` |
 | `python tools/reporting/run_parse_matrix_with_summary.py --report` | matrix outputs above plus `reports/regression/<timestamp>/report.json`, `report.md`, `LATEST.txt` |
 | `python tools/run_parse_full_regression.py --report` | matrix outputs above plus `reports/regression/<timestamp>/report.json`, `report.md`, `LATEST.txt` |
 | `python tools/reporting/render_regression_summary.py --endpoint parse --input ...` | `reports/parse/matrix/latest-summary.md` by default, or the explicit `--output` target |
@@ -73,6 +93,12 @@ Removed historical reporting paths:
 ## Mutating Commands
 | Command | What It Can Mutate |
 | --- | --- |
+| `python3 tools/install_session_capture_automation.py` | `~/.claude/settings.json`; optional launch-agent plist and launchctl state when allowed |
+| `python3 tools/start_ai_session.py` | external vault markdown under `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/`; if it starts the watcher, the same generated files and automated note sections as `python3 tools/session_capture_pipeline.py --watch --quiet` |
+| `python3 tools/obsidian_session.py --today --open` | external vault markdown under `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/` |
+| `python3 tools/session_capture_pipeline.py --watch --quiet` | generated files under `reports/conversation-captures/` and automated sections in the external session note while the watcher runs |
+| `python3 tools/session_capture_pipeline.py --sync` | generated files under `reports/conversation-captures/` and automated sections in the external session note |
+| `pytest tests/endpoints/parse/ -v` | generated files under `reports/parse/responses/` |
 | `python tools/reporting/run_parse_matrix_with_summary.py` | generated files under `reports/parse/matrix/` |
 | `python tools/reporting/run_parse_matrix_with_summary.py --report` | generated files under `reports/parse/matrix/` and `reports/regression/` |
 | `python tools/reporting/run_parse_matrix_with_summary.py --mode apply` | generated files under `reports/parse/matrix/` and tracked KB file `docs/knowledge-base/parse/promotion-candidates.md` |

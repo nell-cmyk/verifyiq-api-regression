@@ -45,7 +45,8 @@ This repo should grow into a maintainable API regression suite and a pragmatic o
   - Matrix triage doc exists at `docs/operations/matrix.md`
   - Command registry exists at `docs/operations/command-registry.md`
   - Workflow runbook exists at `docs/operations/workflow.md`
-  - Active handoff state lives under `docs/operations/current-handoff.md`
+  - External Obsidian vault is the canonical active session/handoff layer
+  - `docs/operations/current-handoff.md` is pointer-only
   - Reporting surface lives under `tools/reporting/`
   - `/parse` durable knowledge-base pages exist under `docs/knowledge-base/parse/`
   - Legacy root `.codex` reporting scripts are removed
