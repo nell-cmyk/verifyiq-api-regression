@@ -82,6 +82,16 @@ Use `httpx` for HTTP client work.
 - `reports/` is generated output only.
 - Do not reintroduce removed root `.codex` reporting entrypoints; translate historical references to `tools/reporting/*`.
 
+## Obsidian Boundary
+Obsidian may be used only as a personal/project capture and staging layer outside this repo.
+
+Rules:
+- Treat Obsidian notes as non-canonical working notes unless the user explicitly asks to promote validated content into the repo.
+- Durable repo truth must remain in `AGENTS.md`, `docs/operations/*`, and `docs/knowledge-base/*`.
+- Do not add repo-tracked Obsidian vault files, `.obsidian/` config, sync tooling, or note automation unless explicitly requested.
+- When promoting from Obsidian, rewrite curated conclusions into the appropriate repo doc; do not paste raw scratch notes or transcript-style logs into durable docs.
+- If state is still active and transient, prefer `docs/operations/current-handoff.md` or keep it outside the repo rather than creating new tracked working-note files.
+
 ## Documentation Maintenance
 When a change affects a canonical command, workflow step, validation tier, source-of-truth location, or other durable repo behavior, update the appropriate markdown documentation in the same pass.
 

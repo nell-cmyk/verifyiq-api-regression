@@ -167,6 +167,34 @@ Do not use it:
 - Keep it focused on the current branch/task, not as a historical running log.
 - Durable findings belong in `docs/knowledge-base/`, not in the handoff file.
 
+## Optional Obsidian Staging
+If you use Obsidian as a personal/project brain, keep the vault outside the repo and use it only as a capture/staging layer.
+
+Suggested minimal note buckets outside the repo:
+- `Inbox/`: raw ideas, snippets, questions, and follow-ups.
+- `Sessions/`: date-scoped or branch-scoped working notes for the active task.
+- `Promotion Queue/`: draft items that may deserve repo promotion after review.
+
+Promotion rules:
+- Keep raw terminal excerpts, hypotheses, personal reminders, and dead ends in Obsidian only.
+- Promote validated workflow or command changes into `docs/operations/*`.
+- Promote stable `/parse` findings into `docs/knowledge-base/parse/*`.
+- Promote transient in-progress branch state only into `docs/operations/current-handoff.md`.
+- Promote repo-wide planning only into `docs/knowledge-base/repo-roadmap.md`.
+
+End-of-day audit:
+1. Review the day's Obsidian notes against live repo state and the latest terminal output.
+2. Leave anything speculative, personal, or transcript-style in Obsidian only.
+3. Move active next-session state to `docs/operations/current-handoff.md` only if another agent or later session will need it.
+4. Curate any validated durable truth into the correct repo doc in the same pass.
+5. Mark the Obsidian item as promoted, deferred, or discarded so it does not linger as pseudo-truth.
+
+Do not automate yet:
+- vault sync into the repo
+- auto-promotion from note tags or frontmatter
+- scripts that rewrite repo docs from Obsidian files
+- repo-tracked `.obsidian/` config, daily-note folders, or attachment stores
+
 ## What Not To Use By Default
 - Do not use direct matrix pytest with manual `RUN_PARSE_MATRIX=1` as the normal operator path; use the matrix wrapper instead.
 - Do not use `python tools/run_parse_with_report.py ...` as the default workflow; it is advanced/internal.
