@@ -1,18 +1,22 @@
 """Strict loader + canonical selection over the generated /parse fixture registry.
 
-The YAML is produced by `tools/generate_fixture_registry.py` from the QA
-spreadsheet. This module is the thin read layer pytest uses to parametrize
-multi-fileType coverage. No writes, no mutation, no side effects.
+The YAML is produced by `tools/generate_fixture_registry.py` from the curated
+fixture sources. This module is the thin read layer pytest uses to parametrize
+multi-fileType coverage and opt-in selected-fixture runs. No writes, no
+mutation, no side effects.
 
 Canonical policy for now: take the FIRST enabled fixture for each distinct
 `file_type` in generated YAML order.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from tests.endpoints.parse.fixture_json import normalize_fixture_json_entries
 
 REGISTRY_PATH = Path(__file__).with_name("fixture_registry.yaml")
 REQUIRED_FIXTURE_KEYS = (
@@ -129,3 +133,89 @@ def load_canonical_fixtures() -> list[dict[str, Any]]:
     if not canonical:
         raise _registry_error("registry contains zero canonical fixtures after selection")
     return canonical
+
+
+def fixture_test_id(fixture: dict[str, Any], *, explicit_selection: bool) -> str:
+    if explicit_selection:
+        return str(fixture["name"])
+    return str(fixture["file_type"])
+
+
+def resolve_selected_registry_fixtures(
+    registry_fixtures: list[dict[str, Any]],
+    selection_json_path: str | Path,
+    *,
+    error_factory: Callable[[str], RuntimeError],
+) -> list[dict[str, Any]]:
+    try:
+        normalization = normalize_fixture_json_entries(selection_json_path)
+    except ValueError as exc:
+        raise error_factory(str(exc)) from exc
+    entries = normalization.entries
+    if not entries:
+        if normalization.skipped:
+            raise error_factory(
+                "selected fixture JSON resolved to zero supported entries after filtering "
+                "unsupported formats"
+            )
+        raise error_factory("selected fixture JSON resolved to zero fixture entries")
+
+    by_uri: dict[str, list[dict[str, Any]]] = {}
+    by_uri_and_type: dict[tuple[str, str], dict[str, Any]] = {}
+    for fixture in registry_fixtures:
+        gcs_uri = fixture["gcs_uri"]
+        by_uri.setdefault(gcs_uri, []).append(fixture)
+        file_type = fixture.get("file_type")
+        if file_type:
+            by_uri_and_type[(gcs_uri, file_type)] = fixture
+
+    selected: list[dict[str, Any]] = []
+    seen_names: set[str] = set()
+    missing: list[str] = []
+
+    for entry in entries:
+        gcs_uri = entry["gcs_uri"]
+        explicit_file_type = entry.get("file_type")
+
+        if explicit_file_type:
+            fixture = by_uri_and_type.get((gcs_uri, explicit_file_type))
+            matches = [fixture] if fixture else []
+        else:
+            matches = by_uri.get(gcs_uri, [])
+
+        if not matches:
+            if explicit_file_type:
+                missing.append(f"{gcs_uri} ({explicit_file_type})")
+            else:
+                missing.append(gcs_uri)
+            continue
+
+        for fixture in matches:
+            name = str(fixture["name"])
+            if name in seen_names:
+                continue
+            seen_names.add(name)
+            selected.append(fixture)
+
+    if missing:
+        raise error_factory(
+            "selected fixture JSON references paths not present in the registry: "
+            + ", ".join(missing)
+        )
+    if not selected:
+        raise error_factory("selected fixture JSON resolved to zero registry fixtures")
+    return selected
+
+
+def load_selected_fixtures(selection_json_path: str | Path) -> list[dict[str, Any]]:
+    return resolve_selected_registry_fixtures(
+        load_registry().get("fixtures", []),
+        selection_json_path,
+        error_factory=_registry_error,
+    )
+
+
+def load_matrix_fixtures(*, selection_json_path: str | Path | None = None) -> list[dict[str, Any]]:
+    if selection_json_path:
+        return load_selected_fixtures(selection_json_path)
+    return load_canonical_fixtures()

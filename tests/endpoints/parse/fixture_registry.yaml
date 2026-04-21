@@ -3258,6 +3258,9 @@ fixtures:
   source_row: 61
   verification_status: confirmed
   enabled: true
+  batch_expected_warning: 'Known /documents/batch page-limit warning: this fixture may return DocumentSizeGuardError instead of parsed data.'
+  batch_expected_error_type: DocumentSizeGuardError
+  batch_expected_error: Page count (456) exceeds limit (50)
 - name: MJRL_MV Dela Cruz_Bank Statement (2)
   file_type: BankStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/MJRL_MV Dela Cruz_Bank Statement (2).pdf
@@ -3274,6 +3277,9 @@ fixtures:
   source_row: 63
   verification_status: confirmed
   enabled: true
+  batch_expected_warning: 'Known /documents/batch page-limit warning: this fixture may return DocumentSizeGuardError instead of parsed data.'
+  batch_expected_error_type: DocumentSizeGuardError
+  batch_expected_error: Page count (66) exceeds limit (50)
 - name: MJRL_MV Dela Cruz_Bank Statement (4)
   file_type: BankStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/MJRL_MV Dela Cruz_Bank Statement (4).pdf
@@ -3282,6 +3288,9 @@ fixtures:
   source_row: 64
   verification_status: confirmed
   enabled: true
+  batch_expected_warning: 'Known /documents/batch page-limit warning: this fixture may return DocumentSizeGuardError instead of parsed data.'
+  batch_expected_error_type: DocumentSizeGuardError
+  batch_expected_error: Page count (151) exceeds limit (50)
 - name: OCR-Gemini for 4007_Bank Statement_Bank of the philippine islands (2).png
   file_type: BankStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/OCR-Gemini for 4007_Bank Statement_Bank of the philippine islands (2).png.xlsx
