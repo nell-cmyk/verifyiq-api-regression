@@ -161,7 +161,7 @@ Default operator expectation:
 - deeper rerendering and targeted reporting commands are secondary; see the [Command Registry](command-registry.md)
 
 ## Registry Refresh Rules
-Run fixture-registry generation only when the source spreadsheet has intentionally changed:
+Run fixture-registry generation only when the curated source data has intentionally changed:
 
 ```powershell
 python tools/generate_fixture_registry.py
@@ -169,7 +169,20 @@ python tools/generate_fixture_registry.py
 
 Use it:
 - after deliberate edits to `tools/fixture_registry_source/qa_fixture_registry.xlsx`
-- when the generated YAML must be refreshed to match the spreadsheet
+- after deliberate edits to `tools/fixture_registry_source/supplemental_fixture_registry.yaml`
+- when the generated YAML must be refreshed to match the curated sources
+
+Use JSON onboarding when a new fixture list arrives as a JSON file of `gs://` paths:
+
+```powershell
+python tools/onboard_fixture_json.py --json path\to\fixtures.json
+```
+
+This command:
+- checks the JSON input against the current registry flow
+- skips unsupported file formats explicitly before onboarding
+- writes only missing supported fixtures into `tools/fixture_registry_source/supplemental_fixture_registry.yaml`
+- regenerates `tests/endpoints/parse/fixture_registry.yaml` only when additions are required
 
 Do not use it:
 - as part of ordinary baseline or matrix runs

@@ -1,0 +1,4 @@
+# Supplemental /parse fixtures for JSON-driven onboarding.
+# Edit this file directly or rerun tools/onboard_fixture_json.py.
+schema_version: 1
+fixtures: []
