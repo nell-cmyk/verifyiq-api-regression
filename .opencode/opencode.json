@@ -1,0 +1,11 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "./plugins/verifyiq-mind-session.js"
+  ],
+  "skills": {
+    "paths": [
+      "./skills"
+    ]
+  }
+}

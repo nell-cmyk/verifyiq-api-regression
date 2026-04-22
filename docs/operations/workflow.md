@@ -38,7 +38,9 @@ mind help
 mind setup opencode
 ```
 
-Create the project space once if it does not already exist:
+The repo's normal OpenCode path is automatic after that. Repo-local session automation loads from `.opencode/opencode.json` and is documented in [Mind Session](mind-session.md).
+
+Create the project space once only if you are debugging the wrapper before the automatic flow has done it for you:
 
 ```bash
 mind create "projects/verifyiq-api-regression" "Persistent memory for VerifyIQ API regression automation" --tags "type:project"
@@ -69,54 +71,42 @@ At a high level, the repo expects:
 ## Normal Development Flow
 1. Install deps and configure `.env` for the current target.
 2. Install Mind and run `mind setup opencode` if this machine has not been bootstrapped yet.
-3. Recover active context from Mind before changing code:
+3. Open this repo in OpenCode. The repo-local plugin automatically recovers context, refreshes checkpoints on continuity events, and closes the active checkpoint on session end.
+4. If you need to validate or repair that automation explicitly, use the repo wrapper instead of raw mutating `mind` commands:
 
 ```bash
-mind checkpoint list "projects/verifyiq-api-regression" --status active
-mind checkpoint recover "projects/verifyiq-api-regression" --name <checkpoint-name>
-mind search "<task keywords>" --space "projects/verifyiq-api-regression" --detail
+./.venv/bin/python tools/mind_session.py doctor
+./.venv/bin/python tools/mind_session.py start
 ```
 
-4. If no active checkpoint exists yet for the current work, create or refresh one:
-
-```bash
-mind checkpoint set "projects/verifyiq-api-regression" "Goal" "Pending work" --notes "Current status"
-```
-
-5. Do normal work in OpenCode. After each significant decision, bug fix, pattern, or durable discovery, persist it in Mind:
-
-```bash
-mind add "projects/verifyiq-api-regression" "memory-name" "What: ... Why: ... Where: ... Learned: ..." --tags "cat:decision"
-```
-
-6. Make a narrow repo change.
-7. Run the protected baseline:
+5. Make a narrow repo change.
+6. Run the protected baseline:
 
 ```bash
 ./.venv/bin/python -m pytest tests/endpoints/parse/ -v
 ```
 
-8. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix wrapper:
+7. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix wrapper:
 
 ```bash
 ./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
 ```
 
-9. If you want the stronger explicit gate, run full regression:
+8. If you want the stronger explicit gate, run full regression:
 
 ```bash
 ./.venv/bin/python tools/run_parse_full_regression.py
 ```
 
-10. Review generated artifacts from the validation surface you used.
-11. Refresh or close the active checkpoint once the work segment is complete:
+9. Review generated artifacts from the validation surface you used.
+10. Before handoff or commit, save an explicit durable Mind summary only when the automatic session flow is not enough:
 
 ```bash
-mind checkpoint list "projects/verifyiq-api-regression" --status active
-mind checkpoint complete "projects/verifyiq-api-regression" "<checkpoint-name>" "Completed work summary"
+./.venv/bin/python tools/mind_session.py save-summary --title "short-title" --body "Durable summary"
+./.venv/bin/python tools/mind_session.py finish
 ```
 
-12. Review the diff, stage the intended files, and use the guarded Git flow:
+11. Review the diff, stage the intended files, and use the guarded Git flow:
 
 ```bash
 ./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"
@@ -240,9 +230,9 @@ Do not use it:
 ## Active Session State
 - Mind now replaces `docs/operations/current-handoff.md` for active state, handoff, working context, and ongoing task tracking.
 - Canonical project space: `projects/verifyiq-api-regression`.
-- Resume work with `mind checkpoint list ...`, `mind checkpoint recover ...`, and `mind search ...`.
-- Persist decisions, bug fixes, patterns, and config changes with `mind add ... --tags ...`.
-- `mind setup opencode` installs OpenCode protocol instructions, local MCP wiring, and a non-blocking automation plugin for session and compaction continuity.
+- `mind setup opencode` installs the global Mind MCP and protocol wiring.
+- `.opencode/opencode.json` adds the repo-local plugin and skill that automate start, checkpoint refresh, compaction continuity, and finish handling.
+- `./.venv/bin/python tools/mind_session.py ...` is the fallback/debug surface when the automatic flow needs inspection or an explicit durable summary.
 - Optional local web and API access is available through `mind serve start --detached` on `http://localhost:30303`.
 - Optional local HTTP MCP access is available through `mind mcp start --http --detached` on `http://localhost:7438/mcp`.
 - Keep active status and working context in Mind, not in repo docs.
@@ -250,18 +240,22 @@ Do not use it:
 - `docs/operations/current-handoff.md` is pointer-only and must not hold live task state.
 
 ## Session Lifecycle
-1. Start: list active checkpoints, recover the right checkpoint, and search for relevant task memories.
-2. Continue: keep the active checkpoint current and add durable memories as decisions, discoveries, or fixes happen. OpenCode's Mind automation plugin assists session and compaction continuity after `mind setup opencode`.
-3. End: complete the active checkpoint, then promote any durable truths into repo docs in the same pass.
+1. Start: OpenCode loads the repo-local Mind plugin, which runs the wrapper to recover or create the active continuity checkpoint automatically.
+2. Continue: the plugin refreshes checkpoints on continuity events. Use `tools/mind_session.py save-summary` only when you need an explicit durable project memory before handoff or commit.
+3. End: the plugin runs `tools/mind_session.py finish` on session end. Promote any durable truths into repo docs in the same pass.
 
 ## Mind Troubleshooting
 - `mind` not found: ensure `~/.local/bin` is on `PATH`. If the launcher shim is missing or stale on this machine, use `~/.local/share/mind/mind` directly.
-- OpenCode does not use Mind: rerun `mind setup opencode`, then inspect `~/.config/opencode/opencode.json` for `mcp.mind`, the managed instruction file, and the managed plugin.
+- Repo plugin not loading: inspect `.opencode/opencode.json`, then run `opencode debug config` from the repo root.
+- Wrapper health check: run `./.venv/bin/python tools/mind_session.py doctor`.
+- Force explicit recovery: run `./.venv/bin/python tools/mind_session.py start`.
+- Force explicit checkpoint refresh: run `./.venv/bin/python tools/mind_session.py checkpoint`.
+- Need an explicit durable summary before handoff or commit: run `./.venv/bin/python tools/mind_session.py save-summary ...` or `finish`.
 - Need the web UI or HTTP API: run `mind serve start --detached`, then browse `http://localhost:30303`. Stop it with `mind serve stop`.
 - Need the HTTP MCP endpoint: run `mind mcp start --http --detached`, confirm with `mind server-status`, and stop it with `mind mcp stop`.
-- Active context looks stale: run `mind checkpoint list "projects/verifyiq-api-regression" --status active`, recover the intended checkpoint by name, then run `mind search "<keywords>" --space "projects/verifyiq-api-regression" --detail`.
-- The project space does not exist yet: create it once with `mind create "projects/verifyiq-api-regression" "Persistent memory for VerifyIQ API regression automation" --tags "type:project"`.
-- Multiple `mind` commands fail with `SQLITE_BUSY_RECOVERY`: rerun them sequentially instead of in parallel; Mind uses a local SQLite store.
+- Active context still looks stale after `start`: use raw `mind search "<keywords>" --space "projects/verifyiq-api-regression" --detail` as a troubleshooting fallback.
+- The project space does not exist yet: the wrapper should create it automatically, but `mind create "projects/verifyiq-api-regression" "Persistent memory for VerifyIQ API regression automation" --tags "type:project"` remains available as a last-resort fallback.
+- Multiple `mind` commands fail with `SQLITE_BUSY_RECOVERY`: rerun them sequentially instead of in parallel; Mind uses a local SQLite store and the wrapper already serializes access.
 
 ## What Not To Use By Default
 - Do not use direct matrix pytest with manual `RUN_PARSE_MATRIX=1` as the normal operator path; use the matrix wrapper instead.

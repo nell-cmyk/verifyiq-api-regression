@@ -16,20 +16,11 @@ Python-first live API regression automation for VerifyIQ, centered on the protec
 - Workflow runbook: `docs/operations/workflow.md`
 
 ## Mind Memory Workflow
-- Active workflow memory now lives in Mind space `projects/verifyiq-api-regression`, not in repo docs.
-- One-time bootstrap:
-  1. `curl -fsSL https://raw.githubusercontent.com/GabrielMartinMoran/mind/main/scripts/install.sh | bash`
-  2. Ensure `~/.local/bin` is on `PATH`
-  3. `mind help`
-  4. `mind setup opencode`
-- Resume context with:
-  - `mind checkpoint list "projects/verifyiq-api-regression" --status active`
-  - `mind checkpoint recover "projects/verifyiq-api-regression" --name <checkpoint-name>`
-  - `mind search "<keywords>" --space "projects/verifyiq-api-regression" --detail`
-- Persist decisions, patterns, and checkpoints with:
-  - `mind checkpoint set "projects/verifyiq-api-regression" "Goal" "Pending work" --notes "Current state"`
-  - `mind add "projects/verifyiq-api-regression" "memory-name" "What: ... Why: ... Where: ... Learned: ..." --tags "cat:decision"`
-- See `docs/operations/workflow.md` for the full Mind-backed operator flow.
+- Active workflow memory lives in Mind space `projects/verifyiq-api-regression`, not in repo docs.
+- OpenCode now loads repo-controlled Mind automation from `.opencode/` when this repo is open.
+- Normal path: the repo plugin automatically recovers context, refreshes continuity checkpoints, and closes the active checkpoint when the session ends.
+- Fallback/debug path: use `./.venv/bin/python tools/mind_session.py doctor|start|checkpoint|save-summary|finish`.
+- See `docs/operations/mind-session.md` for the automatic flow and troubleshooting.
 
 ## Reporting Outputs
 - Matrix summary lane: `reports/parse/matrix/latest-terminal.txt` and `reports/parse/matrix/latest-summary.md`

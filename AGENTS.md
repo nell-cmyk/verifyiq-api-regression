@@ -9,6 +9,7 @@
 - `tests/`: endpoint coverage plus shared validation, fixture, and reporting helpers.
 - `tools/`: repo-owned CLIs.
 - `tools/reporting/`: matrix and reporting wrappers.
+- `.opencode/`: repo-local OpenCode plugin, config, and skills for automatic Mind session continuity.
 - `docs/operations/`: canonical runbooks and command registry.
 - `docs/knowledge-base/`: durable findings only.
 - `reports/`: generated local artifacts only.
@@ -26,6 +27,7 @@
   - Ensure `~/.local/bin` is on `PATH` for interactive `mind` usage.
   - `mind help`
   - `mind setup opencode`
+- OpenCode loads repo-local Mind automation from `.opencode/opencode.json` in this repo.
 - Operator command source of truth: `docs/operations/command-registry.md`.
 
 ## Canonical Validation Commands
@@ -53,11 +55,10 @@
   - matrix wrapper
   - batch suite
   - repo-local pytest suites
+  - `./.venv/bin/python tools/mind_session.py doctor`
+  - `./.venv/bin/python tools/mind_session.py start`
   - `mind help`
   - `mind status`
-  - `mind checkpoint list "projects/verifyiq-api-regression" --status active`
-  - `mind checkpoint recover "projects/verifyiq-api-regression" --name ...`
-  - `mind search "<query>" --space "projects/verifyiq-api-regression" --detail`
   - `mind server-status`
 - Mutating repo commands:
   - `./.venv/bin/python tools/generate_fixture_registry.py`
@@ -66,9 +67,9 @@
   - `./.venv/bin/python tools/safe_git_commit.py ...`
 - Mutating external/local-state commands:
   - `mind setup opencode`
-  - `mind create "projects/verifyiq-api-regression" ...`
-  - `mind add "projects/verifyiq-api-regression" ...`
-  - `mind checkpoint set|complete "projects/verifyiq-api-regression" ...`
+  - `./.venv/bin/python tools/mind_session.py checkpoint`
+  - `./.venv/bin/python tools/mind_session.py save-summary --title ... --body ...`
+  - `./.venv/bin/python tools/mind_session.py finish`
   - `mind serve start --detached`
   - `mind mcp start --http --detached`
 - Never run deployment, publish, destructive Git, or data-deleting commands unless explicitly requested.
@@ -77,7 +78,10 @@
 - Patch narrowly. Preserve passing behavior unless the task explicitly requires a change.
 - Do not refactor, redesign, reorganize, or broaden repo scope unless explicitly asked.
 - Use evidence-first debugging: start from the latest terminal output, response body, status code, headers, and fixture metadata.
+- For OpenCode sessions in this repo, Mind recovery/checkpointing is mandatory and automatic through `.opencode/plugins/verifyiq-mind-session.js`.
+- Use `./.venv/bin/python tools/mind_session.py ...` for fallback/debug only, or when you need an explicit durable summary before handoff or commit.
 - Keep active workflow state, durable decisions, bug fixes, patterns, and checkpoints in Mind; promote only durable repo truth into tracked docs.
+- Do not store secrets, credentials, raw logs, `.env` values, or large raw payloads in Mind. Save durable summaries only.
 - `fileType` request mapping lives in `tests/endpoints/parse/file_types.py`.
 - Current aliases: `TIN -> TINID`, `ACR -> ACRICard`, `WaterBill -> WaterUtilityBillingStatement`.
 - GCS-backed fixtures are required for `/parse`; do not add local fixture fallback or local file-path fallback.
@@ -98,6 +102,7 @@
 - `/parse` and `/documents/batch` rely on live API access and Google IAP credentials.
 - Mind stores local workflow memory outside the repo; the current machine defaults to `~/.local/share/data/mind.db`.
 - `mind setup opencode` writes managed OpenCode config under `~/.config/opencode/`.
+- Repo-local OpenCode automation is configured under `.opencode/` and uses the fixed Mind project space `projects/verifyiq-api-regression`.
 - Checked-in CI baseline uses the same live inputs and skips clearly when the required secrets are not configured.
 
 ## Artifact/Report Handling
@@ -111,6 +116,6 @@
 - The `/parse` matrix is opt-in; direct matrix pytest requires `RUN_PARSE_MATRIX=1`.
 - Auth-negative `/parse` tests may warn on timeout and still pass by design.
 - The `python` shell alias is not assumed on this machine; use `./.venv/bin/python` or `python3` only when bootstrapping `.venv`.
-- Mind uses a local SQLite store; avoid running multiple `mind` commands in parallel against the same store or you may hit `SQLITE_BUSY_RECOVERY`.
+- Mind uses a local SQLite store; keep Mind writes sequential. The repo wrapper `tools/mind_session.py` already serializes access and should be preferred over raw mutating `mind` commands.
 - `docs/operations/current-handoff.md` is pointer-only; live session state lives in Mind space `projects/verifyiq-api-regression`, not in repo docs.
 - Historical `.codex` reporting entrypoints are removed; use `tools/reporting/*`.
