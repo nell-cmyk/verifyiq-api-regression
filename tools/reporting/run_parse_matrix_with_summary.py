@@ -13,6 +13,8 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tests.endpoints.parse.fixture_json import normalize_fixture_json_entries
+from tests.endpoints.artifact_runs import ensure_run_folder_name
+from tests.endpoints.parse.artifacts import PARSE_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR
 
 RENDER_SCRIPT = Path(__file__).resolve().with_name("render_regression_summary.py")
 DEFAULT_TERMINAL_OUTPUT = REPO_ROOT / "reports" / "parse" / "matrix" / "latest-terminal.txt"
@@ -94,6 +96,11 @@ def run_matrix_and_capture(
 
     env = os.environ.copy()
     env["RUN_PARSE_MATRIX"] = "1"
+    ensure_run_folder_name(
+        env,
+        prefix="parse",
+        env_var=PARSE_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR,
+    )
     if report:
         env["REGRESSION_REPORT"] = "1"
         env.setdefault("REGRESSION_REPORT_TIER", "matrix")
