@@ -23,6 +23,7 @@ This is a classification document, not a workflow guide:
 - Protected `/parse` happy-path coverage still depends on the repo's configured `PARSE_FIXTURE_FILE` and related auth settings.
 - `PARSE_FIXTURE_FILE` must remain a `gs://` URI.
 - The protected baseline creates a new `reports/parse/responses/<run-id>/` folder per run and writes one structured response artifact per executed `/parse` test case there.
+- Supported `/batch` runs write one raw JSON artifact per `/v1/documents/batch` call to `reports/batch/`.
 - The matrix wrapper sets `RUN_PARSE_MATRIX=1` for you. Direct matrix pytest commands require that env var explicitly.
 - Structured reporting under `reports/regression/<timestamp>/` is opt-in via `--report` on the wrapper surfaces that support it.
 - Fixture-registry regeneration depends on `tools/fixture_registry_source/qa_fixture_registry.xlsx` plus the deps in `tools/requirements.txt`.
@@ -56,7 +57,8 @@ Notes:
 | `python3 tools/session_capture_pipeline.py --sync` | Useful for manual backfill and debugging because the watcher or Claude hooks usually keep things current for you | `reports/conversation-captures/raw/**/*`, `reports/conversation-captures/normalized/**/*`, state JSON, and refreshed external note sections | generated artifacts plus external Obsidian note |
 | `python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt` | Re-renders from saved terminal output; useful after a completed run, not as the primary run surface | `reports/parse/matrix/latest-summary.md` by default | generated summary only in draft mode |
 | `python tools/run_parse_with_report.py --tier baseline|matrix|full ...` | Focused reporter iteration and targeted structured-report inspection, not the normal operator workflow | `reports/regression/<timestamp>/report.json`, `report.md`, `LATEST.txt` | generated artifacts only |
-| `python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` | Opt-in `/documents/batch` selected-fixture run; useful when you want batch coverage against an exact JSON-provided fixture list, including larger JSON inputs that need to be chunked into multiple legal 4-item batch requests and registry-annotated warning fixtures that should be treated as expected page-limit warnings instead of hard failures | none by default | no repo mutation by default |
+| `pytest tests/endpoints/batch/test_batch.py -v` | Direct live `/documents/batch` validation | Live repo env for `/documents/batch` | `reports/batch/batch_<timestamp>_<seq>.json` | generated artifacts only under `reports/batch/` |
+| `python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` | Opt-in `/documents/batch` selected-fixture run; useful when you want batch coverage against an exact JSON-provided fixture list, including larger JSON inputs that need to be chunked into multiple legal 4-item batch requests and registry-annotated warning fixtures that should be treated as expected page-limit warnings instead of hard failures | `reports/batch/batch_<timestamp>_<seq>.json` | generated artifacts only under `reports/batch/` |
 | `python tools/generate_fixture_registry.py` | Maintenance command for fixture-registry refresh, not a normal regression run | `tests/endpoints/parse/fixture_registry.yaml` | mutates tracked generated YAML |
 | `pytest tests/endpoints/parse/test_parse_matrix.py -v` with `RUN_PARSE_MATRIX=1` | Valid direct matrix surface for debugging, but the wrapper is the normal path because it captures terminal output and renders the summary | none unless you add your own capture step | no repo mutation by default |
 
@@ -86,6 +88,8 @@ Removed historical reporting paths:
 | `python3 tools/session_capture_pipeline.py --sync` | `reports/conversation-captures/raw/**/*`, `reports/conversation-captures/normalized/**/*`, and refreshed automated note sections |
 | `python tools/reporting/run_parse_matrix_with_summary.py` | `reports/parse/matrix/latest-terminal.txt`, `reports/parse/matrix/latest-summary.md` |
 | `pytest tests/endpoints/parse/ -v` | `reports/parse/responses/<run-id>/*.json` |
+| `pytest tests/endpoints/batch/test_batch.py -v` | `reports/batch/batch_<timestamp>_<seq>.json` |
+| `python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` | `reports/batch/batch_<timestamp>_<seq>.json` |
 | `python tools/reporting/run_parse_matrix_with_summary.py --report` | matrix outputs above plus `reports/regression/<timestamp>/report.json`, `report.md`, `LATEST.txt` |
 | `python tools/run_parse_full_regression.py --report` | matrix outputs above plus `reports/regression/<timestamp>/report.json`, `report.md`, `LATEST.txt` |
 | `python tools/reporting/render_regression_summary.py --endpoint parse --input ...` | `reports/parse/matrix/latest-summary.md` by default, or the explicit `--output` target |
@@ -101,6 +105,8 @@ Removed historical reporting paths:
 | `python3 tools/session_capture_pipeline.py --watch --quiet` | generated files under `reports/conversation-captures/` and automated sections in the external session note while the watcher runs |
 | `python3 tools/session_capture_pipeline.py --sync` | generated files under `reports/conversation-captures/` and automated sections in the external session note |
 | `pytest tests/endpoints/parse/ -v` | generated files under `reports/parse/responses/` |
+| `pytest tests/endpoints/batch/test_batch.py -v` | generated files under `reports/batch/` |
+| `python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` | generated files under `reports/batch/` |
 | `python tools/reporting/run_parse_matrix_with_summary.py` | generated files under `reports/parse/matrix/` |
 | `python tools/reporting/run_parse_matrix_with_summary.py --report` | generated files under `reports/parse/matrix/` and `reports/regression/` |
 | `python tools/reporting/run_parse_matrix_with_summary.py --mode apply` | generated files under `reports/parse/matrix/` and tracked KB file `docs/knowledge-base/parse/promotion-candidates.md` |
