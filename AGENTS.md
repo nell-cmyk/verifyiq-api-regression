@@ -78,6 +78,14 @@
 - Patch narrowly. Preserve passing behavior unless the task explicitly requires a change.
 - Do not refactor, redesign, reorganize, or broaden repo scope unless explicitly asked.
 - Use evidence-first debugging: start from the latest terminal output, response body, status code, headers, and fixture metadata.
+- Planning source of truth: `docs/knowledge-base/repo-roadmap.md`.
+- Implementation source of truth: the repository as it exists now, including code, tests, config, CI, scripts, API specs, and current docs.
+- Before development work: read the roadmap, identify the phase/milestone/next step the task advances, and inspect the relevant repo files before editing.
+- If requested work does not map cleanly to the roadmap, add or update a narrowly scoped roadmap item before or alongside the implementation work.
+- Keep implementation aligned with the roadmap. Do not let roadmap drift accumulate silently.
+- If repo inspection shows the roadmap is stale, blocked, incorrect, already completed, or contradicted by the repo, treat the repo as factual and update the roadmap.
+- Preserve useful roadmap content; do not rewrite broad strategy for minor implementation changes.
+- Agents may update `docs/knowledge-base/repo-roadmap.md` without asking when needed to keep planning aligned with completed work, newly discovered repo facts, changed direction, blockers, risks, assumptions, milestones, priorities, or next steps.
 - For OpenCode sessions in this repo, Mind recovery/checkpointing is mandatory and automatic through `.opencode/plugins/verifyiq-mind-session.js`.
 - Use `./.venv/bin/python tools/mind_session.py ...` for fallback/debug only, or when you need an explicit durable summary before handoff or commit.
 - Keep active workflow state, durable decisions, bug fixes, patterns, and checkpoints in Mind; promote only durable repo truth into tracked docs.
@@ -93,6 +101,7 @@
   1. diagnosis
   2. file-by-file changes
   3. exact rerun command
+- After development work, report which roadmap item was advanced, whether the roadmap was updated, what validation was performed, and which files changed.
 - If validation is blocked by missing secrets, external services, or environment prerequisites, say so plainly.
 - If terminal output conflicts with saved notes or docs, trust the terminal output.
 

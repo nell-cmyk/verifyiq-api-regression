@@ -4,6 +4,8 @@
 Use this file as the canonical operator runbook for the current root checkout.
 
 Use it for the normal end-to-end flow:
+- read the roadmap
+- inspect the repo surfaces the task touches
 - set up the repo
 - recover active context from Mind
 - run the protected baseline
@@ -11,7 +13,9 @@ Use it for the normal end-to-end flow:
 - review artifacts
 - use the guarded Git flow
 
-Use [Command Registry](command-registry.md) for command classification and [Matrix Triage](matrix.md) for deeper matrix-specific triage details.
+Use [Command Registry](command-registry.md) for command classification, [Regression Runner Plan](regression-runner-plan.md) for the canonical-runner consolidation design, and [Matrix Triage](matrix.md) for deeper matrix-specific triage details.
+
+Planning governance for development work lives in `AGENTS.md`: use `docs/knowledge-base/repo-roadmap.md` as the planning source of truth, and treat the repo itself as the source of truth for current implementation details.
 
 ## Prerequisites
 ### Python deps
@@ -79,34 +83,36 @@ At a high level, the repo expects:
 ./.venv/bin/python tools/mind_session.py start
 ```
 
-5. Make a narrow repo change.
-6. Run the protected baseline:
+5. Read `docs/knowledge-base/repo-roadmap.md`, identify the roadmap phase, milestone, or next step the task advances, and inspect the relevant repo files before editing. If the task does not map cleanly, update the roadmap before or alongside the work.
+6. Make a narrow repo change aligned with the roadmap and the current repo state.
+7. Run the relevant validation command for the change. Use the protected baseline by default:
 
 ```bash
 ./.venv/bin/python -m pytest tests/endpoints/parse/ -v
 ```
 
-7. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix wrapper:
+8. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix wrapper:
 
 ```bash
 ./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
 ```
 
-8. If you want the stronger explicit gate, run full regression:
+9. If you want the stronger explicit gate, run full regression:
 
 ```bash
 ./.venv/bin/python tools/run_parse_full_regression.py
 ```
 
-9. Review generated artifacts from the validation surface you used.
-10. Before handoff or commit, save an explicit durable Mind summary only when the automatic session flow is not enough:
+10. Review generated artifacts from the validation surface you used.
+11. Update `docs/knowledge-base/repo-roadmap.md` when the work changes project status, sequencing, risks, blockers, assumptions, milestones, priorities, or next steps.
+12. Before handoff or commit, save an explicit durable Mind summary only when the automatic session flow is not enough:
 
 ```bash
 ./.venv/bin/python tools/mind_session.py save-summary --title "short-title" --body "Durable summary"
 ./.venv/bin/python tools/mind_session.py finish
 ```
 
-11. Review the diff, stage the intended files, and use the guarded Git flow:
+13. Review the diff, stage the intended files, and use the guarded Git flow:
 
 ```bash
 ./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"

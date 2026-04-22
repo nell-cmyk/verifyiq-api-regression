@@ -71,4 +71,4 @@ jobs:
           IAP_CLIENT_ID: ${{ secrets.IAP_CLIENT_ID }}
           PARSE_FIXTURE_FILE: ${{ secrets.PARSE_FIXTURE_FILE }}
           PARSE_FIXTURE_FILE_TYPE: ${{ secrets.PARSE_FIXTURE_FILE_TYPE }}
-        run: python -m pytest tests/endpoints/parse/ -v
+        run: python tools/run_regression.py --suite protected

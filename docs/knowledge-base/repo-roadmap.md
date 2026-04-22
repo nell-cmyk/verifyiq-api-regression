@@ -1,64 +1,210 @@
-# Repo Roadmap
+# VerifyIQ Roadmap
 
 ## Purpose
-Preserve the working roadmap for this repository as durable reference material.
+This roadmap reflects the current repository state and defines the implementation path toward a clean, scalable API regression system with one canonical runner.
 
-This repo should grow into a maintainable API regression suite and a pragmatic operating model for long-term agent-assisted development, without changing the protected `/parse` baseline by default and without introducing process clutter.
+The target operating model is a lean, risk-based regression suite that stays practical for local use, scales as more VerifyIQ endpoints are added, and eventually replaces the current fragmented set of operator-facing Python test wrappers.
 
-## Current Priorities
-- Keep the current `docs/operations/` runbooks and command-surface guidance aligned with the live wrapper/validation surfaces.
-- Extend the curated `/parse` knowledge base only when new stable findings are validated and worth preserving.
-- Keep command-surface documentation current as wrappers or operator-facing commands change.
-- Resolve the remaining roadmap/docs-placement exception without turning planning notes into durable knowledge.
-- Preserve the current simple test-suite split of config, client, diagnostics, endpoint tests, registry tooling, and reporting hooks.
-- Improve UTF-8 / doc hygiene incrementally without changing protected `/parse` behavior.
+## Current Repository Status
+- The existing roadmap already lived at `docs/knowledge-base/repo-roadmap.md`.
+- The runner-consolidation design artifact now lives at `docs/operations/regression-runner-plan.md`.
+- The first canonical runner slice now lives at `tools/run_regression.py` and supports inventory-backed `--list`, `--dry-run`, and live protected-baseline execution only.
+- The checked-in protected-baseline CI workflow now calls `python tools/run_regression.py --suite protected` via the `setup-python` interpreter while preserving the existing secret-aware skip behavior and protected baseline scope.
+- The repository is Python-first and uses `pytest`, `httpx`, `python-dotenv`, `google-auth`, and `pyyaml`.
+- Live endpoint tests are under `tests/`, with current automated endpoint coverage focused on `/v1/documents/parse` and `/v1/documents/batch`.
+- Requests are live, not mocked. `tests/client.py` builds an `httpx.Client` from `BASE_URL`, `API_KEY`, `TENANT_TOKEN`, and Google IAP credentials.
+- `/parse` uses GCS-backed fixtures from `PARSE_FIXTURE_FILE` and `PARSE_FIXTURE_FILE_TYPE`; `/documents/batch` also reuses registry-backed `gs://` fixtures.
+- No local mock server, `responses`, `respx`, VCR, or similar replay layer was found in the active regression surfaces.
+- The current checked-in CI surface is limited to `.github/workflows/protected-baseline.yml`, which runs the protected `/parse` baseline when required secrets are present.
+- The OpenAPI source currently present in the repo is `official-openapi.json` at the repository root.
+- `official-openapi.json` is OpenAPI `3.1.0` and contains many endpoint groups beyond current automated coverage, including `documents`, `applications`, `monitoring`, `parser_studio`, `qa`, `health`, and admin-style paths.
+- Current contract coverage is manual and selective. Shared assertions live in `tests/endpoints/document_contracts.py`, and no full OpenAPI-driven validator or generated-schema workflow is currently in place.
+- Current automated endpoint coverage is narrower than the OpenAPI inventory. The repo currently validates `/v1/documents/parse` and `/v1/documents/batch`; the remaining endpoint surface is still largely unrepresented in regression automation.
 
-## Later Priorities
-- Add CI in two tiers: protected baseline on normal changes, matrix on opt-in or scheduled runs.
-- Add richer run-history or trend reporting only when the suite is large enough to justify it.
-- Introduce a minimal endpoint expansion template after more endpoints exist beyond `/parse`.
-- Expand shared assertion layers or endpoint conventions only when multiple endpoints need the same pattern.
+## Current Validation Surface
 
-## Sequencing
-1. Keep the operations docs aligned with the existing command surface as it changes.
-2. Extend curated `/parse` knowledge-base pages only when new durable findings appear.
-3. Clean up the remaining docs-placement boundary around roadmap/planning notes without turning them into durable knowledge.
-4. Add CI tiers for protected baseline and opt-in matrix flows if still justified.
-5. Introduce endpoint templates only after 2-3 endpoints exist.
-6. Add richer history/trend automation only after sustained matrix usage.
+| Surface | Current entry point | Current purpose | Consolidation note |
+| --- | --- | --- | --- |
+| Protected `/parse` baseline | `./.venv/bin/python -m pytest tests/endpoints/parse/ -v` | Default live gate for `/parse` | Must remain behaviorally stable during migration |
+| `/parse` matrix | `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` | Opt-in broader fileType coverage plus saved summary | Good candidate to become a runner subcommand/category |
+| `/parse` full regression | `./.venv/bin/python tools/run_parse_full_regression.py` | Protected baseline followed by matrix | Strong signal that orchestration already exists but is fragmented |
+| Targeted `/parse` reporting | `./.venv/bin/python tools/run_parse_with_report.py` | Internal reporting/debug helper | Should become internal-only after consolidation |
+| Direct `/documents/batch` suite | `./.venv/bin/python -m pytest tests/endpoints/batch/ -v` | Live batch validation | Should be callable through the canonical runner |
+| Selected-fixture `/documents/batch` wrapper | `./.venv/bin/python tools/run_batch_with_fixtures.py --fixtures-json ...` | Fixture-targeted batch runs | Useful migration input for endpoint/category targeting |
 
-## Anti-Patterns To Avoid
-- Do not change the protected baseline behavior by default.
-- Do not turn the matrix into part of the default `/parse` baseline run.
-- Do not add local fixture fallback or invent a second fixture source of truth.
-- Do not build a generic endpoint test framework before multiple endpoints need it.
-- Do not store every run log in Git.
-- Do not mix regression knowledge with manual QA workflow, ticket workflow, or business-process tooling.
-- Do not let multiple agents share one branch or opportunistically refactor unrelated code.
-- Do not promote unstable terminal output into durable repo truth without a curated summary.
+## Why Consolidation Is Needed
+- The repo already has multiple valid ways to run regression coverage, but the operator command surface is fragmented across direct `pytest` entry points and several Python wrappers.
+- `/parse` alone currently has baseline, matrix, full-regression, and targeted-reporting paths.
+- `/documents/batch` has both direct pytest and wrapper-based execution.
+- This makes it harder to answer basic operator questions: what is the default regression, what is the stronger regression, what is safe to run locally, and which command should CI call as more endpoints arrive.
+- A single runner should simplify execution without discarding the useful logic already present in the existing wrappers.
 
-## Status Tracker
-- Done:
-  - Root instruction files exist: `AGENTS.md`, `CLAUDE.md`
-  - Protected `/parse` baseline is documented
-  - Opt-in matrix path exists
-  - Matrix triage doc exists at `docs/operations/matrix.md`
-  - Command registry exists at `docs/operations/command-registry.md`
-  - Workflow runbook exists at `docs/operations/workflow.md`
-  - Mind is the canonical active session/handoff layer
-  - `docs/operations/current-handoff.md` is pointer-only
-  - Reporting surface lives under `tools/reporting/`
-  - `/parse` durable knowledge-base pages exist under `docs/knowledge-base/parse/`
-  - Legacy root `.codex` reporting scripts are removed
-  - Full regression wrapper exists at `./.venv/bin/python tools/run_parse_full_regression.py`
-  - Checked-in protected-baseline CI exists at `.github/workflows/protected-baseline.yml`
-  - Fixture lifecycle rules are explicit: spreadsheet is the human source of truth, generated YAML is the automation source of truth
-  - Multi-agent Git/governance guidance is materially present
-- Next:
-  - Keep command-surface and operations docs aligned as wrappers or operator guidance change
-  - Add new durable `/parse` knowledge-base entries only when validated findings justify them
-  - Clean up the remaining docs-placement exception under `docs/knowledge-base/`
-- Later:
-  - Expand CI beyond the protected baseline if stronger automated coverage is still desired
-  - Add endpoint expansion template after more endpoints exist
-  - Add run-history/trend support when justified by suite size
+## Existing Roadmap Items Worth Preserving
+- Keep `docs/operations/` aligned with the live command surface whenever command behavior changes.
+- Preserve the current protected `/parse` baseline behavior during migration instead of silently broadening the default gate.
+- Keep the matrix opt-in until the new runner has clear suite boundaries and stable reporting.
+- Keep the current GCS-backed fixture policy; do not add local file fallback for `/parse`.
+- Preserve lean test architecture. Do not build a generic framework ahead of actual multi-endpoint need.
+- Treat `reports/` as disposable generated output, not durable repo truth.
+- Keep durable endpoint knowledge curated in docs and Mind, not as raw terminal logs in Git.
+
+## Modernization Goal
+Adopt one canonical regression entry point:
+
+```bash
+./.venv/bin/python tools/run_regression.py
+```
+
+The `tools/` path matches the repository's existing operator-facing CLI convention. During migration, `tools/run_regression.py` should stay thin and call reusable logic from existing `tools/` modules until coverage and reporting parity are proven.
+
+## Target Command Interface
+
+```bash
+./.venv/bin/python tools/run_regression.py
+./.venv/bin/python tools/run_regression.py --suite protected
+./.venv/bin/python tools/run_regression.py --suite full
+./.venv/bin/python tools/run_regression.py --category auth
+./.venv/bin/python tools/run_regression.py --category contract
+./.venv/bin/python tools/run_regression.py --endpoint parse
+./.venv/bin/python tools/run_regression.py --endpoint batch
+./.venv/bin/python tools/run_regression.py --list
+./.venv/bin/python tools/run_regression.py --dry-run
+```
+
+Planned runner expectations:
+- One command can execute the default necessary regression suite.
+- Targeting works by suite, category, endpoint group, and eventually risk level or tag.
+- `--list` shows what would run and why it is included.
+- `--dry-run` shows the exact underlying pytest nodeids or wrapper calls without hitting live endpoints.
+- Output is concise at the top level and still preserves endpoint, fixture, and summary detail for failure diagnosis.
+- Existing wrappers stay available only as migration inputs until the canonical runner has proven parity.
+
+## Definition Of Necessary Regression
+
+### Include By Default
+- Smoke checks for the most important endpoints and auth layers.
+- Critical user and API flows with representative happy-path coverage.
+- Contract and schema checks for selected request and response shapes.
+- Authentication and authorization checks.
+- Representative negative behavior and high-risk edge cases.
+- Previously broken behavior and high-usage endpoint coverage.
+
+### Avoid By Default
+- Duplicate checks spread across multiple wrappers.
+- Exhaustive permutations that do not materially increase confidence.
+- Slow matrix-style breadth in the default path unless the endpoint risk justifies it.
+- Broad tests with unclear failure ownership.
+- Blind OpenAPI-only validation when live behavior and the spec may have drifted.
+
+## Regression Taxonomy
+
+| Dimension | Planned values | Current repo grounding |
+| --- | --- | --- |
+| Suite | `protected`, `smoke`, `full`, `extended` | `parse` baseline is the current protected default; matrix and full are already separate |
+| Category | `smoke`, `critical-path`, `contract`, `auth`, `negative`, `integration`, `slow`, `legacy` | Current tests already map naturally to happy path, auth, validation, matrix breadth, and batch limits |
+| Endpoint group | `parse`, `batch`, then broader groups such as `documents`, `applications`, `monitoring`, `parser-studio`, `qa`, `health-admin` | Current automation covers only `parse` and `batch`; the broader groups come from `official-openapi.json` inventory |
+| Risk level | `critical`, `high`, `standard`, `extended` | Needed once more endpoints are onboarded so the default suite stays lean |
+
+Initial categorization of current endpoint coverage:
+- `parse`: smoke, critical-path, auth, contract, negative, extended matrix.
+- `batch`: smoke candidate, critical-path, contract, negative, integration-live, extended selected-fixture runs.
+- `legacy`: current standalone wrappers that remain temporarily available during migration.
+
+## Contract And Schema Validation Strategy
+- Treat `official-openapi.json` as the initial contract source, not automatic ground truth.
+- Keep contract validation separate from schema discovery.
+- Contract validation means checking requests and responses against the intended OpenAPI contract.
+- Schema discovery means capturing current live request and response shapes from safe existing regression flows and comparing them with the spec.
+
+### Pilot Strategy
+1. Start with `/v1/documents/parse` because it is the protected baseline, already has stable live fixtures, and already writes response artifacts.
+2. Use existing safe regression inputs only: current `gs://` fixtures, current baseline tests, current matrix wrapper, and current saved artifacts and reports.
+3. Capture representative request and response shapes for `200` and validation-error flows from existing runs rather than from new destructive probing.
+4. Compare observed shapes against `ParseRequest`, `HTTPValidationError`, and current success-response assumptions in `official-openapi.json`.
+5. Document confirmed drift explicitly and decide whether the fix belongs in the spec, the tests, or both.
+6. Extend the same workflow to `/v1/documents/batch` only after the `/parse` pilot produces a stable pattern.
+
+### Drift Handling Rules
+- If the spec is clearly stale and live behavior is accepted product behavior, update the spec and keep the tests aligned.
+- If live behavior is incorrect, preserve the failing test or add a targeted regression guard.
+- If ownership is unclear, record the mismatch as known drift and do not silently treat the spec as authoritative.
+
+## Legacy Script Deprecation Strategy
+
+| Current surface | Near-term status | End-state |
+| --- | --- | --- |
+| `pytest tests/endpoints/parse/ -v` | Keep as protected baseline implementation and debug surface | Still valid for direct pytest debugging, but no longer the primary operator command |
+| `tools/reporting/run_parse_matrix_with_summary.py` | Reuse internally from the canonical runner | Internal helper or compatibility wrapper |
+| `tools/run_parse_full_regression.py` | Keep during migration for parity checks | Deprecated after `tools/run_regression.py --suite full` is proven |
+| `tools/run_parse_with_report.py` | Keep as advanced/debug-only during migration | Internal-only or removed if superseded by runner flags |
+| `pytest tests/endpoints/batch/ -v` | Keep as a direct debug path | No longer primary operator command |
+| `tools/run_batch_with_fixtures.py` | Reuse for targeted batch selection while runner coverage is built | Deprecated or retained as an internal utility |
+
+Deprecation rules:
+- Do not delete wrappers until their useful coverage is callable through `tools/run_regression.py`.
+- Do not remove docs references until CI and local workflow references have moved.
+- Mark old entry points as legacy before removal so operators can transition without ambiguity.
+
+## CI And Local Execution Strategy
+- Local execution remains first-class. The runner must be discoverable and safe for developers before it becomes a CI dependency.
+- Keep the current protected-baseline workflow unchanged until the canonical runner reproduces the same behavior with equal or better clarity.
+- The checked-in protected-baseline workflow now calls `tools/run_regression.py --suite protected` for the default gate.
+- Add a separate `full` or `extended` CI lane only after runtime and secret requirements are understood.
+- Preserve the existing secret-aware skip behavior for live environments.
+- Reuse existing artifact patterns where possible so migration does not destroy diagnosability.
+
+Expected reporting behavior for the canonical runner:
+- Top-level pass or fail summary by suite, endpoint, and category.
+- Clear indication of which underlying tests or wrappers ran.
+- Direct links or paths to generated artifacts such as `reports/parse/...`, `reports/batch/...`, and `reports/regression/...`.
+- Failure summaries that identify endpoint, fixture, request type, and contract-vs-behavior context when relevant.
+
+## Phased Plan
+
+| Phase | Priority | Scope | Exit criteria |
+| --- | --- | --- | --- |
+| Phase 0: Repository and runner inventory | Highest | Map every current regression command, the endpoint coverage it provides, duplication, and gaps between repo automation and OpenAPI inventory | Each existing runner surface is mapped to suites, categories, and a migration disposition |
+| Phase 1: Regression taxonomy | Highest | Define suite names, category rules, endpoint-group naming, and what counts as necessary regression | Current `/parse` and `/batch` tests are classified without changing runtime behavior |
+| Phase 2: One-runner design | Highest | Define `tools/run_regression.py`, its CLI contract, list and dry-run behavior, and how it delegates to existing logic | CLI contract is approved and can express current baseline, batch, matrix, and full flows |
+| Phase 3: Contract and schema modernization | High | Pilot OpenAPI drift detection on `/parse`, then extend to `/batch` | One endpoint has a documented discovery workflow and drift decision process |
+| Phase 4: Legacy migration | High | Route current useful wrapper behavior through the canonical runner and mark old commands as legacy | Operators can use one runner for normal work; old wrappers are clearly secondary |
+| Phase 5: CI and reporting cutover | Medium | Move CI from direct command strings to canonical runner suites and unify summaries | CI calls one runner for the default gate and keeps extended coverage separate |
+| Phase 6: Endpoint expansion | Medium | Add remaining VerifyIQ endpoints through the same taxonomy and risk model | Each new endpoint group enters with explicit suite, category, and contract expectations |
+
+## Milestones Ordered By Priority
+1. Publish a current-state inventory that maps every existing regression command to its endpoint coverage, suite intent, and future status.
+2. Freeze the taxonomy for `suite`, `category`, `endpoint`, and `risk` labels using current `/parse` and `/batch` coverage as the first examples.
+3. Implement the CLI contract for `tools/run_regression.py` on paper before code changes begin.
+4. Use `/v1/documents/parse` as the contract-drift pilot and document how OpenAPI mismatches are handled.
+5. Bring `/documents/batch` under the same runner interface with targeted fixture-selection support.
+6. Confirm the protected CI cutover remains stable before broader canonical-runner execution paths are enabled.
+7. Deprecate fragmented legacy wrappers once operator docs and CI no longer depend on them.
+8. Add the next endpoint group only after it is categorized, risk-ranked, and mapped into the runner.
+
+## Success Criteria And Validation Gates
+- There is exactly one documented primary regression command for normal operator use.
+- `tools/run_regression.py --list` and `--dry-run` explain suite contents without hitting live endpoints.
+- Current `/parse` baseline behavior remains intact throughout migration.
+- Current `/documents/batch` coverage is callable through the canonical runner before batch wrappers are deprecated.
+- The default suite stays lean and diagnostically clear; broader or slower coverage is explicitly named and opt-in.
+- `/parse` and `/batch` both have explicit category labels for smoke, contract, auth or validation, negative, and extended coverage where applicable.
+- The OpenAPI drift workflow is documented and exercised on at least one safe endpoint before broader contract claims are made.
+- CI and docs point to the same canonical runner surface before legacy wrappers are removed.
+
+## Risks, Assumptions, And Open Questions
+- Assumption: the current `/parse` and `/documents/batch` live regression calls are acceptable safe test-environment operations because the repo already depends on them.
+- Assumption: `official-openapi.json` is useful for endpoint inventory and initial contract definitions, but it may include internal, deprecated, or stale surfaces.
+- Risk: consolidating under one `tools/` runner must preserve the current wrapper semantics, artifacts, and opt-in boundaries.
+- Risk: live-environment dependencies, GCS fixture availability, and IAP credentials will continue to constrain what can run by default in CI.
+- Risk: broad endpoint expansion without risk-based gating will recreate the current confusion at a larger scale.
+- Open question: should `/documents/batch` join the default no-argument regression immediately, or remain a named suite until fixture stability and runtime are better characterized?
+- Open question: which remaining OpenAPI endpoint groups are highest business priority after `parse` and `batch`?
+- Open question: which parts of the large OpenAPI inventory are still active product surface versus internal or deprecated endpoints?
+
+## Recommended Next Implementation Steps
+1. Use `docs/operations/regression-runner-plan.md` as the implementation design artifact for runner consolidation.
+2. Keep `./.venv/bin/python tools/run_regression.py` aligned with the exact protected baseline behavior while protected live execution settles.
+3. Add live execution mapping for `full`, parse matrix targeting, and targeted batch flows only after protected execution is stable.
+4. Define metadata for current `/parse` and `/batch` tests so the future runner can target them by suite and category without duplicating logic.
+5. Pilot contract and schema drift detection on `/v1/documents/parse` using existing safe fixtures and artifacts.
+6. Update `docs/operations/command-registry.md`, `docs/operations/workflow.md`, and CI only after the broader canonical runner surface actually exists and has parity.
