@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+from collections import Counter
 from pathlib import Path
+
+import pytest
 
 
 SCRIPT_PATH = (
@@ -18,6 +21,32 @@ def _load_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_load_supplemental_fixtures_rejects_unsupported_extensions(monkeypatch):
+    module = _load_module()
+    monkeypatch.setattr(
+        module,
+        "load_supplemental_registry_doc",
+        lambda: {
+            "fixtures": [
+                {
+                    "gcs_uri": (
+                        "gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/"
+                        "OCR-Gemini of 1160_Bank statement_PBCOM.png.xlsx"
+                    ),
+                    "file_type": "BankStatement",
+                }
+            ]
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="unsupported 'gcs_uri'"):
+        module._load_supplemental_fixtures(
+            used_names=set(),
+            existing_pairs=set(),
+            counts=Counter(),
+        )
 
 
 def test_fixture_metadata_overrides_for_known_batch_guard_error():

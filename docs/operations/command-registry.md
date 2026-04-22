@@ -25,7 +25,7 @@ This is a classification document, not a workflow guide:
 - The protected baseline creates a new `reports/parse/responses/<run-id>/` folder per run and writes one structured response artifact per executed `/parse` test case there.
 - The matrix wrapper sets `RUN_PARSE_MATRIX=1` for you. Direct matrix pytest commands require that env var explicitly.
 - Structured reporting under `reports/regression/<timestamp>/` is opt-in via `--report` on the wrapper surfaces that support it.
-- Fixture-registry regeneration depends on `tools/fixture_registry_source/qa_fixture_registry.xlsx` plus the deps in `tools/requirements.txt`.
+- Fixture-registry regeneration depends on `tools/fixture_registry_source/qa_fixture_registry.xlsx`, `tools/fixture_registry_source/supplemental_fixture_registry.yaml`, and the deps in `tools/requirements.txt`.
 - `tools/safe_git_commit.py` expects a reviewed/staged change set and a clean worktree; `--push` also requires a matching upstream branch.
 
 ## Canonical Commands
@@ -48,6 +48,7 @@ Notes:
 - `python3 tools/session_capture_pipeline.py --sync` is the manual catch-up command behind the live automation; it syncs Codex and Claude transcripts into `reports/conversation-captures/` and refreshes today's automated note sections.
 - `python tools/reporting/run_parse_matrix_with_summary.py --report` also writes `reports/regression/<timestamp>/report.json`, `report.md`, and `LATEST.txt`.
 - `python tools/reporting/run_parse_matrix_with_summary.py --mode apply` additionally appends reviewed promotion candidates to `docs/knowledge-base/parse/promotion-candidates.md`.
+- `python tools/reporting/run_parse_matrix_with_summary.py --fixtures-json /path/to/fixtures.json` keeps the default matrix wrapper flow but replaces canonical selection with the exact registry fixtures resolved from that JSON input after skipping unsupported file formats.
 - `python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` reuses the same fixture JSON normalization rules as `/parse`; when the selection resolves to more than four supported registry fixtures, it runs the full live `/documents/batch` suite once on the first legal chunk, then replays the happy-path checks across the remaining chunks. It also surfaces registry-annotated batch warning fixtures, such as known `DocumentSizeGuardError` page-count limits, instead of silently treating them as ordinary happy-path items.
 
 ## Advanced/Internal Commands
@@ -58,6 +59,7 @@ Notes:
 | `python tools/run_parse_with_report.py --tier baseline|matrix|full ...` | Focused reporter iteration and targeted structured-report inspection, not the normal operator workflow | `reports/regression/<timestamp>/report.json`, `report.md`, `LATEST.txt` | generated artifacts only |
 | `python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` | Opt-in `/documents/batch` selected-fixture run; useful when you want batch coverage against an exact JSON-provided fixture list, including larger JSON inputs that need to be chunked into multiple legal 4-item batch requests and registry-annotated warning fixtures that should be treated as expected page-limit warnings instead of hard failures | none by default | no repo mutation by default |
 | `python tools/generate_fixture_registry.py` | Maintenance command for fixture-registry refresh, not a normal regression run | `tests/endpoints/parse/fixture_registry.yaml` | mutates tracked generated YAML |
+| `python tools/onboard_fixture_json.py --json /path/to/fixtures.json` | Maintenance helper for JSON-driven fixture onboarding before an opt-in selected-fixture run | `tools/fixture_registry_source/supplemental_fixture_registry.yaml`, `tests/endpoints/parse/fixture_registry.yaml` when new supported fixtures are added; skipped unsupported entries are reported only in CLI output | mutates tracked YAML sources only when missing supported fixtures are discovered |
 | `pytest tests/endpoints/parse/test_parse_matrix.py -v` with `RUN_PARSE_MATRIX=1` | Valid direct matrix surface for debugging, but the wrapper is the normal path because it captures terminal output and renders the summary | none unless you add your own capture step | no repo mutation by default |
 
 Notes:
@@ -91,6 +93,7 @@ Removed historical reporting paths:
 | `python tools/reporting/render_regression_summary.py --endpoint parse --input ...` | `reports/parse/matrix/latest-summary.md` by default, or the explicit `--output` target |
 | `python tools/run_parse_with_report.py --tier baseline|matrix|full ...` | `reports/regression/<timestamp>/report.json`, `report.md`, `LATEST.txt` |
 | `python tools/generate_fixture_registry.py` | `tests/endpoints/parse/fixture_registry.yaml` |
+| `python tools/onboard_fixture_json.py --json /path/to/fixtures.json` | `tools/fixture_registry_source/supplemental_fixture_registry.yaml` and, when supported additions exist, `tests/endpoints/parse/fixture_registry.yaml` |
 
 ## Mutating Commands
 | Command | What It Can Mutate |
@@ -108,6 +111,7 @@ Removed historical reporting paths:
 | `python tools/reporting/render_regression_summary.py --mode apply ...` | summary output file and tracked KB file `docs/knowledge-base/parse/promotion-candidates.md` |
 | `python tools/run_parse_with_report.py --tier ...` | generated files under `reports/regression/` |
 | `python tools/generate_fixture_registry.py` | tracked generated file `tests/endpoints/parse/fixture_registry.yaml` |
+| `python tools/onboard_fixture_json.py --json /path/to/fixtures.json` | tracked YAML under `tools/fixture_registry_source/` and, when supported additions exist, tracked generated file `tests/endpoints/parse/fixture_registry.yaml` |
 | `python tools/safe_git_commit.py ...` | Git index/history/upstream push state depending on flags |
 
 ## Update Rules For New/Changed Commands

@@ -7,6 +7,9 @@ does not appear in the protected baseline run. Opt in explicitly:
 
   RUN_PARSE_MATRIX=1 pytest tests/endpoints/parse/test_parse_matrix.py -v
 
+For exact-fixture opt-in runs, set `PARSE_MATRIX_FIXTURES_JSON` to a JSON file
+of `gs://` paths (or use the reporting wrapper's `--fixtures-json` flag).
+
 Windows (cmd/PowerShell):
 
   set RUN_PARSE_MATRIX=1
@@ -29,7 +32,7 @@ from tests.diagnostics import (
     timeout_diagnostics,
 )
 from tests.endpoints.parse.file_types import request_file_type_for
-from tests.endpoints.parse.registry import load_canonical_fixtures
+from tests.endpoints.parse.registry import fixture_test_id, load_matrix_fixtures
 
 ENDPOINT = "/v1/documents/parse"
 _EXPECTED_FIELDS = (
@@ -64,13 +67,15 @@ def _matrix_context(fixture: dict, request_file_type: str) -> str:
     )
 
 
-_CANONICAL = load_canonical_fixtures()
+_SELECTION_JSON = os.getenv("PARSE_MATRIX_FIXTURES_JSON")
+_EXPLICIT_SELECTION = bool(_SELECTION_JSON)
+_MATRIX_FIXTURES = load_matrix_fixtures(selection_json_path=_SELECTION_JSON)
 
 
 @pytest.mark.parametrize(
     "fixture",
-    _CANONICAL,
-    ids=[f["file_type"] for f in _CANONICAL],
+    _MATRIX_FIXTURES,
+    ids=[fixture_test_id(f, explicit_selection=_EXPLICIT_SELECTION) for f in _MATRIX_FIXTURES],
 )
 def test_parse_fixture_contract(client, fixture):
     """Generic /parse contract: 200 JSON, echoed fileType, required fields present."""

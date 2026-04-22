@@ -71,6 +71,8 @@ def _derive_fixture_and_endpoint(item: "pytest.Item") -> tuple[dict, dict, str]:
                         }
                     except Exception:
                         file_type = {"registry": env_ft}
+    elif "batch" in mod_name:
+        endpoint = "/v1/documents/batch"
 
     return fixture, file_type, endpoint
 

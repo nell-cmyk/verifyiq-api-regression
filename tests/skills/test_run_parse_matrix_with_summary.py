@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -117,3 +118,195 @@ def test_wrapper_preserves_nonzero_matrix_exit_but_still_writes_summary(tmp_path
     assert summary_output.exists()
     summary_text = summary_output.read_text(encoding="utf-8")
     assert "auth-proxy" in summary_text
+
+
+def test_wrapper_supports_explicit_fixtures_json_selection(tmp_path):
+    fake_runner = _write_fake_runner(
+        tmp_path,
+        "\n".join(
+            [
+                "============================= test session starts =============================",
+                "collecting ... collected 1 item",
+                "tests/endpoints/parse/test_parse_matrix.py::test_parse_fixture_contract[1118_Bank Statement_Philippine National Bank] PASSED [100%]",
+                "============================== 1 passed in 4.56s ==============================",
+            ]
+        ),
+        0,
+    )
+
+    selection_path = tmp_path / "fixtures.json"
+    selection_path.write_text(
+        (
+            '{"files": '
+            '["gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/'
+            '1118_Bank Statement_Philippine National Bank.pdf"]}'
+        ),
+        encoding="utf-8",
+    )
+
+    terminal_output = tmp_path / "latest-terminal.txt"
+    summary_output = tmp_path / "latest-summary.md"
+    promotion_path = tmp_path / "promotion-candidates.md"
+    promotion_path.write_text("# Promotion Candidates\n\n## Entries\n\n", encoding="utf-8")
+
+    cmd = [
+        sys.executable,
+        str(WRAPPER_PATH),
+        "--fixtures-json",
+        str(selection_path),
+        "--terminal-output",
+        str(terminal_output),
+        "--summary-output",
+        str(summary_output),
+        "--promotion-candidates-path",
+        str(promotion_path),
+        "--",
+        sys.executable,
+        str(fake_runner),
+    ]
+    completed = subprocess.run(cmd, capture_output=True, text=True)
+
+    assert completed.returncode == 0
+    summary_text = summary_output.read_text(encoding="utf-8")
+    assert "Per-selected-fixture Results" in summary_text
+    assert str(selection_path.resolve()) in summary_text
+    assert "1118_Bank Statement_Philippine National Bank" in summary_text
+    assert "Promotion candidates are only generated for canonical runs." in summary_text
+
+
+def test_wrapper_reports_skipped_unsupported_fixture_entries(tmp_path):
+    fake_runner = _write_fake_runner(
+        tmp_path,
+        "\n".join(
+            [
+                "============================= test session starts =============================",
+                "collecting ... collected 1 item",
+                "tests/endpoints/parse/test_parse_matrix.py::test_parse_fixture_contract[1118_Bank Statement_Philippine National Bank] PASSED [100%]",
+                "============================== 1 passed in 4.56s ==============================",
+            ]
+        ),
+        0,
+    )
+
+    selection_path = tmp_path / "fixtures.json"
+    selection_path.write_text(
+        (
+            '{"files": ['
+            '"gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/'
+            '1118_Bank Statement_Philippine National Bank.pdf",'
+            '"gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/'
+            'OCR-Gemini of 1160_Bank statement_PBCOM.png.xlsx"'
+            "]}"
+        ),
+        encoding="utf-8",
+    )
+
+    terminal_output = tmp_path / "latest-terminal.txt"
+    summary_output = tmp_path / "latest-summary.md"
+    promotion_path = tmp_path / "promotion-candidates.md"
+    promotion_path.write_text("# Promotion Candidates\n\n## Entries\n\n", encoding="utf-8")
+
+    cmd = [
+        sys.executable,
+        str(WRAPPER_PATH),
+        "--fixtures-json",
+        str(selection_path),
+        "--terminal-output",
+        str(terminal_output),
+        "--summary-output",
+        str(summary_output),
+        "--promotion-candidates-path",
+        str(promotion_path),
+        "--",
+        sys.executable,
+        str(fake_runner),
+    ]
+    completed = subprocess.run(cmd, capture_output=True, text=True)
+
+    assert completed.returncode == 0
+    assert "Skipped unsupported entries: 1" in completed.stdout
+    assert "OCR-Gemini of 1160_Bank statement_PBCOM.png.xlsx" in completed.stdout
+    assert "unsupported file extension '.xlsx'" in completed.stdout
+
+
+def test_wrapper_rejects_fixtures_json_with_only_unsupported_entries(tmp_path):
+    fake_runner = _write_fake_runner(tmp_path, "runner should not execute", 0)
+    selection_path = tmp_path / "fixtures.json"
+    selection_path.write_text(
+        (
+            '{"files": ['
+            '"gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/'
+            'OCR-Gemini of 1160_Bank statement_PBCOM.png.xlsx"'
+            "]}"
+        ),
+        encoding="utf-8",
+    )
+
+    cmd = [
+        sys.executable,
+        str(WRAPPER_PATH),
+        "--fixtures-json",
+        str(selection_path),
+        "--",
+        sys.executable,
+        str(fake_runner),
+    ]
+    completed = subprocess.run(cmd, capture_output=True, text=True)
+
+    assert completed.returncode != 0
+    assert "No supported fixture entries remained after filtering unsupported formats" in (
+        completed.stderr or completed.stdout
+    )
+    assert "runner should not execute" not in completed.stdout
+
+
+def test_wrapper_clears_inherited_selection_env_without_flag(tmp_path):
+    fake_runner = tmp_path / "fake_runner_env.py"
+    fake_runner.write_text(
+        "\n".join(
+            [
+                "import os",
+                "import sys",
+                "sys.stdout.write(\"\\n\".join([",
+                "    f\"ENV={os.environ.get('PARSE_MATRIX_FIXTURES_JSON')!r}\",",
+                "    '============================= test session starts =============================',",
+                "    'collecting ... collected 1 item',",
+                "    'tests/endpoints/parse/test_parse_matrix.py::test_parse_fixture_contract[TIN] PASSED [100%]',",
+                "    '============================== 1 passed in 4.56s ==============================',",
+                "]))",
+                "raise SystemExit(0)",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    terminal_output = tmp_path / "latest-terminal.txt"
+    summary_output = tmp_path / "latest-summary.md"
+    promotion_path = tmp_path / "promotion-candidates.md"
+    promotion_path.write_text("# Promotion Candidates\n\n## Entries\n\n", encoding="utf-8")
+
+    cmd = [
+        sys.executable,
+        str(WRAPPER_PATH),
+        "--terminal-output",
+        str(terminal_output),
+        "--summary-output",
+        str(summary_output),
+        "--promotion-candidates-path",
+        str(promotion_path),
+        "--",
+        sys.executable,
+        str(fake_runner),
+    ]
+    completed = subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "PARSE_MATRIX_FIXTURES_JSON": "/tmp/should-not-leak.json",
+        },
+    )
+
+    assert completed.returncode == 0
+    assert "ENV=None" in terminal_output.read_text(encoding="utf-8")

@@ -84,7 +84,11 @@ def promotion_candidates(
     *,
     today: str,
     command: str,
+    canonical_only: bool,
 ) -> list[str]:
+    if not canonical_only:
+        return []
+
     candidates: list[str] = []
     for row in rows:
         if row.pytest_status != "PASSED":
@@ -95,17 +99,20 @@ def promotion_candidates(
     return candidates
 
 
-def highlights(rows: list[EnrichedParseResult]) -> list[str]:
+def highlights(rows: list[EnrichedParseResult], *, canonical_only: bool) -> list[str]:
     items: list[str] = []
     passed_unverified = [
-        row.registry_file_type
+        row.registry_file_type if canonical_only else (row.fixture_name or row.registry_file_type)
         for row in rows
         if row.pytest_status == "PASSED" and row.verification_status == "unverified"
     ]
     if passed_unverified:
-        items.append(
-            f"Passed unverified canonicals: {', '.join(passed_unverified)}."
-        )
+        if canonical_only:
+            items.append(f"Passed unverified canonicals: {', '.join(passed_unverified)}.")
+        else:
+            items.append(
+                f"Passed unverified selected fixtures: {', '.join(passed_unverified)}."
+            )
 
     failure_classes = sorted(
         {
@@ -132,12 +139,15 @@ def render_summary_text(
     duration_text: str | None,
     mode: str,
     generated_at: str,
+    fixture_selection_label: str,
+    canonical_only: bool,
 ) -> str:
     counts = Counter(row.failure_class for row in rows)
     candidate_blocks = promotion_candidates(
         rows,
         today=generated_at[:10],
         command=command,
+        canonical_only=canonical_only,
     )
 
     lines = [
@@ -149,6 +159,7 @@ def render_summary_text(
         f"- Input: `{input_path.as_posix()}`",
         f"- Command: `{command}`",
         f"- Duration: `{duration_text or 'unknown'}`",
+        f"- Fixture selection: `{fixture_selection_label}`",
         "",
         "## Counts",
     ]
@@ -169,16 +180,18 @@ def render_summary_text(
     lines.extend(
         [
             "",
-            "## Per-fileType Results",
+            "## Per-fileType Results" if canonical_only else "## Per-selected-fixture Results",
             markdown_table(rows),
             "",
             "## What Looks New In This Run",
         ]
     )
-    lines.extend(f"- {item}" for item in highlights(rows))
+    lines.extend(f"- {item}" for item in highlights(rows, canonical_only=canonical_only))
 
     lines.extend(["", "## Promotion Candidates"])
-    if candidate_blocks:
+    if not canonical_only:
+        lines.append("Promotion candidates are only generated for canonical runs.")
+    elif candidate_blocks:
         lines.append(
             "Copy the reviewed entries below into "
             "`docs/knowledge-base/parse/promotion-candidates.md` if they should be tracked."
@@ -229,6 +242,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=str(DEFAULT_PROMOTION_CANDIDATES),
     )
     parser.add_argument("--command", default=DEFAULT_MATRIX_COMMAND)
+    parser.add_argument("--fixtures-json")
     parser.add_argument("--generated-at")
     return parser
 
@@ -254,7 +268,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.endpoint != "parse":
         raise SystemExit(f"Unsupported endpoint: {args.endpoint}")
 
-    rows = enrich_parse_matrix_results(parsed_run)
+    canonical_only = not args.fixtures_json
+    rows = enrich_parse_matrix_results(
+        parsed_run,
+        fixtures_json=args.fixtures_json or None,
+    )
     summary_text = render_summary_text(
         endpoint=args.endpoint,
         input_path=input_path,
@@ -263,6 +281,12 @@ def main(argv: list[str] | None = None) -> int:
         duration_text=parsed_run.duration_text,
         mode=args.mode,
         generated_at=generated_at,
+        fixture_selection_label=(
+            "canonical"
+            if canonical_only
+            else Path(args.fixtures_json).resolve().as_posix()
+        ),
+        canonical_only=canonical_only,
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -272,6 +296,7 @@ def main(argv: list[str] | None = None) -> int:
         rows,
         today=generated_at[:10],
         command=args.command,
+        canonical_only=canonical_only,
     )
 
     appended = 0

@@ -19,6 +19,12 @@ from tests.diagnostics import (
     request_error_diagnostics,
     timeout_diagnostics,
 )
+from tests.endpoints.document_contracts import (
+    assert_document_result_calculated_fields_not_stub,
+    assert_document_result_file_type,
+    assert_document_result_has_required_fields,
+    assert_http_validation_error_shape,
+)
 from tests.endpoints.parse.fixtures import (
     PARSE_FIXTURE_FILE,
     PARSE_FIXTURE_FILE_TYPE,
@@ -26,8 +32,6 @@ from tests.endpoints.parse.fixtures import (
 )
 
 ENDPOINT = "/v1/documents/parse"
-
-_EXPECTED_FIELDS = ("fileType", "documentQuality", "summaryOCR", "summaryResult", "calculatedFields")
 
 
 # ── Shared response fixture ───────────────────────────────────────────────────
@@ -90,10 +94,11 @@ class TestParseHappyPath:
             context="Parse happy-path response",
             fixture_file=PARSE_FIXTURE_FILE,
         )
-        missing = [f for f in _EXPECTED_FIELDS if f not in body]
-        assert not missing, (
-            f"Missing fields in parse response: {missing}"
-            + diagnose(parse_response, fixture_file=PARSE_FIXTURE_FILE)
+        assert_document_result_has_required_fields(
+            body,
+            context="parse response",
+            response=parse_response,
+            fixture_file=PARSE_FIXTURE_FILE,
         )
 
     def test_file_type_matches_request(self, parse_response):
@@ -105,10 +110,12 @@ class TestParseHappyPath:
             context="Parse happy-path response",
             fixture_file=PARSE_FIXTURE_FILE,
         )
-        assert body.get("fileType") == PARSE_FIXTURE_FILE_TYPE, (
-            f"fileType mismatch: expected {PARSE_FIXTURE_FILE_TYPE!r}, "
-            f"got {body.get('fileType')!r}"
-            + diagnose(parse_response, fixture_file=PARSE_FIXTURE_FILE)
+        assert_document_result_file_type(
+            body,
+            expected_file_type=PARSE_FIXTURE_FILE_TYPE,
+            context="parse response",
+            response=parse_response,
+            fixture_file=PARSE_FIXTURE_FILE,
         )
 
     def test_calculated_fields_not_stub(self, parse_response):
@@ -120,11 +127,12 @@ class TestParseHappyPath:
             parse_response,
             context="Parse happy-path response",
             fixture_file=PARSE_FIXTURE_FILE,
-        ).get("calculatedFields")
-        assert cf != {"pageNumber": 1}, (
-            "calculatedFields is the config-missing stub value — "
-            "computed_fields config may be absent or misconfigured for this fileType"
-            + diagnose(parse_response, fixture_file=PARSE_FIXTURE_FILE)
+        )
+        assert_document_result_calculated_fields_not_stub(
+            cf,
+            context="parse response",
+            response=parse_response,
+            fixture_file=PARSE_FIXTURE_FILE,
         )
 
 
@@ -227,12 +235,4 @@ class TestParseValidation:
         assert resp.status_code == 422, (
             f"Expected 422, got {resp.status_code}" + diagnose(resp)
         )
-        body = parse_json_or_fail(resp, context="Parse validation response")
-        assert "detail" in body, "Missing 'detail' in 422 response" + diagnose(resp)
-        assert isinstance(body["detail"], list), "'detail' must be a list" + diagnose(resp)
-        if body["detail"]:
-            err = body["detail"][0]
-            for key in ("loc", "msg", "type"):
-                assert key in err, (
-                    f"Missing '{key}' in validation error entry" + diagnose(resp)
-                )
+        assert_http_validation_error_shape(resp, context="Parse validation response")

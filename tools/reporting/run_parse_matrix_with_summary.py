@@ -9,6 +9,11 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from tests.endpoints.parse.fixture_json import normalize_fixture_json_entries
+
 RENDER_SCRIPT = Path(__file__).resolve().with_name("render_regression_summary.py")
 DEFAULT_TERMINAL_OUTPUT = REPO_ROOT / "reports" / "parse" / "matrix" / "latest-terminal.txt"
 DEFAULT_SUMMARY_OUTPUT = REPO_ROOT / "reports" / "parse" / "matrix" / "latest-summary.md"
@@ -54,13 +59,27 @@ def command_display(command: list[str]) -> str:
     return subprocess.list2cmdline(command)
 
 
-def reported_command(*, mode: str, custom_command: list[str]) -> str:
+def print_skipped_fixture_entries(*, fixtures_json: Path, skipped) -> None:
+    print(f"Skipped unsupported entries: {len(skipped)}")
+    for item in skipped:
+        print(f"  - {item.gcs_uri}: {item.reason}")
+    print(f"Filtered JSON input: {fixtures_json}")
+
+
+def reported_command(
+    *,
+    mode: str,
+    custom_command: list[str],
+    fixtures_json: Path | None = None,
+) -> str:
     if custom_command:
         return command_display(custom_command)
 
     wrapper_command = [sys.executable, str(CANONICAL_WRAPPER)]
     if mode == "apply":
         wrapper_command.extend(["--mode", "apply"])
+    if fixtures_json is not None:
+        wrapper_command.extend(["--fixtures-json", str(fixtures_json)])
     return command_display(wrapper_command)
 
 
@@ -69,6 +88,7 @@ def run_matrix_and_capture(
     terminal_output: Path,
     *,
     report: bool = False,
+    fixtures_json: Path | None = None,
 ) -> int:
     terminal_output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -77,6 +97,10 @@ def run_matrix_and_capture(
     if report:
         env["REGRESSION_REPORT"] = "1"
         env.setdefault("REGRESSION_REPORT_TIER", "matrix")
+    if fixtures_json is not None:
+        env["PARSE_MATRIX_FIXTURES_JSON"] = str(fixtures_json)
+    else:
+        env.pop("PARSE_MATRIX_FIXTURES_JSON", None)
 
     process = subprocess.Popen(
         command,
@@ -105,6 +129,7 @@ def render_summary(
     promotion_candidates_path: Path,
     mode: str,
     command_to_report: str,
+    fixtures_json: Path | None = None,
 ) -> int:
     cmd = [
         sys.executable,
@@ -122,6 +147,8 @@ def render_summary(
         "--command",
         command_to_report,
     ]
+    if fixtures_json is not None:
+        cmd.extend(["--fixtures-json", str(fixtures_json)])
     completed = subprocess.run(cmd, cwd=REPO_ROOT)
     return completed.returncode
 
@@ -148,6 +175,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Comma-separated registry fileTypes to subset the matrix (e.g. 'Payslip,TIN').",
     )
     parser.add_argument(
+        "--fixtures-json",
+        default="",
+        help="JSON file of gs:// paths to run through the matrix instead of canonical selection.",
+    )
+    parser.add_argument(
         "--k",
         dest="k_expr",
         default="",
@@ -167,6 +199,23 @@ def main(argv: list[str] | None = None) -> int:
 
     custom_command = normalize_remainder(args.pytest_cmd)
     file_types = [ft for ft in (args.file_types or "").split(",") if ft.strip()]
+    fixtures_json = Path(args.fixtures_json).resolve() if args.fixtures_json else None
+    if fixtures_json is not None and not fixtures_json.exists():
+        raise SystemExit(f"Fixture JSON not found: {fixtures_json}")
+    if fixtures_json is not None and file_types:
+        raise SystemExit("--fixtures-json and --file-types are mutually exclusive.")
+    if fixtures_json is not None:
+        try:
+            normalization = normalize_fixture_json_entries(fixtures_json)
+        except ValueError as exc:
+            raise SystemExit(str(exc)) from exc
+        if normalization.skipped:
+            print_skipped_fixture_entries(fixtures_json=fixtures_json, skipped=normalization.skipped)
+        if not normalization.entries:
+            raise SystemExit(
+                "No supported fixture entries remained after filtering unsupported formats "
+                f"from {fixtures_json}."
+            )
     if custom_command:
         command = custom_command
     else:
@@ -181,10 +230,16 @@ def main(argv: list[str] | None = None) -> int:
     command_to_report = reported_command(
         mode=args.mode,
         custom_command=custom_command,
+        fixtures_json=fixtures_json,
     )
 
     print(f"Running matrix command: {command_display(command)}")
-    pytest_rc = run_matrix_and_capture(command, terminal_output, report=args.report)
+    pytest_rc = run_matrix_and_capture(
+        command,
+        terminal_output,
+        report=args.report,
+        fixtures_json=fixtures_json,
+    )
 
     summary_rc = render_summary(
         terminal_output=terminal_output,
@@ -192,6 +247,7 @@ def main(argv: list[str] | None = None) -> int:
         promotion_candidates_path=promotion_candidates_path,
         mode=args.mode,
         command_to_report=command_to_report,
+        fixtures_json=fixtures_json,
     )
 
     if pytest_rc != 0:

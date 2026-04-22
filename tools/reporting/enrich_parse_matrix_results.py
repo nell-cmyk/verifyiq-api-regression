@@ -10,7 +10,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tests.endpoints.parse.file_types import request_file_type_for
-from tests.endpoints.parse.registry import load_canonical_fixtures
+from tests.endpoints.parse.registry import fixture_test_id, load_matrix_fixtures
 
 from parse_pytest_terminal import ParsedTerminalRun
 
@@ -72,16 +72,29 @@ def classify_failure(pytest_status: str, failure_text: str) -> tuple[str, str]:
     return "failed", note
 
 
-def enrich_parse_matrix_results(parsed_run: ParsedTerminalRun) -> list[EnrichedParseResult]:
-    canonical_by_file_type = {
-        fixture["file_type"]: fixture for fixture in load_canonical_fixtures()
+def enrich_parse_matrix_results(
+    parsed_run: ParsedTerminalRun,
+    *,
+    fixtures_json: str | None = None,
+) -> list[EnrichedParseResult]:
+    explicit_selection = bool(fixtures_json)
+    fixtures = load_matrix_fixtures(selection_json_path=fixtures_json)
+    fixtures_by_test_id = {
+        fixture_test_id(fixture, explicit_selection=explicit_selection): fixture
+        for fixture in fixtures
     }
     enriched: list[EnrichedParseResult] = []
 
     for result in parsed_run.results:
-        fixture = canonical_by_file_type.get(result.test_id, {})
-        registry_file_type = result.test_id
-        request_file_type = request_file_type_for(registry_file_type)
+        fixture = fixtures_by_test_id.get(result.test_id, {})
+        registry_file_type = fixture.get("file_type")
+        if not registry_file_type and not explicit_selection:
+            registry_file_type = result.test_id
+        request_file_type = (
+            request_file_type_for(registry_file_type)
+            if registry_file_type
+            else ""
+        )
         failure_class, note = classify_failure(result.status, result.failure_text)
         enriched.append(
             EnrichedParseResult(

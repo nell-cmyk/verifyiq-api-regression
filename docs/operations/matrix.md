@@ -23,6 +23,8 @@ This canonical operator path:
 - saves terminal output to `reports/parse/matrix/latest-terminal.txt`
 - generates `reports/parse/matrix/latest-summary.md`
 - accepts `--report` to also emit structured per-run artifacts under `reports/regression/<timestamp>/`
+- accepts `--fixtures-json /path/to/fixtures.json` to run the exact registry fixtures resolved from that JSON input instead of the default canonical-only selection
+- normalizes JSON-imported `gs://` paths first, skips unsupported file formats with an explicit CLI report, and fails fast if no supported entries remain
 
 2. Canonical re-render from existing saved terminal output:
 
@@ -63,7 +65,7 @@ python tools/reporting/render_regression_summary.py --endpoint parse --input rep
 2. Identify the failing `fileType`, pytest node ID, status code, and fixture metadata.
 3. Inspect the actual response body and headers for contract clues before guessing cause.
 4. Under the current repo policy, request `fileType` comes from the explicit mapping in `tests/endpoints/parse/file_types.py`.
-5. Map the failing case back to the canonical fixture and registry row.
+5. Map the failing case back to the canonical fixture and registry row, or to the explicitly selected fixture when `--fixtures-json` was used.
 6. Classify narrowly:
    - endpoint regression
    - auth or proxy interception
