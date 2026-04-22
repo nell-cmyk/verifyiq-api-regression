@@ -25,6 +25,7 @@ from tests.endpoints.document_contracts import (
     assert_document_result_has_required_fields,
     assert_http_validation_error_shape,
 )
+from tests.endpoints.parse.artifacts import attach as attach_parse_artifacts
 from tests.endpoints.parse.fixtures import (
     PARSE_FIXTURE_FILE,
     PARSE_FIXTURE_FILE_TYPE,
@@ -147,6 +148,7 @@ _AUTH_NEGATIVE_TIMEOUT_SECS = 10.0
 
 
 def _assert_auth_rejection(client: httpx.Client, *, context: str) -> None:
+    attach_parse_artifacts(client)
     try:
         resp = client.post(ENDPOINT, json=PARSE_REQUEST_BASE)
     except httpx.TimeoutException as exc:
