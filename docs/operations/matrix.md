@@ -6,7 +6,7 @@ See also: [Repo Roadmap](../knowledge-base/repo-roadmap.md)
 See also: [Command Registry](command-registry.md)
 See also: [Workflow](workflow.md)
 
-The matrix is hard-gated in code. Running `pytest tests/endpoints/parse/test_parse_matrix.py -v`
+The matrix is hard-gated in code. Running `./.venv/bin/python -m pytest tests/endpoints/parse/test_parse_matrix.py -v`
 without `RUN_PARSE_MATRIX=1` raises a collection error.
 
 ## Post-Run Summary
@@ -14,8 +14,8 @@ Use these commands in this order:
 
 1. Canonical matrix wrapper and summary:
 
-```powershell
-python tools/reporting/run_parse_matrix_with_summary.py
+```bash
+./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
 ```
 
 This canonical operator path:
@@ -28,36 +28,35 @@ This canonical operator path:
 
 2. Canonical re-render from existing saved terminal output:
 
-```powershell
-python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
+```bash
+./.venv/bin/python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
 ```
 
 Use `--mode apply` only after reviewing the generated draft summary.
 
 3. Full regression wrapper when you want the stronger gate:
 
-```powershell
-python tools/run_parse_full_regression.py
+```bash
+./.venv/bin/python tools/run_parse_full_regression.py
 ```
 
 This runs:
-- protected baseline: `pytest tests/endpoints/parse/ -v`
-- matrix wrapper: `python tools/reporting/run_parse_matrix_with_summary.py`
+- protected baseline: `./.venv/bin/python -m pytest tests/endpoints/parse/ -v`
+- matrix wrapper: `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
 - add `--report` to also emit structured per-run artifacts under `reports/regression/<timestamp>/`
 
 4. Advanced/manual flow if you need to separate the steps for debugging:
 
-PowerShell example:
+Shell example:
 
-```powershell
-$env:RUN_PARSE_MATRIX='1'
-pytest tests/endpoints/parse/test_parse_matrix.py -v 2>&1 | Tee-Object -FilePath reports/parse/matrix/latest-terminal.txt
-python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
+```bash
+RUN_PARSE_MATRIX=1 ./.venv/bin/python -m pytest tests/endpoints/parse/test_parse_matrix.py -v 2>&1 | tee reports/parse/matrix/latest-terminal.txt
+./.venv/bin/python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
 ```
 
 5. `tools/reporting/` is the only supported reporting surface:
-- Use `python tools/reporting/run_parse_matrix_with_summary.py` for matrix runs and saved summaries.
-- Use `python tools/reporting/render_regression_summary.py ...` for rerendering from saved terminal output.
+- Use `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` for matrix runs and saved summaries.
+- Use `./.venv/bin/python tools/reporting/render_regression_summary.py ...` for rerendering from saved terminal output.
 - Do not document or rely on `.codex/.../scripts/...` reporting entrypoints.
 
 ## Decision Flow

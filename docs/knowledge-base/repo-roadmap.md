@@ -50,7 +50,8 @@ This repo should grow into a maintainable API regression suite and a pragmatic o
   - Reporting surface lives under `tools/reporting/`
   - `/parse` durable knowledge-base pages exist under `docs/knowledge-base/parse/`
   - Legacy root `.codex` reporting scripts are removed
-  - Full regression wrapper exists at `python tools/run_parse_full_regression.py`
+  - Full regression wrapper exists at `./.venv/bin/python tools/run_parse_full_regression.py`
+  - Checked-in protected-baseline CI exists at `.github/workflows/protected-baseline.yml`
   - Fixture lifecycle rules are explicit: spreadsheet is the human source of truth, generated YAML is the automation source of truth
   - Multi-agent Git/governance guidance is materially present
 - Next:
@@ -58,6 +59,6 @@ This repo should grow into a maintainable API regression suite and a pragmatic o
   - Add new durable `/parse` knowledge-base entries only when validated findings justify them
   - Clean up the remaining docs-placement exception under `docs/knowledge-base/`
 - Later:
-  - Add CI tiers for protected baseline and opt-in matrix flows if still desired
+  - Expand CI beyond the protected baseline if stronger automated coverage is still desired
   - Add endpoint expansion template after more endpoints exist
   - Add run-history/trend support when justified by suite size

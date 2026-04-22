@@ -1,87 +1,18 @@
-# VerifyIQ API Regression Suite
+# CLAUDE.md
 
-## Scope
-This repository is only for VerifyIQ API regression automation.
-
-Do not add or mix in:
-- manual QA workflow
-- ClickUp workflow
-- pass sync logic
-- bug ticket logic
-- ticket analysis logic
-- dev comment workflows
-- unrelated business-process automation
-
-Keep the repo focused on Python + pytest API regression work.
-
-## Current Baseline
-`/parse` is the current prototype endpoint and protected regression baseline.
-
-Use the latest terminal output as the source of truth for status and validation results.
-If docs or assumptions conflict with terminal output, trust the terminal output.
-
-Protected baseline:
-- Command: `pytest tests/endpoints/parse/ -v`
-- Current expected result: `10 passed, 2 warnings`
-
-Additional explicit tier commands:
-- Matrix only: `python tools/reporting/run_parse_matrix_with_summary.py`
-- Full regression: `python tools/run_parse_full_regression.py`
-
-Preserve already-working behavior.
-Do not change passing behavior unless explicitly asked.
-
-## Fixture Rules
-GCS-backed fixtures are required for `/parse`.
-`PARSE_FIXTURE_FILE` must be a `gs://` URI.
-Request `fileType` follows the explicit repo mapping in `tests/endpoints/parse/file_types.py`.
-
-Do not add:
-- local fixture fallback
-- local file-path fallback
-- alternate non-GCS happy-path fixture mode
-
-## Change Rules
-- Patch narrowly.
-- Do not refactor, redesign, generalize, or reorganize unless explicitly asked.
-- Do not modify app logic, test logic, fixtures, auth flow, config behavior, or architecture unless the task requires it.
-- Prefer minimal diffs over cleanup work.
-- Use `httpx` for HTTP client work.
-
-## Canonical Homes
-- Repo-owned executable commands live under `tools/`.
-- Human-facing reporting entrypoints live under `tools/reporting/`.
-- `.codex/skills/` is for agent packaging and adapters, not the primary home for shared repo utilities.
-- `docs/operations/` holds runbooks and commands.
-- `docs/knowledge-base/` holds durable findings.
-- `reports/` is generated output only.
-
-## Multi-Agent Workflow
-- Keep one patch per branch.
-- Start each branch from `main`.
-- Do not let multiple agents edit the same branch at the same time.
-- Keep diffs narrow and avoid opportunistic cleanup.
-- Before handoff or merge, use the protected `/parse` baseline command when validation is needed.
-- The `/parse` matrix is opt-in and hard-gated in code; direct module execution without `RUN_PARSE_MATRIX=1` is an error.
-
-## Debugging Expectations
-- Start triage from the latest terminal output, not from assumptions.
-- For matrix failures, inspect the actual response body, status code, headers, fixture metadata, and registry mapping before proposing root cause.
-- Under the current repo policy, request `fileType` comes from the explicit repo mapping in `tests/endpoints/parse/file_types.py`.
-- Current aliases: `TIN -> TINID`, `ACR -> ACRICard`, `WaterBill -> WaterUtilityBillingStatement`.
-- When a matrix case fails on `fileType`, state the registry label, the mapped request label, and the response label that came back.
-- Use response-body contract clues to distinguish likely endpoint regression, auth/proxy interception, fixture mismatch, and staging instability.
-- If the available evidence does not support a confident conclusion, say what is missing and keep the diagnosis narrow.
-
-## Startup Workflow
-- On a resumed session, read the latest external Obsidian session note via `python3 tools/obsidian_session.py --latest` if it exists, then verify it against the current repo state.
-- When the local automation is installed, expect the note's automated sections to be refreshed from Codex and Claude transcripts by `tools/session_capture_pipeline.py`.
-- On this Mac, use `python3 tools/start_ai_session.py` as the normal daily startup command; it resolves or opens today's note and hands off to the same foreground watcher when needed, while Claude stop hooks update the same note automatically.
-- Re-check Git status, current branch, and latest terminal evidence before acting on saved context.
-- If saved context conflicts with code, terminal output, or Git state, trust the live repo state and update the diagnosis accordingly.
-
-## Output Rules
-Return results in this order:
-1. diagnosis
-2. file-by-file changes
-3. exact rerun command
+- Treat `AGENTS.md` as the canonical project contract. Use it first when repo rules and docs overlap.
+- Repo scope: VerifyIQ API regression automation only. Stay inside Python + pytest live regression work.
+- Use `./.venv/bin/python` for repo-local commands. Bootstrap `.venv` with `python3 -m venv .venv` when needed.
+- Default validation: `./.venv/bin/python -m pytest tests/endpoints/parse/ -v`
+- Broader validation when needed:
+  - `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
+  - `./.venv/bin/python tools/run_parse_full_regression.py`
+  - `./.venv/bin/python -m pytest tests/endpoints/batch/ -v`
+- Do not broaden scope, refactor working paths, or add local fixture fallbacks unless explicitly asked.
+- `PARSE_FIXTURE_FILE` must stay `gs://`; request `fileType` mapping lives in `tests/endpoints/parse/file_types.py`.
+- Trust live terminal output over stale counts or saved notes.
+- Active session notes live outside the repo in the QA Workbench Obsidian vault.
+- Response order for work reports:
+  1. diagnosis
+  2. file-by-file changes
+  3. exact rerun command

@@ -7,9 +7,9 @@ This file is no longer the canonical active handoff system for this project.
 - Canonical active session note location: `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/YYYY-MM-DD - verifyiq-api-regression.md`
 
 ## Use Instead
-- Normal daily startup: `python3 tools/start_ai_session.py`
-- Resolve or open today’s active note only: `python3 tools/obsidian_session.py --today --open`
-- Find the latest active context: `python3 tools/obsidian_session.py --latest`
+- Normal daily startup: `./.venv/bin/python tools/start_ai_session.py`
+- Resolve or open today’s active note only: `./.venv/bin/python tools/obsidian_session.py --today --open`
+- Find the latest active context: `./.venv/bin/python tools/obsidian_session.py --latest`
 
 ## Repo Boundary
 - Keep active task state, working context, and handoff notes in the external Obsidian vault only.

@@ -6,20 +6,20 @@ Emits a structured per-case JSON + Markdown report under
 iteration and targeted inspection, not the default operator workflow.
 
 Prefer these canonical commands for normal use:
-- `python tools/reporting/run_parse_matrix_with_summary.py`
-- `python tools/run_parse_full_regression.py`
+- `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
+- `./.venv/bin/python tools/run_parse_full_regression.py`
 
 Examples:
 
   # one happy-path case
-  python tools/run_parse_with_report.py --tier baseline \
+  ./.venv/bin/python tools/run_parse_with_report.py --tier baseline \
       --case tests/endpoints/parse/test_parse.py::TestParseHappyPath::test_returns_200
 
   # subset of the matrix by fileType
-  python tools/run_parse_with_report.py --tier matrix --file-types Payslip,TIN
+  ./.venv/bin/python tools/run_parse_with_report.py --tier matrix --file-types Payslip,TIN
 
   # full regression with report
-  python tools/run_parse_with_report.py --tier full
+  ./.venv/bin/python tools/run_parse_with_report.py --tier full
 """
 from __future__ import annotations
 

@@ -11,8 +11,9 @@ Output (automation source of truth):
 Re-run this after editing the spreadsheet or supplemental YAML. Idempotent.
 
 Usage:
-  pip install -r tools/requirements.txt
-  python tools/generate_fixture_registry.py
+  python3 -m venv .venv
+  ./.venv/bin/python -m pip install -r tools/requirements.txt
+  ./.venv/bin/python tools/generate_fixture_registry.py
 
 Classification rules (schema_version: 2):
   - Rows with no gs:// path are dropped.
@@ -30,6 +31,7 @@ Classification rules (schema_version: 2):
 """
 from __future__ import annotations
 
+import argparse
 import sys
 from collections import Counter
 from pathlib import Path
@@ -95,6 +97,20 @@ FIXTURE_METADATA_OVERRIDES = {
         "batch_expected_error": "Page count (151) exceeds limit (50)",
     },
 }
+
+
+def build_parser() -> argparse.ArgumentParser:
+    return argparse.ArgumentParser(
+        description="Generate the machine-readable /parse fixture registry from curated sources.",
+        epilog=(
+            "Bootstrap:\n"
+            "  python3 -m venv .venv\n"
+            "  ./.venv/bin/python -m pip install -r tools/requirements.txt\n\n"
+            "Run:\n"
+            "  ./.venv/bin/python tools/generate_fixture_registry.py"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
 
 
 def classify(file_type: str, file_type_status: str) -> tuple[str, bool]:
@@ -187,7 +203,7 @@ def _load_spreadsheet_fixtures() -> tuple[list[dict], Counter[str], int, set[str
     except ModuleNotFoundError as exc:
         raise RuntimeError(
             "openpyxl is required for fixture-registry generation. "
-            "Install tool deps with `pip install -r tools/requirements.txt`."
+            "Install tool deps with `./.venv/bin/python -m pip install -r tools/requirements.txt`."
         ) from exc
 
     wb = openpyxl.load_workbook(SOURCE_XLSX, data_only=True)
@@ -377,7 +393,10 @@ def write_registry_document(doc: dict) -> None:
         yaml.safe_dump(doc, f, allow_unicode=True, sort_keys=False, width=160)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    parser.parse_args(argv)
+
     try:
         doc = build_registry_document()
         write_registry_document(doc)

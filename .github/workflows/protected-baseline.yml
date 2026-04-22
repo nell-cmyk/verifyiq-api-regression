@@ -1,0 +1,74 @@
+name: Protected Baseline
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  parse-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Check live baseline secrets
+        id: secrets
+        env:
+          BASE_URL: ${{ secrets.BASE_URL }}
+          TENANT_TOKEN: ${{ secrets.TENANT_TOKEN }}
+          API_KEY: ${{ secrets.API_KEY }}
+          IAP_CLIENT_ID: ${{ secrets.IAP_CLIENT_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+          PARSE_FIXTURE_FILE: ${{ secrets.PARSE_FIXTURE_FILE }}
+          PARSE_FIXTURE_FILE_TYPE: ${{ secrets.PARSE_FIXTURE_FILE_TYPE }}
+        run: |
+          missing=()
+          for name in BASE_URL TENANT_TOKEN API_KEY IAP_CLIENT_ID GOOGLE_APPLICATION_CREDENTIALS_JSON PARSE_FIXTURE_FILE PARSE_FIXTURE_FILE_TYPE; do
+            if [ -z "${!name}" ]; then
+              missing+=("$name")
+            fi
+          done
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Protected baseline skipped"
+              echo
+              echo "Missing required secrets: ${missing[*]}"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Materialize Google credentials
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+        run: |
+          cred_path="$RUNNER_TEMP/google-credentials.json"
+          printf '%s' "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > "$cred_path"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$cred_path" >> "$GITHUB_ENV"
+
+      - name: Run protected baseline
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          BASE_URL: ${{ secrets.BASE_URL }}
+          TENANT_TOKEN: ${{ secrets.TENANT_TOKEN }}
+          API_KEY: ${{ secrets.API_KEY }}
+          IAP_CLIENT_ID: ${{ secrets.IAP_CLIENT_ID }}
+          PARSE_FIXTURE_FILE: ${{ secrets.PARSE_FIXTURE_FILE }}
+          PARSE_FIXTURE_FILE_TYPE: ${{ secrets.PARSE_FIXTURE_FILE_TYPE }}
+        run: python -m pytest tests/endpoints/parse/ -v

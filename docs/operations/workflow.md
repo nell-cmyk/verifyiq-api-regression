@@ -14,16 +14,17 @@ Use [Command Registry](command-registry.md) for command classification and [Matr
 
 ## Prerequisites
 ### Python deps
-Install base repo deps before running the suite:
+Create the repo-local virtualenv once, then install the base deps:
 
-```powershell
-pip install -r requirements.txt
+```bash
+python3 -m venv .venv
+./.venv/bin/python -m pip install -r requirements.txt
 ```
 
 Install tool-only deps only if you need fixture-registry generation:
 
-```powershell
-pip install -r tools/requirements.txt
+```bash
+./.venv/bin/python -m pip install -r tools/requirements.txt
 ```
 
 ### Env setup
@@ -44,14 +45,14 @@ At a high level, the repo expects:
 1. Install deps and configure `.env` for the current target.
 2. Install the transcript-to-Obsidian automation once on this machine:
 
-```powershell
-python3 tools/install_session_capture_automation.py
+```bash
+./.venv/bin/python tools/install_session_capture_automation.py
 ```
 
 3. Start the normal daily AI session flow in a spare terminal tab:
 
-```powershell
-python3 tools/start_ai_session.py
+```bash
+./.venv/bin/python tools/start_ai_session.py
 ```
 
 4. The startup wrapper resolves or opens today's canonical Obsidian note, prints concise status, and starts the existing foreground watcher only if it is not already running.
@@ -59,40 +60,40 @@ python3 tools/start_ai_session.py
 6. Make a narrow repo change.
 7. Run the protected baseline:
 
-```powershell
-pytest tests/endpoints/parse/ -v
+```bash
+./.venv/bin/python -m pytest tests/endpoints/parse/ -v
 ```
 
 8. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix wrapper:
 
-```powershell
-python tools/reporting/run_parse_matrix_with_summary.py
+```bash
+./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
 ```
 
 9. If you want the stronger explicit gate, run full regression:
 
-```powershell
-python tools/run_parse_full_regression.py
+```bash
+./.venv/bin/python tools/run_parse_full_regression.py
 ```
 
 10. Review generated artifacts from the validation surface you used.
 11. If you want an immediate manual refresh outside the watcher, run the sync pipeline directly:
 
-```powershell
-python3 tools/session_capture_pipeline.py --sync
+```bash
+./.venv/bin/python tools/session_capture_pipeline.py --sync
 ```
 
 12. Review the diff, stage the intended files, and use the guarded Git flow:
 
-```powershell
-python tools/safe_git_commit.py --message "Describe the reviewed change"
+```bash
+./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"
 ```
 
 ## Protected Baseline
 Mandatory default validation surface:
 
-```powershell
-pytest tests/endpoints/parse/ -v
+```bash
+./.venv/bin/python -m pytest tests/endpoints/parse/ -v
 ```
 
 Use it:
@@ -110,8 +111,8 @@ Baseline response artifacts:
 ## Matrix Flow
 Canonical opt-in matrix surface:
 
-```powershell
-python tools/reporting/run_parse_matrix_with_summary.py
+```bash
+./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
 ```
 
 Use it:
@@ -121,8 +122,8 @@ Use it:
 
 Optional structured reporting:
 
-```powershell
-python tools/reporting/run_parse_matrix_with_summary.py --report
+```bash
+./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py --report
 ```
 
 Use [Matrix Triage](matrix.md) for deeper matrix-specific debugging guidance.
@@ -130,8 +131,8 @@ Use [Matrix Triage](matrix.md) for deeper matrix-specific debugging guidance.
 ## Full Regression Flow
 Canonical stronger gate:
 
-```powershell
-python tools/run_parse_full_regression.py
+```bash
+./.venv/bin/python tools/run_parse_full_regression.py
 ```
 
 Use it:
@@ -140,8 +141,8 @@ Use it:
 
 Optional structured reporting:
 
-```powershell
-python tools/run_parse_full_regression.py --report
+```bash
+./.venv/bin/python tools/run_parse_full_regression.py --report
 ```
 
 ## Reporting And Artifact Review
@@ -159,14 +160,14 @@ Optional structured report artifacts when `--report` is enabled:
 - `reports/regression/LATEST.txt`
 
 Default operator expectation:
-- normal matrix runs should use `python tools/reporting/run_parse_matrix_with_summary.py`
+- normal matrix runs should use `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
 - deeper rerendering and targeted reporting commands are secondary; see the [Command Registry](command-registry.md)
 
 ## Registry Refresh Rules
 Run fixture-registry generation only when the curated source data has intentionally changed:
 
-```powershell
-python tools/generate_fixture_registry.py
+```bash
+./.venv/bin/python tools/generate_fixture_registry.py
 ```
 
 Use it:
@@ -176,8 +177,8 @@ Use it:
 
 Use JSON onboarding when a new fixture list arrives as a JSON file of `gs://` paths:
 
-```powershell
-python tools/onboard_fixture_json.py --json path\to\fixtures.json
+```bash
+./.venv/bin/python tools/onboard_fixture_json.py --json path/to/fixtures.json
 ```
 
 This command:
@@ -199,37 +200,37 @@ Do not use it:
 ## Safe Git Flow
 - Review the diff first.
 - Stage only the intended files.
-- Use `python tools/safe_git_commit.py --message "Describe the reviewed change"` for the guarded mechanical commit step.
+- Use `./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"` for the guarded mechanical commit step.
 - Use `--validation full` only when the stronger full-regression gate is intentionally required.
 - Use `--push` only when you are ready to push to the current branch's matching upstream.
 
 ## Active Session State
 - Obsidian now replaces `docs/operations/current-handoff.md` for active state, handoff, working context, and ongoing task tracking.
 - Canonical active state lives outside the repo at `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/YYYY-MM-DD - verifyiq-api-regression.md`.
-- Use `python3 tools/start_ai_session.py` as the normal daily startup command; it resolves or opens today's note and hands off to the same foreground watcher when needed.
-- Resolve or open today's note directly with `python3 tools/obsidian_session.py --today --open` only when you want the note helper without starting the wrapper.
-- Find the latest active context when resuming older work with `python3 tools/obsidian_session.py --latest`.
+- Use `./.venv/bin/python tools/start_ai_session.py` as the normal daily startup command; it resolves or opens today's note and hands off to the same foreground watcher when needed.
+- Resolve or open today's note directly with `./.venv/bin/python tools/obsidian_session.py --today --open` only when you want the note helper without starting the wrapper.
+- Find the latest active context when resuming older work with `./.venv/bin/python tools/obsidian_session.py --latest`.
 - `tools/session_capture_pipeline.py` rebuilds the note's automated sections from local Codex transcripts in `~/.codex/sessions/` and Claude Code transcripts in `~/.claude/projects/`.
-- After `python3 tools/install_session_capture_automation.py`, Claude Code updates the note on `Stop`, `StopFailure`, and `SessionEnd`.
-- On this Mac, keep `python3 tools/session_capture_pipeline.py --watch --quiet` running in a foreground terminal tab for Codex live syncing and Claude backfill. The repo lives under `~/Documents`, so the foreground watcher is more reliable than a background launch agent.
+- After `./.venv/bin/python tools/install_session_capture_automation.py`, Claude Code updates the note on `Stop`, `StopFailure`, and `SessionEnd`.
+- On this Mac, keep `./.venv/bin/python tools/session_capture_pipeline.py --watch --quiet` running in a foreground terminal tab for Codex live syncing and Claude backfill. The repo lives under `~/Documents`, so the foreground watcher is more reliable than a background launch agent.
 - Keep active status, working context, blockers, validation state, and next step in the external session note, not in repo docs. Manual note edits are optional when the automation is running.
 - Promote only durable truth into the repo: governance to `AGENTS.md`, stable runbooks to `docs/operations/*`, and validated findings to `docs/knowledge-base/*`.
 - `docs/operations/current-handoff.md` is a pointer-only deprecation file and must not hold live task state.
 
 ## Session Lifecycle
-1. Start: run `python3 tools/start_ai_session.py` in a spare terminal tab.
+1. Start: run `./.venv/bin/python tools/start_ai_session.py` in a spare terminal tab.
 2. Continue: rely on the automated `Automated active state` and `Automated session log` sections for near-zero-manual session capture; Claude hooks update on stop events, and the foreground watcher keeps Codex and Claude transcripts normalized into the same note.
 3. End: confirm the latest `Next step`, blockers, and promotion targets look correct in the automated note sections, then promote any durable truths into repo docs in the same pass.
 
 ## AI Session Startup Troubleshooting
-- Watcher already running: if `python3 tools/start_ai_session.py` says a watcher is already running, leave that watcher tab in place and keep working. If you intentionally want a fresh watcher, stop the old watcher with `Ctrl-C` in its tab, then rerun `python3 tools/start_ai_session.py`.
-- Obsidian does not open: the command still resolves today's note first. Rerun `python3 tools/obsidian_session.py --today --open` or open `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/YYYY-MM-DD - verifyiq-api-regression.md` directly in Obsidian.
-- Claude hooks are not installed: run `python3 tools/install_session_capture_automation.py` once, then rerun `python3 tools/start_ai_session.py`. The startup wrapper reports hook status but does not install hooks for you.
-- Today's note does not update: first confirm the `python3 tools/start_ai_session.py` watcher tab is still running. If you need an immediate refresh, run `python3 tools/session_capture_pipeline.py --sync`.
-- Duplicate watcher concerns: use `python3 tools/start_ai_session.py` as the only normal startup command. Do not start a second manual `python3 tools/session_capture_pipeline.py --watch --quiet` tab unless you have already stopped the original watcher.
+- Watcher already running: if `./.venv/bin/python tools/start_ai_session.py` says a watcher is already running, leave that watcher tab in place and keep working. If you intentionally want a fresh watcher, stop the old watcher with `Ctrl-C` in its tab, then rerun `./.venv/bin/python tools/start_ai_session.py`.
+- Obsidian does not open: the command still resolves today's note first. Rerun `./.venv/bin/python tools/obsidian_session.py --today --open` or open `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/YYYY-MM-DD - verifyiq-api-regression.md` directly in Obsidian.
+- Claude hooks are not installed: run `./.venv/bin/python tools/install_session_capture_automation.py` once, then rerun `./.venv/bin/python tools/start_ai_session.py`. The startup wrapper reports hook status but does not install hooks for you.
+- Today's note does not update: first confirm the `./.venv/bin/python tools/start_ai_session.py` watcher tab is still running. If you need an immediate refresh, run `./.venv/bin/python tools/session_capture_pipeline.py --sync`.
+- Duplicate watcher concerns: use `./.venv/bin/python tools/start_ai_session.py` as the only normal startup command. Do not start a second manual `./.venv/bin/python tools/session_capture_pipeline.py --watch --quiet` tab unless you have already stopped the original watcher.
 
 ## What Not To Use By Default
 - Do not use direct matrix pytest with manual `RUN_PARSE_MATRIX=1` as the normal operator path; use the matrix wrapper instead.
-- Do not use `python tools/run_parse_with_report.py ...` as the default workflow; it is advanced/internal.
-- Do not use `python tools/reporting/render_regression_summary.py ...` as a substitute for the normal matrix wrapper; it is for saved-output rerendering.
+- Do not use `./.venv/bin/python tools/run_parse_with_report.py ...` as the default workflow; it is advanced/internal.
+- Do not use `./.venv/bin/python tools/reporting/render_regression_summary.py ...` as a substitute for the normal matrix wrapper; it is for saved-output rerendering.
 - Do not use historical `.codex` reporting paths from old notes or old artifacts; the current reporting surface is `tools/reporting/*` only.

@@ -32,18 +32,18 @@ Generate a post-run summary after a completed regression run. Default to safe dr
 ## Commands
 Preferred wrapper for a completed `/parse` matrix run:
 
-```powershell
-python tools/reporting/run_parse_matrix_with_summary.py
+```bash
+./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
 ```
 
 Apply promotion-candidate updates after reviewing the generated draft:
 
-```powershell
-python tools/reporting/run_parse_matrix_with_summary.py --mode apply
+```bash
+./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py --mode apply
 ```
 
 Direct summary generation from an existing saved run:
 
-```powershell
-python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
+```bash
+./.venv/bin/python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
 ```

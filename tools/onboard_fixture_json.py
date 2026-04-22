@@ -141,7 +141,7 @@ def _regenerate_registry_or_exit() -> None:
             raise SystemExit(
                 "Fixture onboarding needs the tool dependencies to regenerate "
                 "tests/endpoints/parse/fixture_registry.yaml. Install them with "
-                "`pip install -r tools/requirements.txt` and rerun the command."
+                "`./.venv/bin/python -m pip install -r tools/requirements.txt` and rerun the command."
             ) from exc
         raise
 

@@ -1,143 +1,100 @@
 # AGENTS.md
 
-## Scope
-This repository is only for VerifyIQ API regression automation.
+## Repository Purpose
+- VerifyIQ API regression automation only.
+- Scope: Python + pytest live regression coverage and maintenance for `/parse` and supported `/documents/batch` validation helpers.
+- Out of scope: manual QA workflow, ClickUp, ticketing, pass-sync logic, and unrelated process automation.
 
-Keep Codex narrowly scoped to this suite:
-- Python + pytest only
-- API regression coverage and maintenance only
+## Project Structure
+- `tests/`: endpoint coverage plus shared validation, fixture, and reporting helpers.
+- `tools/`: repo-owned CLIs.
+- `tools/reporting/`: matrix and reporting wrappers.
+- `docs/operations/`: canonical runbooks and command registry.
+- `docs/knowledge-base/`: durable findings only.
+- `reports/`: generated local artifacts only.
+- External session notes: `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/`.
 
-Do not add or mix in:
-- manual QA workflow
-- ClickUp workflow
-- pass sync logic
-- bug ticket logic
-- unrelated process or project-management automation
+## Runtime/Tooling
+- Run repo-local commands from the repo root.
+- Prefer `./.venv/bin/python` for repo-local Python and pytest commands.
+- One-time local bootstrap:
+  - `python3 -m venv .venv`
+  - `./.venv/bin/python -m pip install -r requirements.txt`
+  - Optional tool deps: `./.venv/bin/python -m pip install -r tools/requirements.txt`
+- Operator command source of truth: `docs/operations/command-registry.md`.
 
-## Current Baseline
-`/parse` is the current prototype endpoint and reference baseline for this repository.
+## Canonical Validation Commands
+- Protected baseline: `./.venv/bin/python -m pytest tests/endpoints/parse/ -v`
+- Matrix wrapper: `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
+- Full regression: `./.venv/bin/python tools/run_parse_full_regression.py`
+- Batch suite: `./.venv/bin/python -m pytest tests/endpoints/batch/ -v`
+- Tooling/reporting suites:
+  - `./.venv/bin/python -m pytest tests/tools/ -v`
+  - `./.venv/bin/python -m pytest tests/skills/ -v`
+  - `./.venv/bin/python -m pytest tests/reporting/ -v`
 
-Protected baseline:
-- Command: `pytest tests/endpoints/parse/ -v`
-- Current expected result: `10 passed, 2 warnings`
+## Test Tiers And When To Run Each
+- Protected baseline: default gate for ordinary repo changes and before handoff or merge.
+- Matrix: when touching fileType mapping, registry selection, reporting, or matrix triage.
+- Full regression: when a stronger `/parse` gate is intentionally required.
+- Batch suite: when touching `/documents/batch` tests, fixtures, or wrappers.
+- Tooling/reporting suites: when editing `tools/`, reporting helpers, or agent/reporting surfaces.
+- Trust live terminal output over hardcoded test counts.
 
-Additional explicit tier commands:
-- Matrix only: `python tools/reporting/run_parse_matrix_with_summary.py`
-- Full regression: `python tools/run_parse_full_regression.py`
+## Safe/Unsafe Commands
+- Safe discovery and validation:
+  - `--help` on repo-owned tools
+  - protected baseline
+  - matrix wrapper
+  - batch suite
+  - repo-local pytest suites
+- Mutating repo commands:
+  - `./.venv/bin/python tools/generate_fixture_registry.py`
+  - `./.venv/bin/python tools/onboard_fixture_json.py --json ...`
+  - `./.venv/bin/python tools/reporting/render_regression_summary.py --mode apply ...`
+  - `./.venv/bin/python tools/safe_git_commit.py ...`
+- Mutating external/local-state commands:
+  - `./.venv/bin/python tools/install_session_capture_automation.py`
+  - `./.venv/bin/python tools/start_ai_session.py`
+  - `./.venv/bin/python tools/obsidian_session.py ...`
+  - `./.venv/bin/python tools/session_capture_pipeline.py --sync|--watch ...`
+- Never run deployment, publish, destructive Git, or data-deleting commands unless explicitly requested.
 
-Validation stance:
-- `pytest tests/endpoints/parse/ -v` is the default validation surface.
-- The matrix remains opt-in and separate from the default baseline.
-- Full regression remains an explicit stronger gate.
+## Development Rules
+- Patch narrowly. Preserve passing behavior unless the task explicitly requires a change.
+- Do not refactor, redesign, reorganize, or broaden repo scope unless explicitly asked.
+- Use evidence-first debugging: start from the latest terminal output, response body, status code, headers, and fixture metadata.
+- `fileType` request mapping lives in `tests/endpoints/parse/file_types.py`.
+- Current aliases: `TIN -> TINID`, `ACR -> ACRICard`, `WaterBill -> WaterUtilityBillingStatement`.
+- GCS-backed fixtures are required for `/parse`; do not add local fixture fallback or local file-path fallback.
+- Use `httpx` for HTTP client work.
+- When a canonical command or workflow changes, update the corresponding docs in the same pass.
 
-Use the latest terminal output as the source of truth for status, regressions, and validation results.
-If terminal output conflicts with assumptions or docs, trust the terminal output.
+## Reporting Expectations
+- Return results in this order:
+  1. diagnosis
+  2. file-by-file changes
+  3. exact rerun command
+- If validation is blocked by missing secrets, external services, or environment prerequisites, say so plainly.
+- If terminal output conflicts with saved notes or docs, trust the terminal output.
 
-Preserve already-working behavior.
-Do not change passing behavior unless explicitly asked.
+## External Dependencies/Secrets
+- Required live env: `BASE_URL`, `TENANT_TOKEN`, `API_KEY`, `IAP_CLIENT_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, `PARSE_FIXTURE_FILE`, `PARSE_FIXTURE_FILE_TYPE`
+- `PARSE_FIXTURE_FILE` must be a `gs://` URI.
+- `/parse` and `/documents/batch` rely on live API access and Google IAP credentials.
+- Active session automation depends on the external Obsidian vault at `/Users/nellvalenzuela/Documents/QA Workbench`.
+- Checked-in CI baseline uses the same live inputs and skips clearly when the required secrets are not configured.
 
-## Debugging Rule
-Use evidence-first debugging for any triage work.
+## Artifact/Report Handling
+- Treat `reports/` as disposable generated output, not durable truth.
+- Protected baseline writes raw `/parse` response artifacts under `reports/parse/responses/`.
+- `/documents/batch` runs write raw artifacts under `reports/batch/`.
+- Matrix wrapper writes `reports/parse/matrix/latest-terminal.txt` and `reports/parse/matrix/latest-summary.md`.
+- Structured reports under `reports/regression/` are opt-in via `--report`.
 
-Start with the latest terminal output and the actual failing response details before proposing causes or fixes.
-Inspect response-body contract clues, status codes, headers, and fixture metadata before escalating to broader theories.
-Under the current repo policy, request `fileType` comes from the explicit repo mapping in `tests/endpoints/parse/file_types.py`.
-Current aliases: `TIN -> TINID`, `ACR -> ACRICard`, `WaterBill -> WaterUtilityBillingStatement`.
-When a matrix failure involves `fileType`, diagnose the registry label, the mapped request label, and the returned response label directly.
-If evidence is incomplete, say so plainly instead of guessing.
-
-## Session Continuity
-Use curated session notes in the external Obsidian vault at `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/` only as restart context.
-The active note may be auto-updated from local Codex and Claude Code transcripts by `tools/session_capture_pipeline.py`; treat those generated sections as helpful context, not a replacement for live repo verification.
-On this Mac, the normal daily startup command is `python3 tools/start_ai_session.py`; it resolves or opens today's canonical note and hands off to the same foreground watcher command `python3 tools/session_capture_pipeline.py --watch --quiet` when needed, while Claude Code continues to use installed stop hooks.
-Current code, terminal output, and Git state override any saved session log or prior summary.
-Verify current repo reality from live files, docs, terminal output, and Git state before acting.
-If the current repo context is already established in the session, continue from that context instead of restarting planning from scratch; re-check only the facts that may have changed.
-
-## Fixture Rules
-GCS-backed fixtures are required for `/parse`.
-`PARSE_FIXTURE_FILE` must be a `gs://` URI.
-Request `fileType` follows the explicit repo mapping in `tests/endpoints/parse/file_types.py`.
-
-Do not add:
-- local fixture fallback
-- local file-path fallback
-- alternate non-GCS happy-path fixture mode
-
-## Change Rules
-Patch narrowly.
-Preserve the existing `/parse` baseline.
-Do not refactor, redesign, generalize, or reorganize the suite unless explicitly asked.
-Do not broaden scope beyond API regression automation.
-
-Favor minimal diffs over cleanup work.
-Keep patches surgical and low-churn, including doc-only tasks.
-Do not change working behavior just to make the code look more abstract or more "complete."
-Use `httpx` for HTTP client work.
-
-## Canonical Homes
-- Repo-owned executable commands live under `tools/`.
-- Human-facing reporting entrypoints live under `tools/reporting/`.
-- `.codex/skills/` is for agent packaging and adapters, not the primary home for shared repo utilities.
-- `docs/operations/` holds runbooks and commands.
-- `docs/knowledge-base/` holds durable findings.
-- `reports/` is generated output only.
-- External active session/handoff notes live under `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/`.
-- Project-owned transcript sync artifacts live under `reports/conversation-captures/`.
-- Do not reintroduce removed root `.codex` reporting entrypoints; translate historical references to `tools/reporting/*`.
-
-## Documentation Maintenance
-When a change affects a canonical command, workflow step, validation tier, source-of-truth location, or other durable repo behavior, update the appropriate markdown documentation in the same pass.
-
-Routing:
-- command surface changes -> `docs/operations/command-registry.md`
-- workflow/run-sequence changes -> `docs/operations/workflow.md`
-- matrix-specific behavior -> `docs/operations/matrix.md`
-- durable `/parse` findings -> `docs/knowledge-base/parse/*`
-- transient active-state only -> external Obsidian session notes under `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/` (`docs/operations/current-handoff.md` is pointer-only)
-- repo-wide planning/priorities -> `docs/knowledge-base/repo-roadmap.md`
-
-Do not promote one-off debugging notes, temporary implementation details, or task-specific context into durable docs.
-
-## Multi-Agent Workflow
-- Keep one patch per branch.
-- Start each branch from `main`.
-- Do not edit the same branch as another agent at the same time.
-- Keep diffs narrow and avoid opportunistic cleanup.
-- Before handoff or merge, validate with the protected baseline command.
-- The `/parse` matrix is opt-in and hard-gated in code; direct module execution without `RUN_PARSE_MATRIX=1` is an error.
-
-## Safe Git Workflow
-Review the diff first. `python tools/safe_git_commit.py` is the guarded mechanical step after review, not the code-review step itself.
-
-Preferred usage:
-- Baseline commit only: `python tools/safe_git_commit.py --message "Describe the reviewed change"`
-- Baseline commit only with auto message: `python tools/safe_git_commit.py --auto-message`
-- Baseline commit + push: `python tools/safe_git_commit.py --message "Describe the reviewed change" --push`
-- Full regression commit + push: `python tools/safe_git_commit.py --message "Describe the reviewed change" --validation full --push`
-- Full regression commit + push with auto message: `python tools/safe_git_commit.py --auto-message --validation full --push`
-- Stage specific files first: `python tools/safe_git_commit.py --message "Describe the reviewed change" --stage AGENTS.md tests/endpoints/parse/test_parse.py`
-- Stage all changed files first: `python tools/safe_git_commit.py --message "Describe the reviewed change" --stage-all`
-- Dry run preview: `python tools/safe_git_commit.py --auto-message --stage-all --push --dry-run`
-
-Guardrails:
-- Default validation is the protected baseline.
-- `--push` is explicit and only pushes `HEAD` to the current branch's matching upstream.
-- The script refuses to continue if there are no staged changes.
-- The script refuses to continue if unstaged or untracked files remain after optional staging.
-- `--auto-message` is explicit and generates a short message from the staged file paths.
-- The script does not auto-push on ordinary file changes.
-
-Reporting note:
-- Use `python tools/reporting/run_parse_matrix_with_summary.py` as the reporting entrypoint when documenting or running the matrix workflow.
-
-## Response Format
-When reporting work, return results in this order:
-1. diagnosis
-2. file-by-file changes
-3. exact rerun command
-
-Default rerun command for the protected baseline:
-`pytest tests/endpoints/parse/ -v`
-
-If a requested change would risk the protected baseline or broaden repo scope, call that out explicitly.
+## Known Gotchas
+- The `/parse` matrix is opt-in; direct matrix pytest requires `RUN_PARSE_MATRIX=1`.
+- Auth-negative `/parse` tests may warn on timeout and still pass by design.
+- The `python` shell alias is not assumed on this machine; use `./.venv/bin/python` or `python3` only when bootstrapping `.venv`.
+- `docs/operations/current-handoff.md` is pointer-only; live session state lives in the external Obsidian note.
+- Historical `.codex` reporting entrypoints are removed; use `tools/reporting/*`.

@@ -17,13 +17,13 @@ Use this reference when summarizing completed `/parse` runs.
 - Write generated summary output under `reports/parse/matrix/`.
 - Include copy-ready promotion-candidate blocks.
 - Do not update tracked knowledge-base files.
-- Preferred command: `python tools/reporting/run_parse_matrix_with_summary.py`
+- Preferred command: `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
 
 ## Apply Mode
 - Generate the same summary artifact first.
 - Update only `docs/knowledge-base/parse/promotion-candidates.md`.
 - Keep candidate status separate from promoted status.
-- Preferred command: `python tools/reporting/run_parse_matrix_with_summary.py --mode apply`
+- Preferred command: `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py --mode apply`
 
 ## Failure Classes
 - `passed`

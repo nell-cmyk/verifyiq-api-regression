@@ -40,5 +40,5 @@ See also: [Promotion Candidates](promotion-candidates.md), [Matrix Triage](../..
 
 ## Durable Boundary
 - Updating the spreadsheet or supplemental YAML and regenerating YAML changes fixture status.
-- `python tools/onboard_fixture_json.py --json /path/to/fixtures.json` is the reusable path for JSON-driven additions; it writes only missing supported fixtures into the supplemental YAML, reports skipped unsupported entries, and regenerates the tracked registry when needed.
+- `./.venv/bin/python tools/onboard_fixture_json.py --json /path/to/fixtures.json` is the reusable path for JSON-driven additions; it writes only missing supported fixtures into the supplemental YAML, reports skipped unsupported entries, and regenerates the tracked registry when needed.
 - Adding or editing a promotion-candidate entry preserves context for humans; it does not mutate the registry.

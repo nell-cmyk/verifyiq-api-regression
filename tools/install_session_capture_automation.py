@@ -154,7 +154,7 @@ def main() -> int:
         _remove_launch_agent(LAUNCH_AGENT_LABEL, LAUNCH_AGENT_PATH)
         launch_agent_reason = (
             "Skipped the background launch agent because this repo lives under a "
-            "macOS-protected folder. Use `python3 tools/start_ai_session.py` for the "
+            "macOS-protected folder. Use `./.venv/bin/python tools/start_ai_session.py` for the "
             "normal daily startup flow; it will hand off to the same foreground watcher "
             "for Codex live syncing when needed."
         )
@@ -169,8 +169,8 @@ def main() -> int:
                 "launch_agent_label": LAUNCH_AGENT_LABEL,
                 "launch_agent_installed": launch_agent_installed,
                 "launch_agent_reason": launch_agent_reason,
-                "startup_command": "python3 tools/start_ai_session.py",
-                "watch_command": "python3 tools/session_capture_pipeline.py --watch --quiet",
+                "startup_command": "./.venv/bin/python tools/start_ai_session.py",
+                "watch_command": "./.venv/bin/python tools/session_capture_pipeline.py --watch --quiet",
             },
             indent=2,
             ensure_ascii=False,

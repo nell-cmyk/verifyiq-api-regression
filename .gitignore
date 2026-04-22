@@ -1,9 +1,11 @@
 .env
+.DS_Store
 __pycache__/
 .pytest_cache/
 *.pyc
 *.pyo
 .python-version
+.venv/
 .claude/
 qa-api-tester-key.json
 reports/

@@ -23,6 +23,23 @@ def _load_module():
     return module
 
 
+def test_help_exits_without_generating(monkeypatch, capsys):
+    module = _load_module()
+
+    def _should_not_run():
+        raise AssertionError("registry generation should not run for --help")
+
+    monkeypatch.setattr(module, "build_registry_document", _should_not_run)
+
+    with pytest.raises(SystemExit) as exc:
+        module.main(["--help"])
+
+    assert exc.value.code == 0
+    captured = capsys.readouterr()
+    assert "usage:" in captured.out
+    assert "Generate the machine-readable /parse fixture registry" in captured.out
+
+
 def test_load_supplemental_fixtures_rejects_unsupported_extensions(monkeypatch):
     module = _load_module()
     monkeypatch.setattr(
