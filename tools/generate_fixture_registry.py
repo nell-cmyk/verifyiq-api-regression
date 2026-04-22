@@ -46,6 +46,44 @@ EXCLUDED_FILE_TYPES = {"No fileType", "Fraud - Skipped"}
 COMPOSITE_DELIMITER = "||"
 CONFIRMED_MARK = "✓"
 UNVERIFIED_MARK = "⚠ Verify"
+FIXTURE_METADATA_OVERRIDES = {
+    (
+        "gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/"
+        "MJRL_MV Dela Cruz_Bank Statement (1).pdf",
+        "BankStatement",
+    ): {
+        "batch_expected_warning": (
+            "Known /documents/batch page-limit warning: this fixture may return "
+            "DocumentSizeGuardError instead of parsed data."
+        ),
+        "batch_expected_error_type": "DocumentSizeGuardError",
+        "batch_expected_error": "Page count (456) exceeds limit (50)",
+    },
+    (
+        "gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/"
+        "MJRL_MV Dela Cruz_Bank Statement (3).pdf",
+        "BankStatement",
+    ): {
+        "batch_expected_warning": (
+            "Known /documents/batch page-limit warning: this fixture may return "
+            "DocumentSizeGuardError instead of parsed data."
+        ),
+        "batch_expected_error_type": "DocumentSizeGuardError",
+        "batch_expected_error": "Page count (66) exceeds limit (50)",
+    },
+    (
+        "gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/"
+        "MJRL_MV Dela Cruz_Bank Statement (4).pdf",
+        "BankStatement",
+    ): {
+        "batch_expected_warning": (
+            "Known /documents/batch page-limit warning: this fixture may return "
+            "DocumentSizeGuardError instead of parsed data."
+        ),
+        "batch_expected_error_type": "DocumentSizeGuardError",
+        "batch_expected_error": "Page count (151) exceeds limit (50)",
+    },
+}
 
 
 def classify(file_type: str, file_type_status: str) -> tuple[str, bool]:
@@ -74,6 +112,13 @@ def reserve_name(candidate: str, used: set[str]) -> str:
         n += 1
     used.add(name)
     return name
+
+
+def fixture_metadata_overrides_for(*, gcs_uri: str, file_type: str | None) -> dict[str, str]:
+    override = FIXTURE_METADATA_OVERRIDES.get((gcs_uri, file_type or ""))
+    if override is None:
+        return {}
+    return dict(override)
 
 
 def main() -> int:
@@ -130,7 +175,7 @@ def main() -> int:
                 "source_row": row_idx,
                 "verification_status": verification_status,
                 "enabled": enabled,
-            })
+            } | fixture_metadata_overrides_for(gcs_uri=str(gcs_uri), file_type=part or None))
 
     fixtures.sort(key=lambda f: (f["source_folder"] or "", f["file_type"] or "", f["name"]))
 
