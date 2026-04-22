@@ -13,6 +13,12 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from tests.endpoints.artifact_runs import ensure_run_folder_name
+from tests.endpoints.parse.artifacts import PARSE_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR
+
 MATRIX_WRAPPER = (
     REPO_ROOT
     / "tools"
@@ -56,7 +62,14 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    baseline_env = os.environ.copy()
+    shared_env = os.environ.copy()
+    ensure_run_folder_name(
+        shared_env,
+        prefix="parse",
+        env_var=PARSE_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR,
+    )
+
+    baseline_env = shared_env.copy()
     if args.report:
         baseline_env["REGRESSION_REPORT"] = "1"
         baseline_env.setdefault("REGRESSION_REPORT_TIER", "baseline")
@@ -72,7 +85,7 @@ def main() -> int:
         matrix_cmd.extend(["--file-types", args.file_types])
     if args.k_expr:
         matrix_cmd.extend(["--k", args.k_expr])
-    matrix_rc = _run_step("Parse matrix", matrix_cmd)
+    matrix_rc = _run_step("Parse matrix", matrix_cmd, env=shared_env.copy())
     if matrix_rc != 0:
         print(f"Full regression failed in matrix step with exit code {matrix_rc}.")
     return matrix_rc

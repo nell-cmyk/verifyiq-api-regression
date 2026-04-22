@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -17,7 +18,9 @@ def _write_fake_runner(tmp_path: Path, text: str, exit_code: int) -> Path:
     script_path.write_text(
         "\n".join(
             [
+                "import os",
                 "import sys",
+                "print(f\"PARSE_RESPONSE_ARTIFACT_RUN_DIR_NAME={os.getenv('PARSE_RESPONSE_ARTIFACT_RUN_DIR_NAME', '<unset>')}\")",
                 f"sys.stdout.write({text!r})",
                 f"raise SystemExit({exit_code})",
             ]
@@ -78,6 +81,11 @@ def test_wrapper_runs_command_and_generates_summary(tmp_path):
     assert summary_output.exists()
     assert "Running matrix command:" in completed.stdout
     assert "PASSED [100%]" in terminal_output.read_text(encoding="utf-8")
+    run_dir_names = re.findall(
+        r"PARSE_RESPONSE_ARTIFACT_RUN_DIR_NAME=(parse_\d{4}-\d{2}-\d{2}-T\d{6}_\d{6}Z)",
+        terminal_output.read_text(encoding="utf-8"),
+    )
+    assert len(run_dir_names) == 1
     summary_text = summary_output.read_text(encoding="utf-8")
     assert "Registry fileType" in summary_text
     assert "Request fileType" in summary_text

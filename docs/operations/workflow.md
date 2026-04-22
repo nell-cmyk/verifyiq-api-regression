@@ -103,9 +103,9 @@ Use it:
 Do not replace this with the matrix or full regression by default.
 
 Baseline response artifacts:
-- `reports/parse/responses/<test-case-id>__<description>__<timestamp>_<seq>.json`
-- one raw JSON file per `/v1/documents/parse` call, written directly under `reports/parse/responses/`
-- supported `/batch` runs also write one raw response artifact per `/v1/documents/batch` call to `reports/batch/batch_<timestamp>_<seq>.json`
+- `reports/parse/responses/parse_<timestamp>/<test-case-id>__<description>__<timestamp>_<seq>.json`
+- one raw JSON file per `/v1/documents/parse` call, grouped into one per-run folder under `reports/parse/responses/`
+- supported `/batch` runs also write one raw response artifact per `/v1/documents/batch` call to `reports/batch/batch_<timestamp>/batch_<timestamp>_<seq>.json`
 
 ## Matrix Flow
 Canonical opt-in matrix surface:
@@ -146,8 +146,8 @@ python tools/run_parse_full_regression.py --report
 
 ## Reporting And Artifact Review
 Baseline artifacts:
-- `reports/parse/responses/<test-case-id>__<description>__<timestamp>_<seq>.json`
-- `reports/batch/batch_<timestamp>_<seq>.json` for supported `/batch` runs
+- `reports/parse/responses/parse_<timestamp>/<test-case-id>__<description>__<timestamp>_<seq>.json`
+- `reports/batch/batch_<timestamp>/batch_<timestamp>_<seq>.json` for supported `/batch` runs
 
 Default matrix/reporting artifacts:
 - `reports/parse/matrix/latest-terminal.txt`

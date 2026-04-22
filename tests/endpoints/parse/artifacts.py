@@ -7,13 +7,14 @@ import json
 import os
 import re
 import threading
-from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
+from tests.endpoints.artifact_runs import readable_utc_timestamp, resolve_run_folder
 
 PARSE_ENDPOINT = "/v1/documents/parse"
 PARSE_RESPONSE_ARTIFACT_DIR_ENV_VAR = "PARSE_RESPONSE_ARTIFACT_DIR"
+PARSE_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR = "PARSE_RESPONSE_ARTIFACT_RUN_DIR_NAME"
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_PARSE_ARTIFACT_DIR = _REPO_ROOT / "reports" / "parse" / "responses"
 _CURRENT_PARSE_NODEID: contextvars.ContextVar[str | None] = contextvars.ContextVar(
@@ -29,6 +30,14 @@ def parse_response_artifact_dir() -> Path:
     if override:
         return Path(override).expanduser().resolve()
     return _DEFAULT_PARSE_ARTIFACT_DIR
+
+
+def parse_response_run_dir() -> Path:
+    return resolve_run_folder(
+        parse_response_artifact_dir(),
+        prefix="parse",
+        env_var=PARSE_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR,
+    )
 
 
 def is_parse_item(nodeid: str | None) -> bool:
@@ -55,7 +64,7 @@ def _artifact_filename(nodeid: str) -> str:
 
     case_id = _safe_label("__".join(part for part in case_id_parts if part)) or "parse"
     description = _safe_label(parts[-1] if parts else "response") or "response"
-    stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
+    stamp = readable_utc_timestamp()
     with _ARTIFACT_LOCK:
         sequence = next(_ARTIFACT_SEQUENCE)
     return f"{case_id}__{description}__{stamp}_{sequence:04d}.json"
@@ -84,8 +93,7 @@ def write_parse_response_artifact(response: httpx.Response) -> Path | None:
     except Exception:
         return None
 
-    out_dir = parse_response_artifact_dir()
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = parse_response_run_dir()
     out_path = out_dir / _artifact_filename(nodeid)
     out_path.write_text(text, encoding="utf-8")
     return out_path

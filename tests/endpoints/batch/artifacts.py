@@ -5,13 +5,14 @@ import itertools
 import json
 import os
 import threading
-from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
+from tests.endpoints.artifact_runs import readable_utc_timestamp, resolve_run_folder
 
 BATCH_ENDPOINT = "/v1/documents/batch"
 BATCH_RESPONSE_ARTIFACT_DIR_ENV_VAR = "BATCH_RESPONSE_ARTIFACT_DIR"
+BATCH_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR = "BATCH_RESPONSE_ARTIFACT_RUN_DIR_NAME"
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEFAULT_BATCH_ARTIFACT_DIR = _REPO_ROOT / "reports" / "batch"
 _ARTIFACT_SEQUENCE = itertools.count(1)
@@ -25,8 +26,16 @@ def batch_response_artifact_dir() -> Path:
     return _DEFAULT_BATCH_ARTIFACT_DIR
 
 
+def batch_response_run_dir() -> Path:
+    return resolve_run_folder(
+        batch_response_artifact_dir(),
+        prefix="batch",
+        env_var=BATCH_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR,
+    )
+
+
 def _artifact_filename() -> str:
-    stamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%S_%fZ")
+    stamp = readable_utc_timestamp()
     with _ARTIFACT_LOCK:
         sequence = next(_ARTIFACT_SEQUENCE)
     return f"batch_{stamp}_{sequence:04d}.json"
@@ -51,8 +60,7 @@ def write_batch_response_artifact(response: httpx.Response) -> Path | None:
     except Exception:
         return None
 
-    out_dir = batch_response_artifact_dir()
-    out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = batch_response_run_dir()
     out_path = out_dir / _artifact_filename()
     out_path.write_text(text, encoding="utf-8")
     return out_path

@@ -35,11 +35,15 @@ def test_write_parse_response_artifact_writes_raw_json_body(monkeypatch, tmp_pat
 
     out_path = write_parse_response_artifact(response)
     clear_current_parse_nodeid()
+    run_dirs = sorted(path for path in tmp_path.iterdir() if path.is_dir())
 
     assert out_path is not None
-    assert out_path.parent == tmp_path.resolve()
+    assert len(run_dirs) == 1
+    assert out_path.parent == run_dirs[0]
+    assert out_path.parent.parent == tmp_path.resolve()
+    assert re.fullmatch(r"parse_\d{4}-\d{2}-\d{2}-T\d{6}_\d{6}Z", run_dirs[0].name)
     assert re.fullmatch(
-        r"test_parse__TestParseHappyPath__test_returns_200__\d{8}T\d{6}_\d{6}Z_\d{4}\.json",
+        r"test_parse__TestParseHappyPath__test_returns_200__\d{4}-\d{2}-\d{2}-T\d{6}_\d{6}Z_\d{4}\.json",
         out_path.name,
     )
     assert out_path.read_text(encoding="utf-8") == raw
@@ -71,6 +75,11 @@ def test_attach_writes_one_artifact_per_parse_response(monkeypatch, tmp_path):
         clear_current_parse_nodeid()
         client.close()
 
-    artifacts = sorted(tmp_path.glob("*.json"))
+    run_dirs = sorted(path for path in tmp_path.iterdir() if path.is_dir())
+    assert len(run_dirs) == 1
+    assert re.fullmatch(r"parse_\d{4}-\d{2}-\d{2}-T\d{6}_\d{6}Z", run_dirs[0].name)
+
+    artifacts = sorted(run_dirs[0].glob("*.json"))
     assert len(artifacts) == 2
+    assert all(path.parent == run_dirs[0] for path in artifacts)
     assert [json.loads(path.read_text(encoding="utf-8"))["call"] for path in artifacts] == [1, 2]

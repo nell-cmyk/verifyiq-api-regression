@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +33,7 @@ def _write_fake_runner(tmp_path: Path, *, exit_code: int = 0) -> Path:
                 "import sys",
                 "from pathlib import Path",
                 "print(f\"BATCH_FIXTURES_JSON={os.getenv('BATCH_FIXTURES_JSON', '<unset>')}\")",
+                "print(f\"BATCH_RESPONSE_ARTIFACT_RUN_DIR_NAME={os.getenv('BATCH_RESPONSE_ARTIFACT_RUN_DIR_NAME', '<unset>')}\")",
                 "selection = os.getenv('BATCH_FIXTURES_JSON')",
                 "if selection:",
                 "    payload = json.loads(Path(selection).read_text(encoding='utf-8'))",
@@ -195,6 +197,12 @@ def test_wrapper_chunks_large_selection_for_custom_command(tmp_path):
     assert completed.stdout.count("BATCH_FIXTURES_JSON=") == 2
     assert "SELECTION_COUNT=4" in completed.stdout
     assert "SELECTION_COUNT=1" in completed.stdout
+    run_dir_names = re.findall(
+        r"BATCH_RESPONSE_ARTIFACT_RUN_DIR_NAME=(batch_\d{4}-\d{2}-\d{2}-T\d{6}_\d{6}Z)",
+        completed.stdout,
+    )
+    assert len(run_dir_names) == 2
+    assert run_dir_names[0] == run_dir_names[1]
 
 
 def test_wrapper_reports_registry_annotated_batch_warnings(tmp_path):

@@ -20,6 +20,8 @@ from tests.endpoints.batch.fixtures import (
     BATCH_FIXTURES_JSON_ENV_VAR,
     BATCH_SAFE_ITEM_LIMIT,
 )
+from tests.endpoints.batch.artifacts import BATCH_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR
+from tests.endpoints.artifact_runs import ensure_run_folder_name
 from tests.endpoints.parse.fixture_json import normalize_fixture_json_entries
 from tests.endpoints.parse.registry import load_registry, resolve_selected_registry_fixtures
 
@@ -155,6 +157,11 @@ def build_chunked_default_steps(
 
 def run_batch_step(step: BatchCommandStep) -> int:
     env = os.environ.copy()
+    ensure_run_folder_name(
+        env,
+        prefix="batch",
+        env_var=BATCH_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR,
+    )
     if step.fixtures_json is not None:
         env[BATCH_FIXTURES_JSON_ENV_VAR] = str(step.fixtures_json)
     else:
