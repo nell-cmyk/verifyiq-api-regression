@@ -2,6 +2,7 @@ import httpx
 
 from tests.config import API_KEY, BASE_URL, IAP_CLIENT_ID, TENANT_TOKEN
 from tests.endpoints.batch.artifacts import attach as attach_batch_artifacts
+from tests.endpoints.parse.artifacts import attach as attach_parse_artifacts
 
 # IAP OIDC token is stable for ~1h; mint once per process.
 _iap_token_cache: str | None = None
@@ -61,6 +62,7 @@ def make_client(timeout: float = 60.0) -> httpx.Client:
         timeout=timeout,
     )
     attach_batch_artifacts(client)
+    attach_parse_artifacts(client)
     # Opt-in regression reporter hooks. No-op unless REGRESSION_REPORT=1.
     from tests.reporting import is_enabled
     if is_enabled():

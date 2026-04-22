@@ -22,7 +22,7 @@ This is a classification document, not a workflow guide:
 - Because this repo and the external vault live under `~/Documents`, macOS background agents may not have reliable permission to read/write them. Use the foreground watcher command for Codex live syncing on this machine.
 - Protected `/parse` happy-path coverage still depends on the repo's configured `PARSE_FIXTURE_FILE` and related auth settings.
 - `PARSE_FIXTURE_FILE` must remain a `gs://` URI.
-- The protected baseline creates a new `reports/parse/responses/<run-id>/` folder per run and writes one structured response artifact per executed `/parse` test case there.
+- Supported `/parse` runs write one raw JSON artifact per `/v1/documents/parse` call to `reports/parse/responses/`.
 - Supported `/batch` runs write one raw JSON artifact per `/v1/documents/batch` call to `reports/batch/`.
 - The matrix wrapper sets `RUN_PARSE_MATRIX=1` for you. Direct matrix pytest commands require that env var explicitly.
 - Structured reporting under `reports/regression/<timestamp>/` is opt-in via `--report` on the wrapper surfaces that support it.
@@ -36,7 +36,7 @@ This is a classification document, not a workflow guide:
 | `python3 tools/start_ai_session.py` | One-command daily startup: resolve or open today's canonical note, print concise status, and start the foreground watcher only if it is not already running | External Obsidian vault exists; run from a terminal tab you can leave open if the watcher starts here | external note `Sessions/YYYY-MM-DD - verifyiq-api-regression.md`; same watcher artifacts as the live sync command when it starts the watcher | external vault markdown only when a note is created or opened; otherwise it hands off to the same generated-artifact flow as the watcher |
 | `python3 tools/obsidian_session.py --today --open` | Start or resume the canonical external active session note for this project | External Obsidian vault exists at `/Users/nellvalenzuela/Documents/QA Workbench` | external note `Sessions/YYYY-MM-DD - verifyiq-api-regression.md` | external vault markdown only |
 | `python3 tools/session_capture_pipeline.py --watch --quiet` | Keep Codex and Claude transcripts normalized into today’s note while you work | Foreground terminal tab; local transcript stores exist | refreshed automated note sections plus `reports/conversation-captures/**/*` | generated artifacts plus external note |
-| `pytest tests/endpoints/parse/ -v` | Protected `/parse` baseline validation | Live repo env for `/parse`; no matrix opt-in | `reports/parse/responses/<run-id>/*.json` | generated artifacts only under `reports/parse/responses/` |
+| `pytest tests/endpoints/parse/ -v` | Protected `/parse` baseline validation | Live repo env for `/parse`; no matrix opt-in | `reports/parse/responses/<test-case-id>__<description>__<timestamp>_<seq>.json` | generated artifacts only under `reports/parse/responses/` |
 | `python tools/reporting/run_parse_matrix_with_summary.py` | Default opt-in `/parse` matrix run plus saved summary | Live repo env for `/parse`; wrapper handles `RUN_PARSE_MATRIX=1` | `reports/parse/matrix/latest-terminal.txt`, `reports/parse/matrix/latest-summary.md` | generated artifacts only in draft mode |
 | `python tools/run_parse_full_regression.py` | Stronger gate: baseline first, then matrix wrapper | Same env as baseline + matrix | same matrix artifacts; optional structured reports with `--report` | generated artifacts only |
 | `python tools/safe_git_commit.py --message "Describe the reviewed change"` | Guarded commit flow after review | Staged changes, clean worktree, branch configured | none | Git state only |
@@ -87,7 +87,7 @@ Removed historical reporting paths:
 | `python3 tools/session_capture_pipeline.py --watch --quiet` | refreshed automated note sections plus `reports/conversation-captures/raw/**/*`, `reports/conversation-captures/normalized/**/*`, and sync state |
 | `python3 tools/session_capture_pipeline.py --sync` | `reports/conversation-captures/raw/**/*`, `reports/conversation-captures/normalized/**/*`, and refreshed automated note sections |
 | `python tools/reporting/run_parse_matrix_with_summary.py` | `reports/parse/matrix/latest-terminal.txt`, `reports/parse/matrix/latest-summary.md` |
-| `pytest tests/endpoints/parse/ -v` | `reports/parse/responses/<run-id>/*.json` |
+| `pytest tests/endpoints/parse/ -v` | `reports/parse/responses/<test-case-id>__<description>__<timestamp>_<seq>.json` |
 | `pytest tests/endpoints/batch/test_batch.py -v` | `reports/batch/batch_<timestamp>_<seq>.json` |
 | `python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` | `reports/batch/batch_<timestamp>_<seq>.json` |
 | `python tools/reporting/run_parse_matrix_with_summary.py --report` | matrix outputs above plus `reports/regression/<timestamp>/report.json`, `report.md`, `LATEST.txt` |
@@ -104,7 +104,7 @@ Removed historical reporting paths:
 | `python3 tools/obsidian_session.py --today --open` | external vault markdown under `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/` |
 | `python3 tools/session_capture_pipeline.py --watch --quiet` | generated files under `reports/conversation-captures/` and automated sections in the external session note while the watcher runs |
 | `python3 tools/session_capture_pipeline.py --sync` | generated files under `reports/conversation-captures/` and automated sections in the external session note |
-| `pytest tests/endpoints/parse/ -v` | generated files under `reports/parse/responses/` |
+| `pytest tests/endpoints/parse/ -v` | generated raw response files under `reports/parse/responses/` |
 | `pytest tests/endpoints/batch/test_batch.py -v` | generated files under `reports/batch/` |
 | `python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` | generated files under `reports/batch/` |
 | `python tools/reporting/run_parse_matrix_with_summary.py` | generated files under `reports/parse/matrix/` |
