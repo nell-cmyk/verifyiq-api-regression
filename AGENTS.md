@@ -12,7 +12,7 @@
 - `docs/operations/`: canonical runbooks and command registry.
 - `docs/knowledge-base/`: durable findings only.
 - `reports/`: generated local artifacts only.
-- External session notes: `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/`.
+- Active workflow memory lives in Mind space `projects/verifyiq-api-regression` via local Mind checkpoints, memories, and session summaries.
 
 ## Runtime/Tooling
 - Run repo-local commands from the repo root.
@@ -21,6 +21,11 @@
   - `python3 -m venv .venv`
   - `./.venv/bin/python -m pip install -r requirements.txt`
   - Optional tool deps: `./.venv/bin/python -m pip install -r tools/requirements.txt`
+- One-time Mind bootstrap for workflow memory:
+  - `curl -fsSL https://raw.githubusercontent.com/GabrielMartinMoran/mind/main/scripts/install.sh | bash`
+  - Ensure `~/.local/bin` is on `PATH` for interactive `mind` usage.
+  - `mind help`
+  - `mind setup opencode`
 - Operator command source of truth: `docs/operations/command-registry.md`.
 
 ## Canonical Validation Commands
@@ -48,22 +53,31 @@
   - matrix wrapper
   - batch suite
   - repo-local pytest suites
+  - `mind help`
+  - `mind status`
+  - `mind checkpoint list "projects/verifyiq-api-regression" --status active`
+  - `mind checkpoint recover "projects/verifyiq-api-regression" --name ...`
+  - `mind search "<query>" --space "projects/verifyiq-api-regression" --detail`
+  - `mind server-status`
 - Mutating repo commands:
   - `./.venv/bin/python tools/generate_fixture_registry.py`
   - `./.venv/bin/python tools/onboard_fixture_json.py --json ...`
   - `./.venv/bin/python tools/reporting/render_regression_summary.py --mode apply ...`
   - `./.venv/bin/python tools/safe_git_commit.py ...`
 - Mutating external/local-state commands:
-  - `./.venv/bin/python tools/install_session_capture_automation.py`
-  - `./.venv/bin/python tools/start_ai_session.py`
-  - `./.venv/bin/python tools/obsidian_session.py ...`
-  - `./.venv/bin/python tools/session_capture_pipeline.py --sync|--watch ...`
+  - `mind setup opencode`
+  - `mind create "projects/verifyiq-api-regression" ...`
+  - `mind add "projects/verifyiq-api-regression" ...`
+  - `mind checkpoint set|complete "projects/verifyiq-api-regression" ...`
+  - `mind serve start --detached`
+  - `mind mcp start --http --detached`
 - Never run deployment, publish, destructive Git, or data-deleting commands unless explicitly requested.
 
 ## Development Rules
 - Patch narrowly. Preserve passing behavior unless the task explicitly requires a change.
 - Do not refactor, redesign, reorganize, or broaden repo scope unless explicitly asked.
 - Use evidence-first debugging: start from the latest terminal output, response body, status code, headers, and fixture metadata.
+- Keep active workflow state, durable decisions, bug fixes, patterns, and checkpoints in Mind; promote only durable repo truth into tracked docs.
 - `fileType` request mapping lives in `tests/endpoints/parse/file_types.py`.
 - Current aliases: `TIN -> TINID`, `ACR -> ACRICard`, `WaterBill -> WaterUtilityBillingStatement`.
 - GCS-backed fixtures are required for `/parse`; do not add local fixture fallback or local file-path fallback.
@@ -82,7 +96,8 @@
 - Required live env: `BASE_URL`, `TENANT_TOKEN`, `API_KEY`, `IAP_CLIENT_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, `PARSE_FIXTURE_FILE`, `PARSE_FIXTURE_FILE_TYPE`
 - `PARSE_FIXTURE_FILE` must be a `gs://` URI.
 - `/parse` and `/documents/batch` rely on live API access and Google IAP credentials.
-- Active session automation depends on the external Obsidian vault at `/Users/nellvalenzuela/Documents/QA Workbench`.
+- Mind stores local workflow memory outside the repo; the current machine defaults to `~/.local/share/data/mind.db`.
+- `mind setup opencode` writes managed OpenCode config under `~/.config/opencode/`.
 - Checked-in CI baseline uses the same live inputs and skips clearly when the required secrets are not configured.
 
 ## Artifact/Report Handling
@@ -96,5 +111,6 @@
 - The `/parse` matrix is opt-in; direct matrix pytest requires `RUN_PARSE_MATRIX=1`.
 - Auth-negative `/parse` tests may warn on timeout and still pass by design.
 - The `python` shell alias is not assumed on this machine; use `./.venv/bin/python` or `python3` only when bootstrapping `.venv`.
-- `docs/operations/current-handoff.md` is pointer-only; live session state lives in the external Obsidian note.
+- Mind uses a local SQLite store; avoid running multiple `mind` commands in parallel against the same store or you may hit `SQLITE_BUSY_RECOVERY`.
+- `docs/operations/current-handoff.md` is pointer-only; live session state lives in Mind space `projects/verifyiq-api-regression`, not in repo docs.
 - Historical `.codex` reporting entrypoints are removed; use `tools/reporting/*`.

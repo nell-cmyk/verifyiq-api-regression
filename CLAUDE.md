@@ -11,7 +11,7 @@
 - Do not broaden scope, refactor working paths, or add local fixture fallbacks unless explicitly asked.
 - `PARSE_FIXTURE_FILE` must stay `gs://`; request `fileType` mapping lives in `tests/endpoints/parse/file_types.py`.
 - Trust live terminal output over stale counts or saved notes.
-- Active session notes live outside the repo in the QA Workbench Obsidian vault.
+- Use Mind for active workflow memory in space `projects/verifyiq-api-regression`; recover with `mind checkpoint list ...`, `mind checkpoint recover ...`, and `mind search ...`.
 - Response order for work reports:
   1. diagnosis
   2. file-by-file changes

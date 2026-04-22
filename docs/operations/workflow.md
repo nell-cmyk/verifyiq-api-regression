@@ -5,6 +5,7 @@ Use this file as the canonical operator runbook for the current root checkout.
 
 Use it for the normal end-to-end flow:
 - set up the repo
+- recover active context from Mind
 - run the protected baseline
 - opt into matrix or full regression when needed
 - review artifacts
@@ -27,6 +28,30 @@ Install tool-only deps only if you need fixture-registry generation:
 ./.venv/bin/python -m pip install -r tools/requirements.txt
 ```
 
+### Mind bootstrap
+Install Mind once for local workflow memory and OpenCode integration:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/GabrielMartinMoran/mind/main/scripts/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+mind help
+mind setup opencode
+```
+
+Create the project space once if it does not already exist:
+
+```bash
+mind create "projects/verifyiq-api-regression" "Persistent memory for VerifyIQ API regression automation" --tags "type:project"
+```
+
+Optional local Mind access surfaces:
+
+```bash
+mind serve start --detached
+mind mcp start --http --detached
+mind server-status
+```
+
 ### Env setup
 Copy `.env.example` to `.env`, then fill in the current environment values.
 
@@ -43,20 +68,27 @@ At a high level, the repo expects:
 
 ## Normal Development Flow
 1. Install deps and configure `.env` for the current target.
-2. Install the transcript-to-Obsidian automation once on this machine:
+2. Install Mind and run `mind setup opencode` if this machine has not been bootstrapped yet.
+3. Recover active context from Mind before changing code:
 
 ```bash
-./.venv/bin/python tools/install_session_capture_automation.py
+mind checkpoint list "projects/verifyiq-api-regression" --status active
+mind checkpoint recover "projects/verifyiq-api-regression" --name <checkpoint-name>
+mind search "<task keywords>" --space "projects/verifyiq-api-regression" --detail
 ```
 
-3. Start the normal daily AI session flow in a spare terminal tab:
+4. If no active checkpoint exists yet for the current work, create or refresh one:
 
 ```bash
-./.venv/bin/python tools/start_ai_session.py
+mind checkpoint set "projects/verifyiq-api-regression" "Goal" "Pending work" --notes "Current status"
 ```
 
-4. The startup wrapper resolves or opens today's canonical Obsidian note, prints concise status, and starts the existing foreground watcher only if it is not already running.
-5. Do normal work in Codex or Claude Code. Claude stop hooks update the note automatically, and the foreground watcher keeps Codex transcripts synced into the same note with near-zero manual note-taking.
+5. Do normal work in OpenCode. After each significant decision, bug fix, pattern, or durable discovery, persist it in Mind:
+
+```bash
+mind add "projects/verifyiq-api-regression" "memory-name" "What: ... Why: ... Where: ... Learned: ..." --tags "cat:decision"
+```
+
 6. Make a narrow repo change.
 7. Run the protected baseline:
 
@@ -77,10 +109,11 @@ At a high level, the repo expects:
 ```
 
 10. Review generated artifacts from the validation surface you used.
-11. If you want an immediate manual refresh outside the watcher, run the sync pipeline directly:
+11. Refresh or close the active checkpoint once the work segment is complete:
 
 ```bash
-./.venv/bin/python tools/session_capture_pipeline.py --sync
+mind checkpoint list "projects/verifyiq-api-regression" --status active
+mind checkpoint complete "projects/verifyiq-api-regression" "<checkpoint-name>" "Completed work summary"
 ```
 
 12. Review the diff, stage the intended files, and use the guarded Git flow:
@@ -205,32 +238,34 @@ Do not use it:
 - Use `--push` only when you are ready to push to the current branch's matching upstream.
 
 ## Active Session State
-- Obsidian now replaces `docs/operations/current-handoff.md` for active state, handoff, working context, and ongoing task tracking.
-- Canonical active state lives outside the repo at `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/YYYY-MM-DD - verifyiq-api-regression.md`.
-- Use `./.venv/bin/python tools/start_ai_session.py` as the normal daily startup command; it resolves or opens today's note and hands off to the same foreground watcher when needed.
-- Resolve or open today's note directly with `./.venv/bin/python tools/obsidian_session.py --today --open` only when you want the note helper without starting the wrapper.
-- Find the latest active context when resuming older work with `./.venv/bin/python tools/obsidian_session.py --latest`.
-- `tools/session_capture_pipeline.py` rebuilds the note's automated sections from local Codex transcripts in `~/.codex/sessions/` and Claude Code transcripts in `~/.claude/projects/`.
-- After `./.venv/bin/python tools/install_session_capture_automation.py`, Claude Code updates the note on `Stop`, `StopFailure`, and `SessionEnd`.
-- On this Mac, keep `./.venv/bin/python tools/session_capture_pipeline.py --watch --quiet` running in a foreground terminal tab for Codex live syncing and Claude backfill. The repo lives under `~/Documents`, so the foreground watcher is more reliable than a background launch agent.
-- Keep active status, working context, blockers, validation state, and next step in the external session note, not in repo docs. Manual note edits are optional when the automation is running.
+- Mind now replaces `docs/operations/current-handoff.md` for active state, handoff, working context, and ongoing task tracking.
+- Canonical project space: `projects/verifyiq-api-regression`.
+- Resume work with `mind checkpoint list ...`, `mind checkpoint recover ...`, and `mind search ...`.
+- Persist decisions, bug fixes, patterns, and config changes with `mind add ... --tags ...`.
+- `mind setup opencode` installs OpenCode protocol instructions, local MCP wiring, and a non-blocking automation plugin for session and compaction continuity.
+- Optional local web and API access is available through `mind serve start --detached` on `http://localhost:30303`.
+- Optional local HTTP MCP access is available through `mind mcp start --http --detached` on `http://localhost:7438/mcp`.
+- Keep active status and working context in Mind, not in repo docs.
 - Promote only durable truth into the repo: governance to `AGENTS.md`, stable runbooks to `docs/operations/*`, and validated findings to `docs/knowledge-base/*`.
-- `docs/operations/current-handoff.md` is a pointer-only deprecation file and must not hold live task state.
+- `docs/operations/current-handoff.md` is pointer-only and must not hold live task state.
 
 ## Session Lifecycle
-1. Start: run `./.venv/bin/python tools/start_ai_session.py` in a spare terminal tab.
-2. Continue: rely on the automated `Automated active state` and `Automated session log` sections for near-zero-manual session capture; Claude hooks update on stop events, and the foreground watcher keeps Codex and Claude transcripts normalized into the same note.
-3. End: confirm the latest `Next step`, blockers, and promotion targets look correct in the automated note sections, then promote any durable truths into repo docs in the same pass.
+1. Start: list active checkpoints, recover the right checkpoint, and search for relevant task memories.
+2. Continue: keep the active checkpoint current and add durable memories as decisions, discoveries, or fixes happen. OpenCode's Mind automation plugin assists session and compaction continuity after `mind setup opencode`.
+3. End: complete the active checkpoint, then promote any durable truths into repo docs in the same pass.
 
-## AI Session Startup Troubleshooting
-- Watcher already running: if `./.venv/bin/python tools/start_ai_session.py` says a watcher is already running, leave that watcher tab in place and keep working. If you intentionally want a fresh watcher, stop the old watcher with `Ctrl-C` in its tab, then rerun `./.venv/bin/python tools/start_ai_session.py`.
-- Obsidian does not open: the command still resolves today's note first. Rerun `./.venv/bin/python tools/obsidian_session.py --today --open` or open `/Users/nellvalenzuela/Documents/QA Workbench/Sessions/YYYY-MM-DD - verifyiq-api-regression.md` directly in Obsidian.
-- Claude hooks are not installed: run `./.venv/bin/python tools/install_session_capture_automation.py` once, then rerun `./.venv/bin/python tools/start_ai_session.py`. The startup wrapper reports hook status but does not install hooks for you.
-- Today's note does not update: first confirm the `./.venv/bin/python tools/start_ai_session.py` watcher tab is still running. If you need an immediate refresh, run `./.venv/bin/python tools/session_capture_pipeline.py --sync`.
-- Duplicate watcher concerns: use `./.venv/bin/python tools/start_ai_session.py` as the only normal startup command. Do not start a second manual `./.venv/bin/python tools/session_capture_pipeline.py --watch --quiet` tab unless you have already stopped the original watcher.
+## Mind Troubleshooting
+- `mind` not found: ensure `~/.local/bin` is on `PATH`. If the launcher shim is missing or stale on this machine, use `~/.local/share/mind/mind` directly.
+- OpenCode does not use Mind: rerun `mind setup opencode`, then inspect `~/.config/opencode/opencode.json` for `mcp.mind`, the managed instruction file, and the managed plugin.
+- Need the web UI or HTTP API: run `mind serve start --detached`, then browse `http://localhost:30303`. Stop it with `mind serve stop`.
+- Need the HTTP MCP endpoint: run `mind mcp start --http --detached`, confirm with `mind server-status`, and stop it with `mind mcp stop`.
+- Active context looks stale: run `mind checkpoint list "projects/verifyiq-api-regression" --status active`, recover the intended checkpoint by name, then run `mind search "<keywords>" --space "projects/verifyiq-api-regression" --detail`.
+- The project space does not exist yet: create it once with `mind create "projects/verifyiq-api-regression" "Persistent memory for VerifyIQ API regression automation" --tags "type:project"`.
+- Multiple `mind` commands fail with `SQLITE_BUSY_RECOVERY`: rerun them sequentially instead of in parallel; Mind uses a local SQLite store.
 
 ## What Not To Use By Default
 - Do not use direct matrix pytest with manual `RUN_PARSE_MATRIX=1` as the normal operator path; use the matrix wrapper instead.
 - Do not use `./.venv/bin/python tools/run_parse_with_report.py ...` as the default workflow; it is advanced/internal.
 - Do not use `./.venv/bin/python tools/reporting/render_regression_summary.py ...` as a substitute for the normal matrix wrapper; it is for saved-output rerendering.
 - Do not use historical `.codex` reporting paths from old notes or old artifacts; the current reporting surface is `tools/reporting/*` only.
+- Do not rebuild a repo-local note-taking workflow around Obsidian or transcript watchers; Mind is now the canonical memory and continuity layer.
