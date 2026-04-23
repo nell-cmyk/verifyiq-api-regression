@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 import pytest
 
-from tests.diagnostics import diagnose, request_error_diagnostics, timeout_diagnostics
+from tests.diagnostics import diagnose, parse_json_or_fail, request_error_diagnostics, timeout_diagnostics
 
 GET_SMOKE_TIMEOUT_SECS = 30.0
 
@@ -31,7 +32,7 @@ def _case_context(case: GetSmokeCase) -> str:
     return "\n".join(lines)
 
 
-def assert_get_smoke_200(client: httpx.Client, case: GetSmokeCase) -> None:
+def get_smoke_response(client: httpx.Client, case: GetSmokeCase) -> httpx.Response:
     ctx = _case_context(case)
     params = dict(case.params) if case.params else None
     try:
@@ -59,3 +60,17 @@ def assert_get_smoke_200(client: httpx.Client, case: GetSmokeCase) -> None:
         + diagnose(resp)
         + ctx
     )
+    return resp
+
+
+def get_smoke_json(client: httpx.Client, case: GetSmokeCase, *, context: str | None = None) -> Any:
+    resp = get_smoke_response(client, case)
+    return parse_json_or_fail(
+        resp,
+        context=context or f"GET smoke JSON response for {case.path}",
+        extra_context=_case_context(case),
+    )
+
+
+def assert_get_smoke_200(client: httpx.Client, case: GetSmokeCase) -> None:
+    get_smoke_response(client, case)
