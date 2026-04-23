@@ -43,7 +43,7 @@ That rating is appropriate because the repository already has a disciplined prot
 
 ## Main Gaps
 - Live endpoint automation still covers only a small subset of the OpenAPI inventory, but it now extends beyond `/v1/documents/parse` and `/v1/documents/batch` through the opt-in GET smoke lane.
-- The suite now has an explicit opt-in cross-endpoint GET smoke lane. `protected` remains the real default gate, while `smoke` is now implemented as a 200-only GET suite rather than a broader default regression.
+- The suite now has an explicit opt-in cross-endpoint GET smoke lane. `protected` remains the real default gate, while `smoke` is implemented as a bounded GET suite with 200 assertions for covered current endpoints plus exact-status checks for a small set of known non-200 surfaces.
 - Contract and schema validation are still manual and selective. There is no checked-in OpenAPI validator, drift register, or observed-schema comparison workflow in operation.
 - The canonical runner is still only partially real. `tools/run_regression.py` can list and dry-run multiple mappings and now executes live for `--suite protected`, `--suite smoke`, and `--suite full`, but batch and other targeted execution paths remain incomplete.
 - Offline pytest suites are not cleanly isolated from live env requirements because `tests/conftest.py` imports `tests.client`, which imports `tests.config` at module import time.
@@ -56,7 +56,7 @@ That rating is appropriate because the repository already has a disciplined prot
 ## Detailed Assessment By Dimension
 
 ### 1. Test Strategy and Scope
-- Current state: The live strategy is strong for `/parse` and decent for `/documents/batch`, and the repo now has an opt-in cross-group GET smoke lane under `tests/endpoints/get_smoke/`. `/parse` has happy-path, auth-negative, validation, and opt-in matrix coverage in `tests/endpoints/parse/test_parse.py` and `tests/endpoints/parse/test_parse_matrix.py`. `/documents/batch` has happy-path, validation, limit handling, and partial-failure coverage in `tests/endpoints/batch/test_batch.py`. The new smoke lane covers status-200 checks for safely testable current GET endpoints, but setup-backed, query-backed, and unstable GET routes are still deferred.
+- Current state: The live strategy is strong for `/parse` and decent for `/documents/batch`, and the repo now has an opt-in cross-group GET smoke lane under `tests/endpoints/get_smoke/`. `/parse` has happy-path, auth-negative, validation, and opt-in matrix coverage in `tests/endpoints/parse/test_parse.py` and `tests/endpoints/parse/test_parse_matrix.py`. `/documents/batch` has happy-path, validation, limit handling, and partial-failure coverage in `tests/endpoints/batch/test_batch.py`. The smoke lane now covers status-200 checks for safely testable current GET endpoints plus exact checks for the known `401`/`403`/`502` surfaces, while the remaining setup-backed, query-backed, and unstable GET routes are still deferred.
 - Professional expectation: A professional API automation repo has a deliberately defined test model that distinguishes protected smoke, regression, contract/schema, auth/authz, negative, and extended lanes across the covered endpoint set.
 - Gap: The current taxonomy exists mostly in docs and roadmap text, not as an enforced runnable model beyond `protected`, `full`, and the parse matrix.
 - Recommended improvement: Define the minimum required category set per endpoint group and decide whether `protected` remains parse-only or evolves into a curated cross-endpoint smoke lane.

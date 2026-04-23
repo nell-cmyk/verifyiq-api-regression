@@ -32,7 +32,7 @@ def _case_context(case: GetSmokeCase) -> str:
     return "\n".join(lines)
 
 
-def get_smoke_response(client: httpx.Client, case: GetSmokeCase) -> httpx.Response:
+def get_smoke_response(client: httpx.Client, case: GetSmokeCase, *, expected_status: int = 200) -> httpx.Response:
     ctx = _case_context(case)
     params = dict(case.params) if case.params else None
     try:
@@ -55,8 +55,8 @@ def get_smoke_response(client: httpx.Client, case: GetSmokeCase) -> httpx.Respon
             )
         )
 
-    assert resp.status_code == 200, (
-        f"GET smoke endpoint {case.path!r}: expected 200, got {resp.status_code}"
+    assert resp.status_code == expected_status, (
+        f"GET smoke endpoint {case.path!r}: expected {expected_status}, got {resp.status_code}"
         + diagnose(resp)
         + ctx
     )
@@ -74,3 +74,7 @@ def get_smoke_json(client: httpx.Client, case: GetSmokeCase, *, context: str | N
 
 def assert_get_smoke_200(client: httpx.Client, case: GetSmokeCase) -> None:
     get_smoke_response(client, case)
+
+
+def assert_get_smoke_status(client: httpx.Client, case: GetSmokeCase, expected_status: int) -> None:
+    get_smoke_response(client, case, expected_status=expected_status)

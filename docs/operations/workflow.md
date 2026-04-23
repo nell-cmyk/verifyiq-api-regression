@@ -189,7 +189,7 @@ Exact underlying implementation/debug path:
 
 Use it:
 - when touching GET smoke coverage or expanding safely testable GET coverage beyond `parse` and `batch`
-- when you need the current 200-only smoke signal for covered GET endpoints
+- when you need the current GET smoke signal for covered endpoints, including the small exact-status guard set for known non-200 surfaces
 
 Current suite rule:
 - `smoke` is opt-in.
