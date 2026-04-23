@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from types import SimpleNamespace
 from pathlib import Path
 
 
@@ -67,3 +68,34 @@ def test_format_context_mentions_created_checkpoint_when_missing():
     assert "No active checkpoint was found" in context
     assert "Recent project memories:" in context
     assert "Recent session activity:" in context
+
+
+def test_doctor_reports_codex_automation_surfaces():
+    module = _load_module()
+    payloads: list[dict] = []
+
+    class _Lock:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    module._mind_lock = lambda: _Lock()
+    module._run_mind = lambda args, allow_failure=False: module.CommandResult(
+        binary="/tmp/mind",
+        command=["/tmp/mind", *args],
+        returncode=0,
+        stdout="ok",
+        stderr="",
+    )
+    module._space_exists = lambda space: True
+    module._emit = lambda payload, exit_code=0: payloads.append(payload) or exit_code
+
+    rc = module.cmd_doctor(SimpleNamespace(command="doctor"))
+
+    assert rc == 0
+    assert payloads
+    assert payloads[0]["local_codex_config"] == ".codex/config.toml"
+    assert payloads[0]["local_codex_hooks"] == ".codex/hooks.json"
+    assert payloads[0]["local_codex_skill"] == ".agents/skills/verifyiq-mind-session/SKILL.md"

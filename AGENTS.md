@@ -9,6 +9,8 @@
 - `tests/`: endpoint coverage plus shared validation, fixture, and reporting helpers.
 - `tools/`: repo-owned CLIs.
 - `tools/reporting/`: matrix and reporting wrappers.
+- `.agents/`: repo-local shared skills, including Codex-facing Mind fallback instructions.
+- `.codex/`: repo-local Codex config and hooks for Mind MCP plus checkpoint continuity.
 - `.opencode/`: repo-local OpenCode plugin, config, and skills for automatic Mind session continuity.
 - `docs/operations/`: canonical runbooks and command registry.
 - `docs/knowledge-base/`: durable findings only.
@@ -26,8 +28,9 @@
   - `curl -fsSL https://raw.githubusercontent.com/GabrielMartinMoran/mind/main/scripts/install.sh | bash`
   - Ensure `~/.local/bin` is on `PATH` for interactive `mind` usage.
   - `mind help`
-  - `mind setup opencode`
+  - `mind setup opencode` when using OpenCode globally
 - OpenCode loads repo-local Mind automation from `.opencode/opencode.json` in this repo.
+- Codex loads repo-local Mind automation from trusted project config in `.codex/config.toml` and `.codex/hooks.json`; no extra global Codex setup is required for this repo.
 - Operator command source of truth: `docs/operations/command-registry.md`.
 
 ## Canonical Validation Commands
@@ -92,8 +95,19 @@
 - If repo inspection shows the roadmap is stale, blocked, incorrect, already completed, or contradicted by the repo, treat the repo as factual and update the roadmap.
 - Preserve useful roadmap content; do not rewrite broad strategy for minor implementation changes.
 - Agents may update `docs/knowledge-base/repo-roadmap.md` without asking when needed to keep planning aligned with completed work, newly discovered repo facts, changed direction, blockers, risks, assumptions, milestones, priorities, or next steps.
+- Agents must treat durable-truth promotion as automatic work, not as a separate user reminder task.
+- When code, config, tests, validation output, or docs reveal durable repo truth, update the appropriate tracked file in the same pass without waiting for an explicit request.
+- Route durable updates by scope:
+  - `docs/knowledge-base/repo-roadmap.md` for project status, sequencing, blockers, priorities, milestones, and next steps.
+  - `docs/operations/*` for canonical commands, workflow steps, setup, runbooks, and artifact/reporting paths.
+  - `docs/knowledge-base/*` for durable endpoint behavior, blockers, validation findings, and other repo facts that should outlive one session.
+  - `AGENTS.md` only for stable repo-wide agent rules, safety constraints, documentation policy, or canonical workflow requirements.
+  - `README.md` only when top-level orientation, quick-start guidance, or canonical entry points materially change.
+- Update `AGENTS.md` only when the rule is repo-wide, verified from the repo, and likely to matter across future sessions; do not churn it for one-off task notes.
+- If a durable truth belongs both in Mind and in tracked docs, do both in the same pass: save the durable summary to Mind and patch the tracked doc.
 - For OpenCode sessions in this repo, Mind recovery/checkpointing is mandatory and automatic through `.opencode/plugins/verifyiq-mind-session.js`.
-- Use `./.venv/bin/python tools/mind_session.py ...` for fallback/debug only, or when you need an explicit durable summary before handoff or commit.
+- For Codex sessions in this repo, Mind startup recovery and checkpoint refresh are automatic through `.codex/config.toml` and `.codex/hooks.json`, but explicit `./.venv/bin/python tools/mind_session.py finish` is still required before handoff or commit because Codex does not expose a true session-end hook here.
+- Use `./.venv/bin/python tools/mind_session.py ...` for fallback/debug only, or when you need an explicit durable summary before handoff or commit. Before handoff or commit, the agent should run `save-summary` or `finish` when needed; the user should not need to remember the repo-local Mind bookkeeping.
 - Keep active workflow state, durable decisions, bug fixes, patterns, and checkpoints in Mind; promote only durable repo truth into tracked docs.
 - Do not store secrets, credentials, raw logs, `.env` values, or large raw payloads in Mind. Save durable summaries only.
 - `fileType` request mapping lives in `tests/endpoints/parse/file_types.py`.
@@ -117,6 +131,7 @@
 - `/parse` and `/documents/batch` rely on live API access and Google IAP credentials.
 - Mind stores local workflow memory outside the repo; the current machine defaults to `~/.local/share/data/mind.db`.
 - `mind setup opencode` writes managed OpenCode config under `~/.config/opencode/`.
+- Repo-local Codex automation is configured under `.codex/` and the Codex fallback skill is checked in under `.agents/skills/`.
 - Repo-local OpenCode automation is configured under `.opencode/` and uses the fixed Mind project space `projects/verifyiq-api-regression`.
 - Checked-in CI baseline uses the same live inputs and skips clearly when the required secrets are not configured.
 

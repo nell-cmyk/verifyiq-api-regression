@@ -19,6 +19,7 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 - `VERIFYIQ_SKIP_DOTENV=1` disables repo `.env` loading so non-live tooling/reporting suites can prove they do not depend on live env bootstrap.
 - Mind is the canonical local memory/context layer. Install it with `curl -fsSL https://raw.githubusercontent.com/GabrielMartinMoran/mind/main/scripts/install.sh | bash`, then ensure `~/.local/bin` is on `PATH` for interactive `mind` usage.
 - `mind setup opencode` writes managed OpenCode config under `~/.config/opencode/` and uses the local Mind store.
+- Trusted Codex projects can load repo-local Mind automation from `.codex/config.toml` and `.codex/hooks.json` without extra global Codex setup for this repo.
 - Repo-local OpenCode automation lives under `.opencode/` and loads automatically for this repo.
 - `./.venv/bin/python tools/mind_session.py ...` is the repo-owned fallback/debug surface. Raw mutating `mind ...` commands are fallback only.
 - The current machine defaults to `~/.local/share/data/mind.db` for Mind storage.
@@ -51,6 +52,7 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 | `./.venv/bin/python -m pytest tests/endpoints/get_smoke/ -v` | Exact GET smoke implementation/debug surface; the canonical operator path is `tools/run_regression.py --suite smoke` | none | no repo mutation |
 | `./.venv/bin/python -m pytest tests/endpoints/batch/ -v` | Direct live `/documents/batch` validation when batch-specific coverage is needed | `reports/batch/batch_<timestamp>/...` | generated artifacts only |
 | `./.venv/bin/python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` | Selected-fixture `/documents/batch` run | `reports/batch/batch_<timestamp>/...` | generated artifacts only |
+| `./.venv/bin/python tools/reporting/export_batch_ground_truth.py --reference-workbook /absolute/path/to/reference.xlsx [--file-type ...]` | Live batch export workflow for ground-truth comparison workbooks keyed by fileType | `reports/batch_ground_truth/batch_ground_truth_<timestamp>/workbooks/*.xlsx`, `manifest.json`, plus raw batch artifacts under `reports/batch/batch_<timestamp>/...` | generated artifacts only |
 | `./.venv/bin/python tools/run_regression.py --list|--dry-run ...` | Non-executing canonical-runner discovery surface for inventory preview and command mapping | none | no repo mutation |
 | `RUN_PARSE_MATRIX=1 ./.venv/bin/python -m pytest tests/endpoints/parse/test_parse_matrix.py -v` | Valid direct matrix surface for debugging, but the wrapper is the normal path | none unless you capture output separately | no repo mutation by default |
 | `./.venv/bin/python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt` | Re-renders from saved terminal output; not the primary run surface | `reports/parse/matrix/latest-summary.md` by default | generated summary only in draft mode |
@@ -61,7 +63,7 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 | `./.venv/bin/python tools/mind_session.py finish` | Fallback explicit checkpoint completion outside the automatic plugin flow | completed checkpoint entry in Mind history | external/local state |
 | `mind status` | Raw Mind health/status fallback when wrapper debugging is insufficient | none | reads local Mind DB only |
 | `mind serve start --detached` | Optional local web UI + HTTP API access; not required for everyday repo work | local web service on `http://localhost:30303` | external/local state |
-| `mind mcp start --http --detached` | Optional local HTTP MCP endpoint; OpenCode uses local command transport by default | local MCP service on `http://localhost:7438/mcp` | external/local state |
+| `mind mcp start --http --detached` | Optional local HTTP MCP endpoint; OpenCode and repo-local Codex use local command transport by default | local MCP service on `http://localhost:7438/mcp` | external/local state |
 | `mind server-status` | Status/debug surface for optional Mind services | none | reads local Mind runtime state |
 
 ## Mutating Commands
@@ -87,9 +89,10 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 - `tools/run_regression.py` currently supports live execution for the protected baseline, `--suite smoke`, and `--suite full` only. Direct live parse-matrix, batch, extended, and other selections remain dry-run only.
 - `smoke` is now a real opt-in suite, not the broader default suite.
 - `tools/generate_fixture_registry.py` and `tools/onboard_fixture_json.py` are maintenance surfaces, not ordinary validation steps.
-- The normal active-context path is automatic through `.opencode/plugins/verifyiq-mind-session.js`.
+- `tools/reporting/export_batch_ground_truth.py` is a reusable reporting/export surface for local ground-truth comparison work; see `docs/operations/batch-ground-truth-export.md`.
+- The normal active-context path is automatic through `.opencode/plugins/verifyiq-mind-session.js` in OpenCode and through trusted `.codex/config.toml` plus `.codex/hooks.json` in Codex.
 - `tools/mind_session.py` is the repo-owned fallback surface for explicit recovery, checkpointing, summaries, and finish events.
-- `mind setup opencode` installs global Mind wiring, while `.opencode/opencode.json` adds repo-local automation and skills.
+- `mind setup opencode` installs global OpenCode Mind wiring, while `.opencode/opencode.json` and trusted `.codex/config.toml` add repo-local automation for their respective clients.
 - Mind uses a local SQLite store; avoid running multiple raw mutating `mind` commands in parallel against the same database or you may hit `SQLITE_BUSY_RECOVERY`. The wrapper already serializes access.
 - Historical Obsidian session helpers are removed. Use Mind directly for workflow memory and continuity.
 - Historical `.codex/skills/regression-run-summary/scripts/...` reporting entrypoints are removed. Translate any old reference to the canonical `tools/reporting/*` commands.

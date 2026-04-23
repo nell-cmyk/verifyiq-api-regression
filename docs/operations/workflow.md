@@ -34,7 +34,7 @@ Install tool-only deps only if you need fixture-registry generation:
 ```
 
 ### Mind bootstrap
-Install Mind once for local workflow memory and OpenCode integration:
+Install Mind once for local workflow memory, OpenCode integration, and repo-local Codex support:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/GabrielMartinMoran/mind/main/scripts/install.sh | bash
@@ -44,6 +44,8 @@ mind setup opencode
 ```
 
 The repo's normal OpenCode path is automatic after that. Repo-local session automation loads from `.opencode/opencode.json` and is documented in [Mind Session](mind-session.md).
+
+For Codex in this repo, no extra global `mind setup codex` step is required. Trust the repo so Codex can load the checked-in `.codex/config.toml` and `.codex/hooks.json` layers.
 
 Create the project space once only if you are debugging the wrapper before the automatic flow has done it for you:
 
@@ -95,51 +97,52 @@ Safe runner discovery checks:
 ## Normal Development Flow
 1. Install deps and configure `.env` for the current target.
 2. Install Mind and run `mind setup opencode` if this machine has not been bootstrapped yet.
-3. Open this repo in OpenCode. The repo-local plugin automatically recovers context, refreshes checkpoints on continuity events, and closes the active checkpoint on session end.
-4. If you need to validate or repair that automation explicitly, use the repo wrapper instead of raw mutating `mind` commands:
+3. Open this repo in OpenCode or Codex.
+4. OpenCode automatically recovers context, refreshes checkpoints on continuity events, and closes the active checkpoint on session end. Codex automatically recovers context and refreshes checkpoints around each turn, but still requires an explicit `finish` before handoff or commit.
+5. If you need to validate or repair that automation explicitly, use the repo wrapper instead of raw mutating `mind` commands:
 
 ```bash
 ./.venv/bin/python tools/mind_session.py doctor
 ./.venv/bin/python tools/mind_session.py start
 ```
 
-5. Read `docs/knowledge-base/repo-roadmap.md`, identify the roadmap phase, milestone, or next step the task advances, and inspect the relevant repo files before editing. If the task does not map cleanly, update the roadmap before or alongside the work.
-6. Make a narrow repo change aligned with the roadmap and the current repo state.
-7. Run the relevant validation command for the change. Use the non-live suite first for tooling/reporting changes, and use the canonical protected runner by default for live validation:
+6. Read `docs/knowledge-base/repo-roadmap.md`, identify the roadmap phase, milestone, or next step the task advances, and inspect the relevant repo files before editing. If the task does not map cleanly, update the roadmap before or alongside the work.
+7. Make a narrow repo change aligned with the roadmap and the current repo state.
+8. Run the relevant validation command for the change. Use the non-live suite first for tooling/reporting changes, and use the canonical protected runner by default for live validation:
 
 ```bash
 VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting/ tests/skills/ -v
 ./.venv/bin/python tools/run_regression.py
 ```
 
-8. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix wrapper:
+9. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix wrapper:
 
 ```bash
 ./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
 ```
 
-9. If you want the stronger explicit gate, run full regression:
+10. If you want the stronger explicit gate, run full regression:
 
 ```bash
 ./.venv/bin/python tools/run_regression.py --suite full
 ```
 
-10. If the change touches the GET smoke lane or cross-group GET coverage, run the canonical smoke suite:
+11. If the change touches the GET smoke lane or cross-group GET coverage, run the canonical smoke suite:
 
 ```bash
 ./.venv/bin/python tools/run_regression.py --suite smoke
 ```
 
-11. Review generated artifacts from the validation surface you used.
-12. Update `docs/knowledge-base/repo-roadmap.md` when the work changes project status, sequencing, risks, blockers, assumptions, milestones, priorities, or next steps.
-13. Before handoff or commit, save an explicit durable Mind summary only when the automatic session flow is not enough:
+12. Review generated artifacts from the validation surface you used.
+13. If the task produced durable repo truth, promote it automatically in the same pass instead of leaving it only in Mind. Update `docs/knowledge-base/repo-roadmap.md` for project status and sequencing, `docs/operations/*` for command/workflow changes, `docs/knowledge-base/*` for durable findings, and `AGENTS.md` only for stable repo-wide rules.
+14. Before handoff or commit, the agent should save an explicit durable Mind summary when needed and run the repo-local finish step. In Codex this remains explicit, but it should not be left for the user to remember:
 
 ```bash
 ./.venv/bin/python tools/mind_session.py save-summary --title "short-title" --body "Durable summary"
 ./.venv/bin/python tools/mind_session.py finish
 ```
 
-14. Review the diff, stage the intended files, and use the guarded Git flow:
+15. Review the diff, stage the intended files, and use the guarded Git flow:
 
 ```bash
 ./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"
@@ -259,6 +262,41 @@ Do not treat timeout, transport failure, or an unexpected `200` as passing auth
 coverage; this path is only complete when missing and invalid
 `X-Tenant-Token` return confirmed `401` or `403` responses.
 
+## Batch Ground-Truth Export
+Use the dedicated batch ground-truth export workflow when you want one workbook
+per fileType for comparison or model-improvement review:
+
+```bash
+./.venv/bin/python tools/reporting/export_batch_ground_truth.py \
+  --reference-workbook /absolute/path/to/reference.xlsx
+```
+
+Use `--file-type` to limit the run:
+
+```bash
+./.venv/bin/python tools/reporting/export_batch_ground_truth.py \
+  --reference-workbook /absolute/path/to/reference.xlsx \
+  --file-type Payslip \
+  --file-type TIN,ACR
+```
+
+Use `--plan` to inspect discovered fileTypes, skipped unsupported rows, and
+planned chunk counts without calling the live endpoint:
+
+```bash
+./.venv/bin/python tools/reporting/export_batch_ground_truth.py \
+  --reference-workbook /absolute/path/to/reference.xlsx \
+  --plan
+```
+
+Default outputs land under:
+- `reports/batch_ground_truth/batch_ground_truth_<timestamp>/workbooks/*.xlsx`
+- `reports/batch_ground_truth/batch_ground_truth_<timestamp>/manifest.json`
+- raw batch response artifacts continue under `reports/batch/batch_<timestamp>/...`
+
+See [Batch Ground-Truth Export](batch-ground-truth-export.md) for the full
+operator notes on inclusion, failure rows, and heterogeneous response mapping.
+
 ## Reporting And Artifact Review
 Baseline artifacts:
 - `reports/parse/responses/parse_<timestamp>/<test-case-id>__<description>__<timestamp>_<seq>.json`
@@ -321,8 +359,9 @@ Do not use it:
 ## Active Session State
 - Mind now replaces `docs/operations/current-handoff.md` for active state, handoff, working context, and ongoing task tracking.
 - Canonical project space: `projects/verifyiq-api-regression`.
-- `mind setup opencode` installs the global Mind MCP and protocol wiring.
-- `.opencode/opencode.json` adds the repo-local plugin and skill that automate start, checkpoint refresh, compaction continuity, and finish handling.
+- `mind setup opencode` installs the global Mind MCP and protocol wiring for OpenCode.
+- `.opencode/opencode.json` adds the repo-local OpenCode plugin and skill that automate start, checkpoint refresh, compaction continuity, and finish handling.
+- Trusted `.codex/config.toml` and `.codex/hooks.json` add the repo-local Codex MCP plus checkpoint-continuity wiring.
 - `./.venv/bin/python tools/mind_session.py ...` is the fallback/debug surface when the automatic flow needs inspection or an explicit durable summary.
 - Optional local web and API access is available through `mind serve start --detached` on `http://localhost:30303`.
 - Optional local HTTP MCP access is available through `mind mcp start --http --detached` on `http://localhost:7438/mcp`.
@@ -331,13 +370,14 @@ Do not use it:
 - `docs/operations/current-handoff.md` is pointer-only and must not hold live task state.
 
 ## Session Lifecycle
-1. Start: OpenCode loads the repo-local Mind plugin, which runs the wrapper to recover or create the active continuity checkpoint automatically.
-2. Continue: the plugin refreshes checkpoints on continuity events. Use `tools/mind_session.py save-summary` only when you need an explicit durable project memory before handoff or commit.
-3. End: the plugin runs `tools/mind_session.py finish` on session end. Promote any durable truths into repo docs in the same pass.
+1. Start: OpenCode loads the repo-local plugin, and Codex loads the trusted repo-local config plus hooks. Both paths recover or create the active continuity checkpoint automatically.
+2. Continue: OpenCode refreshes checkpoints on its continuity events, and Codex refreshes checkpoints around each turn. Use `tools/mind_session.py save-summary` only when you need an explicit durable project memory before handoff or commit.
+3. End: OpenCode runs `tools/mind_session.py finish` on session end. Codex does not expose an equivalent session-end hook here, so run `tools/mind_session.py finish` explicitly before handoff or commit. Promote any durable truths into repo docs in the same pass.
 
 ## Mind Troubleshooting
 - `mind` not found: ensure `~/.local/bin` is on `PATH`. If the launcher shim is missing or stale on this machine, use `~/.local/share/mind/mind` directly.
 - Repo plugin not loading: inspect `.opencode/opencode.json`, then run `opencode debug config` from the repo root.
+- Codex project config not loading: trust the repo, inspect `.codex/config.toml` and `.codex/hooks.json`, then restart Codex.
 - Wrapper health check: run `./.venv/bin/python tools/mind_session.py doctor`.
 - Force explicit recovery: run `./.venv/bin/python tools/mind_session.py start`.
 - Force explicit checkpoint refresh: run `./.venv/bin/python tools/mind_session.py checkpoint`.

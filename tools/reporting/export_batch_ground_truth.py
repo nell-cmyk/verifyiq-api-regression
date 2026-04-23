@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""Export /documents/batch results to one ground-truth workbook per fileType."""
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from tools.generate_fixture_registry import SOURCE_XLSX
+from tools.reporting.batch_ground_truth.schema import load_reference_template
+from tools.reporting.batch_ground_truth.workflow import (
+    DEFAULT_OUTPUT_ROOT,
+    plan_file_types,
+    run_batch_ground_truth_export,
+)
+
+
+def _parse_file_types(values: list[str]) -> set[str]:
+    file_types: set[str] = set()
+    for value in values:
+        for part in value.split(","):
+            cleaned = part.strip()
+            if cleaned:
+                file_types.add(cleaned)
+    return file_types
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+    )
+    parser.add_argument(
+        "--source-workbook",
+        default=str(SOURCE_XLSX),
+        help="Local fixture workbook to read. Defaults to the repo fixture source workbook.",
+    )
+    parser.add_argument(
+        "--reference-workbook",
+        required=True,
+        help="Reference workbook whose flat layout/style should be mirrored and adapted.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default="",
+        help=(
+            "Output directory for this run. Defaults to "
+            f"{DEFAULT_OUTPUT_ROOT.as_posix()}/batch_ground_truth_<timestamp>/"
+        ),
+    )
+    parser.add_argument(
+        "--file-type",
+        dest="file_types",
+        action="append",
+        default=[],
+        help="Repeat or comma-separate to export selected split fileTypes only.",
+    )
+    parser.add_argument(
+        "--plan",
+        action="store_true",
+        help="Inspect workbook coverage and planned chunking without calling the live endpoint.",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    selected_file_types = _parse_file_types(args.file_types)
+    selected = selected_file_types or None
+    try:
+        _parsed, _grouped, plans = plan_file_types(
+            source_workbook=args.source_workbook,
+            selected_file_types=selected,
+        )
+    except RuntimeError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    if not plans:
+        print("ERROR: No matching fileTypes were found in the source workbook.", file=sys.stderr)
+        return 2
+
+    print(f"Source workbook: {Path(args.source_workbook).expanduser().resolve()}")
+    print(f"Reference workbook: {Path(args.reference_workbook).expanduser().resolve()}")
+    print(f"Selected fileTypes: {len(plans)}")
+    for plan in plans:
+        print(
+            f"- {plan.file_type}: total_rows={plan.total_rows}, executable_rows={plan.executable_rows}, "
+            f"skipped_rows={plan.skipped_rows}, chunk_count={plan.chunk_count}"
+        )
+
+    if args.plan:
+        return 0
+
+    try:
+        layout = load_reference_template(args.reference_workbook)
+        result = run_batch_ground_truth_export(
+            source_workbook=args.source_workbook,
+            reference_workbook=args.reference_workbook,
+            output_dir=args.output_dir or None,
+            selected_file_types=selected,
+            template_layout=layout,
+        )
+    except RuntimeError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+
+    print(f"Output dir: {result.output_dir}")
+    print(f"Manifest: {result.manifest_path}")
+    print(f"Batch artifact dir: {result.batch_artifact_run_dir}")
+    for file_type_result in result.file_type_results:
+        print(
+            f"- {file_type_result.file_type}: "
+            f"success_rows={file_type_result.success_rows}, "
+            f"failed_rows={file_type_result.failed_rows}, "
+            f"skipped_rows={file_type_result.skipped_rows}, "
+            f"workbook={file_type_result.workbook_path}"
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

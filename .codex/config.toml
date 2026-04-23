@@ -1,0 +1,9 @@
+[features]
+codex_hooks = true
+
+[mcp_servers.mind]
+command = "/bin/sh"
+args = ["-lc", "\"$(git rev-parse --show-toplevel)/tools/codex_mind_mcp.py\""]
+required = false
+startup_timeout_sec = 20
+tool_timeout_sec = 60

@@ -1,0 +1,41 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -lc \"\\\"$(git rev-parse --show-toplevel)/tools/codex_mind_hook.py\\\"\"",
+            "statusMessage": "Recovering VerifyIQ Mind context",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -lc \"\\\"$(git rev-parse --show-toplevel)/tools/codex_mind_hook.py\\\"\"",
+            "statusMessage": "Refreshing VerifyIQ Mind checkpoint",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -lc \"\\\"$(git rev-parse --show-toplevel)/tools/codex_mind_hook.py\\\"\"",
+            "statusMessage": "Saving VerifyIQ Mind checkpoint",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

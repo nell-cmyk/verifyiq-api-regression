@@ -21,6 +21,7 @@ The target operating model is a lean, risk-based regression suite that stays pra
 - Current contract coverage is manual and selective. Shared assertions live in `tests/endpoints/document_contracts.py`, and no full OpenAPI-driven validator or generated-schema workflow is currently in place.
 - Current automated endpoint coverage is still narrower than the OpenAPI inventory, but it now extends beyond `/v1/documents/parse` and `/v1/documents/batch` through the opt-in GET smoke suite. Setup-backed, query-backed, auth-blocked, and safety-filtered GET endpoints remain explicitly deferred.
 - The current repo-wide assessment artifact now lives at `docs/operations/automation-test-suite-audit.md` and should be used as the concrete gap and prioritization reference for near-term suite improvements.
+- The repo now has a reusable batch ground-truth export workflow at `tools/reporting/export_batch_ground_truth.py` that reads the local fixture workbook, executes `/v1/documents/batch` in safe chunks across discovered fileTypes, preserves raw batch artifacts, and writes one Excel workbook per fileType plus a manifest under `reports/batch_ground_truth/`.
 - Offline tooling, reporting, and runner suites no longer depend on eager live client bootstrap at pytest import time; `VERIFYIQ_SKIP_DOTENV=1` is the explicit non-live validation switch for disabling repo `.env` loading.
 - The repo now has a dedicated non-live CI lane at `.github/workflows/non-live-validation.yml` for `tests/tools/`, `tests/reporting/`, `tests/skills/`, and safe runner discovery checks.
 - The current endpoint-group coverage inventory now lives at `docs/operations/endpoint-coverage-inventory.md`.
@@ -29,6 +30,8 @@ The target operating model is a lean, risk-based regression suite that stays pra
 - The repo now has an opt-in GET smoke suite under `tests/endpoints/get_smoke/`, callable through `./.venv/bin/python tools/run_regression.py --suite smoke`.
 - The current GET smoke suite covers status-200 checks for safely testable current GET endpoints plus a growing setup-backed detail layer across `parser-studio`, `monitoring`, `qa`, `benchmark`, and `applications-api`; a small set of expected-status surfaces is now codified directly in smoke, and the remaining true 200-smoke backlog is limited to four still-blocked endpoints.
 - Legacy parser-studio aliases and duplicate BLS alias routes are intentionally excluded from GET smoke and called out in `docs/operations/endpoint-coverage-inventory.md` instead of padding the coverage count.
+- Repo-local Mind continuity automation now exists for both OpenCode and Codex: OpenCode uses `.opencode/`, while Codex uses trusted project config in `.codex/config.toml` plus `.codex/hooks.json`. Codex auto-recovers context and refreshes checkpoints per turn, but explicit `./.venv/bin/python tools/mind_session.py finish` remains required before handoff or commit because Codex does not expose a true session-end hook in this repo.
+- Repo policy now treats durable-truth promotion as automatic agent work: active task state stays in Mind, while verified durable changes are patched into `docs/operations/*`, `docs/knowledge-base/*`, `README.md`, or `AGENTS.md` by scope without waiting for a separate user reminder.
 
 ## Current Validation Surface
 

@@ -20,7 +20,9 @@ Python-first live API regression automation for VerifyIQ, centered on the protec
 ## Mind Memory Workflow
 - Active workflow memory lives in Mind space `projects/verifyiq-api-regression`, not in repo docs.
 - OpenCode now loads repo-controlled Mind automation from `.opencode/` when this repo is open.
-- Normal path: the repo plugin automatically recovers context, refreshes continuity checkpoints, and closes the active checkpoint when the session ends.
+- Codex now loads repo-controlled Mind automation from trusted project config in `.codex/` plus the repo skill in `.agents/skills/`.
+- Normal path: OpenCode automatically recovers context, refreshes continuity checkpoints, and closes the active checkpoint when the session ends. Codex automatically recovers context and refreshes checkpoints around each turn, but still requires an explicit `finish` before handoff or commit.
+- Durable repo truth should be promoted automatically by the agent into the correct tracked docs; Mind keeps active state and summaries, while repo docs keep verified long-lived guidance.
 - Fallback/debug path: use `./.venv/bin/python tools/mind_session.py doctor|start|checkpoint|save-summary|finish`.
 - See `docs/operations/mind-session.md` for the automatic flow and troubleshooting.
 
@@ -37,8 +39,10 @@ Python-first live API regression automation for VerifyIQ, centered on the protec
   Runbooks and exact operational commands.
 - `docs/knowledge-base/`
   Durable repo and endpoint findings.
+- `.agents/`
+  Repo-local shared skills, including the Codex-facing Mind session fallback skill.
 - `.codex/`
-  Repo-local agent packaging and adapters. Keep agent-specific wiring here, but prefer `tools/` for shared repo utilities.
+  Repo-local Codex configuration and hooks for Mind MCP plus checkpoint continuity.
 - `.claude/`
   Repo-local Claude configuration.
 - `reports/`

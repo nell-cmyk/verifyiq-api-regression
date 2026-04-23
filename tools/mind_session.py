@@ -41,6 +41,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_PATH = REPO_ROOT / ".opencode" / "plugins" / "verifyiq-mind-session.js"
 SKILL_PATH = REPO_ROOT / ".opencode" / "skills" / "mind-session" / "SKILL.md"
 LOCAL_CONFIG_PATH = REPO_ROOT / ".opencode" / "opencode.json"
+CODEX_CONFIG_PATH = REPO_ROOT / ".codex" / "config.toml"
+CODEX_HOOKS_PATH = REPO_ROOT / ".codex" / "hooks.json"
+CODEX_SKILL_PATH = REPO_ROOT / ".agents" / "skills" / "verifyiq-mind-session" / "SKILL.md"
 _RESOLVED_MIND_BINARY: str | None = None
 
 
@@ -428,6 +431,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "local_skill_exists": SKILL_PATH.exists(),
             "local_opencode_config": _repo_rel(LOCAL_CONFIG_PATH),
             "local_opencode_config_exists": LOCAL_CONFIG_PATH.exists(),
+            "local_codex_config": _repo_rel(CODEX_CONFIG_PATH),
+            "local_codex_config_exists": CODEX_CONFIG_PATH.exists(),
+            "local_codex_hooks": _repo_rel(CODEX_HOOKS_PATH),
+            "local_codex_hooks_exists": CODEX_HOOKS_PATH.exists(),
+            "local_codex_skill": _repo_rel(CODEX_SKILL_PATH),
+            "local_codex_skill_exists": CODEX_SKILL_PATH.exists(),
         }
         return _emit(payload)
 
