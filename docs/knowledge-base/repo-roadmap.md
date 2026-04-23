@@ -113,7 +113,7 @@ Planned runner expectations:
 
 Initial categorization of current endpoint coverage:
 - `parse`: smoke, critical-path, auth, contract, negative, extended matrix.
-- `batch`: smoke candidate, critical-path, auth, contract, negative, integration-live, extended selected-fixture runs.
+- `batch`: smoke candidate, critical-path, contract, negative, integration-live, extended selected-fixture runs.
 - `legacy`: current standalone wrappers that remain temporarily available during migration.
 
 ## Contract And Schema Validation Strategy
@@ -213,4 +213,4 @@ Expected reporting behavior for the canonical runner:
 3. Add live execution mapping for direct parse matrix targeting and targeted batch flows only after the delegated full path is stable.
 4. Define metadata for current `/parse` and `/batch` tests so the future runner can target them by suite and category without duplicating logic.
 5. Extend the `/v1/documents/parse` drift pilot with fresh safe response artifacts so the remaining spec-vs-behavior questions can be resolved explicitly.
-6. Decide whether `/documents/batch` should remain an opt-in lane or join a future curated smoke suite now that representative auth-negative coverage exists.
+6. Resolve the current `/documents/batch` auth-negative blocker: missing and invalid tenant-token requests still time out instead of returning a confirmed 401/403 rejection, so the auth gap remains open.

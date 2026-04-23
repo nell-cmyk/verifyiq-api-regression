@@ -43,10 +43,11 @@ from tests.endpoints.document_contracts import (
 ENDPOINT = "/v1/documents/batch"
 BATCH_HAPPY_TIMEOUT_SECS = 300.0
 
-# Auth-negative behavior on staging matches the current parse-side tenant-token
-# layer closely enough to reuse the same assertion style: missing or invalid
-# X-Tenant-Token may hang past a short timeout instead of fast-returning 401/403.
-_AUTH_NEGATIVE_TIMEOUT_SECS = 10.0
+# Representative batch auth-negative coverage is strict: only a confirmed
+# 401/403 counts as rejection. Safe characterization on staging still timed out
+# after 30s for missing and invalid X-Tenant-Token, so timeout remains a live
+# blocker rather than a passing auth outcome.
+_AUTH_NEGATIVE_TIMEOUT_SECS = 30.0
 
 
 def _batch_expected_warning_message(fixture: dict[str, object]) -> str | None:
@@ -322,18 +323,16 @@ def _assert_auth_rejection(
     try:
         resp = client.post(ENDPOINT, json=batch_request_payload)
     except httpx.TimeoutException as exc:
-        warnings.warn(
+        pytest.fail(
             timeout_diagnostics(
                 exc,
                 context=f"Auth-negative '{context}'",
                 timeout_secs=_AUTH_NEGATIVE_TIMEOUT_SECS,
                 extra_context=batch_context,
             )
-            + "\nTreating timeout as valid negative outcome — server did not "
-            "successfully process the batch request.",
-            stacklevel=2,
+            + "\nAuth-negative coverage requires a confirmed 401/403 response; "
+            "timeout is an ambiguous blocker, not a passing rejection."
         )
-        return
     except httpx.RequestError as exc:
         pytest.fail(
             request_error_diagnostics(
@@ -341,9 +340,11 @@ def _assert_auth_rejection(
                 context=f"Auth-negative '{context}'",
                 extra_context=batch_context,
             )
+            + "\nAuth-negative coverage requires a confirmed 401/403 response; "
+            "transport failure is ambiguous and does not close the coverage gap."
         )
     assert resp.status_code in (401, 403), (
-        f"Auth-negative '{context}': expected 401/403 or timeout, "
+        f"Auth-negative '{context}': expected confirmed 401/403 rejection, "
         f"got {resp.status_code}"
         + diagnose(resp)
         + batch_context
