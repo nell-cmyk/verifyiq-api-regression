@@ -8,10 +8,10 @@ The target operating model is a lean, risk-based regression suite that stays pra
 ## Current Repository Status
 - The existing roadmap already lived at `docs/knowledge-base/repo-roadmap.md`.
 - The runner-consolidation design artifact now lives at `docs/operations/regression-runner-plan.md`.
-- The canonical runner now lives at `tools/run_regression.py` and supports inventory-backed `--list`, `--dry-run`, live protected-baseline execution, and live `--suite full` delegation to the existing full-regression wrapper.
+- The canonical runner now lives at `tools/run_regression.py` and supports inventory-backed `--list`, `--dry-run`, live protected-baseline execution, live opt-in `--suite smoke` GET coverage, and live `--suite full` delegation to the existing full-regression wrapper.
 - The checked-in protected-baseline CI workflow now calls `python tools/run_regression.py --suite protected` via the `setup-python` interpreter while preserving the existing secret-aware skip behavior and protected baseline scope.
 - The repository is Python-first and uses `pytest`, `httpx`, `python-dotenv`, `google-auth`, and `pyyaml`.
-- Live endpoint tests are under `tests/`, with current automated endpoint coverage focused on `/v1/documents/parse` and `/v1/documents/batch`.
+- Live endpoint tests are under `tests/`, with current automated endpoint coverage focused on `/v1/documents/parse`, `/v1/documents/batch`, and the new opt-in cross-group GET smoke lane.
 - Requests are live, not mocked. `tests/client.py` builds an `httpx.Client` from `BASE_URL`, `API_KEY`, `TENANT_TOKEN`, and Google IAP credentials.
 - `/parse` uses GCS-backed fixtures from `PARSE_FIXTURE_FILE` and `PARSE_FIXTURE_FILE_TYPE`; `/documents/batch` also reuses registry-backed `gs://` fixtures.
 - No local mock server, `responses`, `respx`, VCR, or similar replay layer was found in the active regression surfaces.
@@ -19,19 +19,22 @@ The target operating model is a lean, risk-based regression suite that stays pra
 - The OpenAPI source currently present in the repo is `official-openapi.json` at the repository root.
 - `official-openapi.json` is OpenAPI `3.1.0` and contains many endpoint groups beyond current automated coverage, including `documents`, `applications`, `monitoring`, `parser_studio`, `qa`, `health`, and admin-style paths.
 - Current contract coverage is manual and selective. Shared assertions live in `tests/endpoints/document_contracts.py`, and no full OpenAPI-driven validator or generated-schema workflow is currently in place.
-- Current automated endpoint coverage is narrower than the OpenAPI inventory. The repo currently validates `/v1/documents/parse` and `/v1/documents/batch`; the remaining endpoint surface is still largely unrepresented in regression automation.
+- Current automated endpoint coverage is still narrower than the OpenAPI inventory, but it now extends beyond `/v1/documents/parse` and `/v1/documents/batch` through the opt-in GET smoke suite. Setup-backed, query-backed, auth-blocked, and safety-filtered GET endpoints remain explicitly deferred.
 - The current repo-wide assessment artifact now lives at `docs/operations/automation-test-suite-audit.md` and should be used as the concrete gap and prioritization reference for near-term suite improvements.
 - Offline tooling, reporting, and runner suites no longer depend on eager live client bootstrap at pytest import time; `VERIFYIQ_SKIP_DOTENV=1` is the explicit non-live validation switch for disabling repo `.env` loading.
 - The repo now has a dedicated non-live CI lane at `.github/workflows/non-live-validation.yml` for `tests/tools/`, `tests/reporting/`, `tests/skills/`, and safe runner discovery checks.
 - The current endpoint-group coverage inventory now lives at `docs/operations/endpoint-coverage-inventory.md`.
 - The current `/v1/documents/parse` contract-drift pilot now lives at `docs/knowledge-base/parse/openapi-drift-pilot.md`.
 - The protected `/parse` happy-path request now retries one `httpx.RemoteProtocolError` before failing so transient upstream disconnects are distinguished from persistent repo or service regressions without broad retry behavior.
+- The repo now has an opt-in GET smoke suite under `tests/endpoints/get_smoke/`, callable through `./.venv/bin/python tools/run_regression.py --suite smoke`.
+- The current GET smoke suite covers status-200 checks for safely testable no-path GET endpoints across `health`, `parser-studio`, `monitoring`, `qa`, `applications-api`, and selected gateway/benchmark utility surfaces; setup-backed, query-backed, and behavior-blocked GET endpoints remain sequenced follow-on tranches.
 
 ## Current Validation Surface
 
 | Surface | Current entry point | Current purpose | Consolidation note |
 | --- | --- | --- | --- |
 | Protected `/parse` baseline | `./.venv/bin/python -m pytest tests/endpoints/parse/ -v` | Default live gate for `/parse` | Must remain behaviorally stable during migration |
+| Opt-in GET smoke suite | `./.venv/bin/python tools/run_regression.py --suite smoke` | Curated live GET 200 smoke coverage across safely testable no-path endpoints | Keep opt-in; do not let it silently replace the protected default |
 | `/parse` matrix | `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` | Opt-in broader fileType coverage plus saved summary | Good candidate to become a runner subcommand/category |
 | `/parse` full regression | `./.venv/bin/python tools/run_parse_full_regression.py` | Protected baseline followed by matrix | Strong signal that orchestration already exists but is fragmented |
 | Targeted `/parse` reporting | `./.venv/bin/python tools/run_parse_with_report.py` | Internal reporting/debug helper | Should become internal-only after consolidation |
@@ -68,6 +71,7 @@ The `tools/` path matches the repository's existing operator-facing CLI conventi
 ```bash
 ./.venv/bin/python tools/run_regression.py
 ./.venv/bin/python tools/run_regression.py --suite protected
+./.venv/bin/python tools/run_regression.py --suite smoke
 ./.venv/bin/python tools/run_regression.py --suite full
 ./.venv/bin/python tools/run_regression.py --category auth
 ./.venv/bin/python tools/run_regression.py --category contract
@@ -106,14 +110,20 @@ Planned runner expectations:
 
 | Dimension | Planned values | Current repo grounding |
 | --- | --- | --- |
-| Suite | `protected`, `smoke`, `full`, `extended` | `parse` baseline is the current protected default; matrix and full are already separate |
+| Suite | `protected`, `smoke`, `full`, `extended` | `parse` baseline is the current protected default; `smoke` is now the opt-in GET smoke suite; matrix and full are already separate |
 | Category | `smoke`, `critical-path`, `contract`, `auth`, `negative`, `integration`, `slow`, `legacy` | Current tests already map naturally to happy path, auth, validation, matrix breadth, and batch limits |
-| Endpoint group | `parse`, `batch`, then broader groups such as `documents`, `applications`, `monitoring`, `parser-studio`, `qa`, `health-admin` | Current automation covers only `parse` and `batch`; the broader groups come from `official-openapi.json` inventory |
+| Endpoint group | `parse`, `batch`, then broader groups such as `documents`, `applications`, `monitoring`, `parser-studio`, `qa`, `health-admin` | Current automation now covers `parse`, `batch`, and an opt-in GET smoke layer across broader groups identified from `official-openapi.json` |
 | Risk level | `critical`, `high`, `standard`, `extended` | Needed once more endpoints are onboarded so the default suite stays lean |
 
 Initial categorization of current endpoint coverage:
 - `parse`: smoke, critical-path, auth, contract, negative, extended matrix.
 - `batch`: smoke candidate, critical-path, contract, negative, integration-live, extended selected-fixture runs.
+- `health`: smoke, GET 200 on the full top-level `/health*` family.
+- `parser-studio`: smoke, GET 200 on safe no-path auth-status, metadata, audit, tenant, and threshold endpoints.
+- `monitoring`: smoke, GET 200 on safe no-path overview, list, report, golden-dataset, export, and drift endpoints.
+- `qa`: smoke, GET 200 on safe no-path queue, stats, report, threshold, and export endpoints.
+- `applications-api`: smoke, GET 200 on safe no-path BLS/API health, list, pages, and summary endpoints.
+- `other-service-surfaces`: smoke, GET 200 on selected gateway, benchmark, and utility list/health endpoints.
 - `legacy`: current standalone wrappers that remain temporarily available during migration.
 
 ## Contract And Schema Validation Strategy
@@ -191,6 +201,7 @@ Expected reporting behavior for the canonical runner:
 - There is exactly one documented primary regression command for normal operator use.
 - `tools/run_regression.py --list` and `--dry-run` explain suite contents without hitting live endpoints.
 - Current `/parse` baseline behavior remains intact throughout migration.
+- `tools/run_regression.py --suite smoke` provides the single entry point for the implemented GET smoke layer while keeping the default no-argument path unchanged.
 - Current `/documents/batch` coverage is callable through the canonical runner before batch wrappers are deprecated.
 - The default suite stays lean and diagnostically clear; broader or slower coverage is explicitly named and opt-in.
 - `/parse` and `/batch` both have explicit category labels for smoke, contract, auth or validation, negative, and extended coverage where applicable.
@@ -214,3 +225,9 @@ Expected reporting behavior for the canonical runner:
 4. Define metadata for current `/parse` and `/batch` tests so the future runner can target them by suite and category without duplicating logic.
 5. Extend the `/v1/documents/parse` drift pilot with fresh safe response artifacts so the remaining spec-vs-behavior questions can be resolved explicitly.
 6. Re-run the opt-in `/documents/batch` auth characterization until both missing and invalid tenant-token requests return confirmed 401/403 rejection; current evidence is still blocking because missing-token requests time out while invalid-token requests can return `200`, so keep the blocker out of the default batch suite and keep the auth gap open. See `docs/knowledge-base/batch/auth-negative-blocker.md`.
+
+## Sequenced Next Tranches For GET Smoke
+1. Add required-query or other input-backed GET smoke coverage for `/v1/admin/cache/stats`, `/monitoring/api/v1/providers`, `/api/v1/applications/documents/export`, `/api/v1/documents/export`, and `/ai-gateway/s3/s3/list` once their safe request inputs are characterized.
+2. Add setup-backed detail GET smoke coverage by deriving identifiers from the already-covered list/status endpoints for `/v1/documents/fraud-status/{job_id}`, the deferred `parser-studio` detail/version routes, the deferred `monitoring` detail/timeseries/golden-dataset routes, the deferred `qa` correlation-id routes, the deferred benchmark detail routes, and the deferred application/document detail routes.
+3. Resolve current GET auth or behavior blockers before promotion into smoke: `/api/v1/health/database-pools`, `/api/v1/health/database-pools/metrics`, `/v1/admin/cache/health`, `/parser_studio/api/document-types`, and `/monitoring/api/v1/golden-dataset/gcs/structure`.
+4. Decide whether UI, debug, and explicit admin/storage GET surfaces such as `/parser_studio`, `/parser_studio/auth/login`, `/qa`, `/sentry-debug`, `/api/v1/sentry-debug`, and the AI Gateway file download/presign routes belong in API automation at all.

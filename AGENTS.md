@@ -2,7 +2,7 @@
 
 ## Repository Purpose
 - VerifyIQ API regression automation only.
-- Scope: Python + pytest live regression coverage and maintenance for `/parse` and supported `/documents/batch` validation helpers.
+- Scope: Python + pytest live regression coverage and maintenance for `/parse`, supported `/documents/batch` validation helpers, and curated GET smoke coverage across safely exercisable VerifyIQ API GET endpoints.
 - Out of scope: manual QA workflow, ClickUp, ticketing, pass-sync logic, and unrelated process automation.
 
 ## Project Structure
@@ -32,6 +32,7 @@
 
 ## Canonical Validation Commands
 - Protected default runner: `./.venv/bin/python tools/run_regression.py`
+- Opt-in GET smoke suite: `./.venv/bin/python tools/run_regression.py --suite smoke`
 - Exact protected implementation/debug path: `./.venv/bin/python -m pytest tests/endpoints/parse/ -v`
 - Matrix wrapper: `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
 - Full regression: `./.venv/bin/python tools/run_regression.py --suite full`
@@ -43,6 +44,7 @@
 
 ## Test Tiers And When To Run Each
 - Protected baseline: default parse-only live gate through `./.venv/bin/python tools/run_regression.py` for ordinary repo changes and before handoff or merge.
+- GET smoke: opt-in cross-group GET 200 coverage through `./.venv/bin/python tools/run_regression.py --suite smoke` when touching GET smoke tests, GET inventory expansion, or runner wiring for the smoke lane.
 - Matrix: when touching fileType mapping, registry selection, reporting, or matrix triage.
 - Full regression: when a stronger `/parse` gate is intentionally required.
 - Batch suite: when touching `/documents/batch` tests, fixtures, or wrappers.
@@ -55,6 +57,7 @@
   - `./.venv/bin/python tools/run_regression.py --dry-run`
   - `--help` on repo-owned tools
   - protected baseline
+  - GET smoke suite
   - matrix wrapper
   - batch suite
   - repo-local pytest suites

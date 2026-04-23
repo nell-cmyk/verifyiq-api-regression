@@ -9,6 +9,7 @@ Use it for the normal end-to-end flow:
 - set up the repo
 - recover active context from Mind
 - run the protected baseline
+- opt into GET smoke when touching cross-group GET coverage
 - opt into matrix or full regression when needed
 - review artifacts
 - use the guarded Git flow
@@ -123,16 +124,22 @@ VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting
 ./.venv/bin/python tools/run_regression.py --suite full
 ```
 
-10. Review generated artifacts from the validation surface you used.
-11. Update `docs/knowledge-base/repo-roadmap.md` when the work changes project status, sequencing, risks, blockers, assumptions, milestones, priorities, or next steps.
-12. Before handoff or commit, save an explicit durable Mind summary only when the automatic session flow is not enough:
+10. If the change touches the GET smoke lane or cross-group GET coverage, run the canonical smoke suite:
+
+```bash
+./.venv/bin/python tools/run_regression.py --suite smoke
+```
+
+11. Review generated artifacts from the validation surface you used.
+12. Update `docs/knowledge-base/repo-roadmap.md` when the work changes project status, sequencing, risks, blockers, assumptions, milestones, priorities, or next steps.
+13. Before handoff or commit, save an explicit durable Mind summary only when the automatic session flow is not enough:
 
 ```bash
 ./.venv/bin/python tools/mind_session.py save-summary --title "short-title" --body "Durable summary"
 ./.venv/bin/python tools/mind_session.py finish
 ```
 
-13. Review the diff, stage the intended files, and use the guarded Git flow:
+14. Review the diff, stage the intended files, and use the guarded Git flow:
 
 ```bash
 ./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"
@@ -158,7 +165,7 @@ Use it:
 
 Current default-suite rule:
 - `tools/run_regression.py` currently maps to the parse-only protected suite.
-- `smoke` remains a planned future label, not a broader current default.
+- `smoke` is now a real opt-in GET suite, not a broader current default.
 
 Do not replace this with the matrix or full regression by default.
 
@@ -166,6 +173,28 @@ Baseline response artifacts:
 - `reports/parse/responses/parse_<timestamp>/<test-case-id>__<description>__<timestamp>_<seq>.json`
 - one raw JSON file per `/v1/documents/parse` call, grouped into one per-run folder under `reports/parse/responses/`
 - supported `/batch` runs also write one raw response artifact per `/v1/documents/batch` call to `reports/batch/batch_<timestamp>/batch_<timestamp>_<seq>.json`
+
+## GET Smoke Flow
+Canonical opt-in GET smoke surface:
+
+```bash
+./.venv/bin/python tools/run_regression.py --suite smoke
+```
+
+Exact underlying implementation/debug path:
+
+```bash
+./.venv/bin/python -m pytest tests/endpoints/get_smoke/ -v
+```
+
+Use it:
+- when touching GET smoke coverage or expanding safely testable GET coverage beyond `parse` and `batch`
+- when you need the current 200-only smoke signal for covered GET endpoints
+
+Current suite rule:
+- `smoke` is opt-in.
+- no-argument `tools/run_regression.py` still maps to the parse-only protected suite.
+- setup-dependent, query-dependent, auth-blocked, and otherwise deferred GET endpoints stay out of this suite until they have a legitimate 200 path.
 
 ## Matrix Flow
 Canonical opt-in matrix surface:

@@ -5,6 +5,7 @@ This slice supports:
 - `--list`
 - `--dry-run`
 - live execution for the protected suite
+- live execution for the opt-in GET smoke suite
 - live execution for `--suite full` via delegation
 
 All other live execution paths remain intentionally disabled.
@@ -22,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 FULL_WRAPPER = REPO_ROOT / "tools" / "run_parse_full_regression.py"
 PARSE_MATRIX_WRAPPER = REPO_ROOT / "tools" / "reporting" / "run_parse_matrix_with_summary.py"
 BATCH_WRAPPER = REPO_ROOT / "tools" / "run_batch_with_fixtures.py"
+GET_SMOKE_TARGET = "tests/endpoints/get_smoke/"
 
 PROTECTED_ENV_VARS = (
     "BASE_URL",
@@ -41,8 +43,10 @@ BATCH_ENV_VARS = (
     "GOOGLE_APPLICATION_CREDENTIALS",
 )
 
-IMPLEMENTED_SUITES = ("protected", "full")
-PLANNED_SUITES = ("smoke", "extended")
+GET_SMOKE_ENV_VARS = BATCH_ENV_VARS
+
+IMPLEMENTED_SUITES = ("protected", "smoke", "full")
+PLANNED_SUITES = ("extended",)
 IMPLEMENTED_ENDPOINTS = ("parse", "batch")
 IMPLEMENTED_CATEGORIES = ("matrix",)
 PLANNED_CATEGORIES = ("contract", "auth", "negative", "legacy")
@@ -76,6 +80,17 @@ INVENTORY: tuple[InventoryItem, ...] = (
         notes=(
             "Maps to the current protected pytest baseline.",
             "This is the current default live runner target and the only live execution path implemented so far.",
+        ),
+    ),
+    InventoryItem(
+        selector="suite=smoke",
+        description="Opt-in GET smoke suite across safely testable VerifyIQ API endpoints.",
+        required_env=GET_SMOKE_ENV_VARS,
+        supported_flags=("--k",),
+        notes=(
+            "Runs the dedicated GET smoke pytest package.",
+            "Keeps the default no-argument runner path unchanged; smoke remains opt-in.",
+            "This is the third live execution path implemented so far.",
         ),
     ),
     InventoryItem(
@@ -155,6 +170,10 @@ def _base_pytest_command(target: str, *, k_expr: str = "") -> tuple[str, ...]:
 
 def _protected_command(*, k_expr: str = "") -> tuple[str, ...]:
     return _base_pytest_command("tests/endpoints/parse/", k_expr=k_expr)
+
+
+def _smoke_command(*, k_expr: str = "") -> tuple[str, ...]:
+    return _base_pytest_command(GET_SMOKE_TARGET, k_expr=k_expr)
 
 
 def _full_command(*, report: bool = False, file_types: str = "", k_expr: str = "") -> tuple[str, ...]:
@@ -256,6 +275,24 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
                 commands=(_protected_command(k_expr=args.k_expr),),
                 required_env=PROTECTED_ENV_VARS,
                 notes=tuple(notes),
+                defaulted_to_protected=defaulted_to_protected,
+            )
+        if suite == "smoke":
+            if args.file_types:
+                return _usage_error(parser, "--file-types is not supported for --suite smoke.")
+            if args.fixtures_json:
+                return _usage_error(parser, "--fixtures-json is not supported for --suite smoke.")
+            if args.report:
+                return _usage_error(parser, "--report is not supported for --suite smoke.")
+            return ResolvedPlan(
+                selector="suite=smoke",
+                description="Opt-in GET smoke suite across safely testable VerifyIQ API endpoints.",
+                commands=(_smoke_command(k_expr=args.k_expr),),
+                required_env=GET_SMOKE_ENV_VARS,
+                notes=(
+                    "Dry-run prints the exact GET smoke pytest command without executing it.",
+                    "This suite is opt-in and does not change the default protected baseline.",
+                ),
                 defaulted_to_protected=defaulted_to_protected,
             )
         if args.fixtures_json:
@@ -376,6 +413,8 @@ def render_list() -> str:
         lines.append(f"  supported flags: {', '.join(item.supported_flags)}")
         if item.selector == "suite=protected":
             command = _protected_command()
+        elif item.selector == "suite=smoke":
+            command = _smoke_command()
         elif item.selector == "suite=full":
             command = _full_command()
         elif item.selector == "endpoint=parse category=matrix":
@@ -394,7 +433,7 @@ def render_list() -> str:
                 lines.append(f"    - {note}")
     lines.append("")
     lines.append(
-        "Only the protected and full suites support live execution in this slice. "
+        "Only the protected, smoke, and full suites support live execution in this slice. "
         "Use --dry-run to inspect every other mapping."
     )
     return "\n".join(lines) + "\n"
@@ -428,9 +467,9 @@ def _run_command(command: tuple[str, ...]) -> int:
 
 
 def execute_live(args: argparse.Namespace, plan: ResolvedPlan) -> int:
-    if plan.selector not in {"suite=protected", "suite=full"}:
+    if plan.selector not in {"suite=protected", "suite=smoke", "suite=full"}:
         print(
-            "Only protected and full live execution are implemented so far. "
+            "Only protected, smoke, and full live execution are implemented so far. "
             "Use --dry-run for parse matrix, batch, extended, and other pending selections where supported.",
             file=sys.stderr,
         )

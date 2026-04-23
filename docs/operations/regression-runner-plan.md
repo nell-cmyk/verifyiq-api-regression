@@ -32,6 +32,7 @@ The roadmap previously named `scripts/run_regression.py`, but the repository's e
 | Surface | Endpoint(s) | Test type | Current purpose | Requirements | Inputs | Outputs | Execution mode | Future role | Recommendation | Overlap / risk |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `./.venv/bin/python -m pytest tests/endpoints/parse/ -v` | `/v1/documents/parse` | Protected baseline: live happy-path, auth-negative, validation, plus local registry-selection tests collected from the parse package | Default protected gate used in docs and CI | `BASE_URL`, `TENANT_TOKEN`, `API_KEY`, `IAP_CLIENT_ID`, `GOOGLE_APPLICATION_CREDENTIALS`, `PARSE_FIXTURE_FILE`, `PARSE_FIXTURE_FILE_TYPE` | Env-backed happy-path fixture; parse package collection; `test_parse_matrix.py` excluded unless `RUN_PARSE_MATRIX=1` | Raw parse response artifacts under `reports/parse/responses/parse_<timestamp>/...` | Live API via `httpx` with GCS-backed fixtures; no mocks in the normal path | Canonical default suite backing | Keep exactly; wrap first as `--suite protected` and default no-arg behavior | Highest regression-safety surface; must not silently broaden or narrow |
+| `./.venv/bin/python tools/run_regression.py --suite smoke` and `./.venv/bin/python -m pytest tests/endpoints/get_smoke/ -v` | cross-group safe GET endpoints | Opt-in live GET smoke: status-200 checks for safely testable no-path GET endpoints across health, parser-studio, monitoring, QA, BLS/API, and selected utility surfaces | First cross-group smoke lane through the canonical runner | `BASE_URL`, `TENANT_TOKEN`, `API_KEY`, `IAP_CLIENT_ID`, `GOOGLE_APPLICATION_CREDENTIALS` | Shared live client/auth only; no fixture or path-param setup in this tranche | none | Live API via `httpx` with the shared repo client | Canonical smoke suite backing | Keep as opt-in smoke lane through `--suite smoke`; grow by adding small endpoint units under `tests/endpoints/get_smoke/` instead of ad hoc scripts | Broader endpoint breadth than protected; must stay opt-in until query-backed, setup-backed, and unstable GET routes are characterized |
 | `./.venv/bin/python -m pytest tests/endpoints/parse/test_parse.py -v` | `/v1/documents/parse` | Direct parse module: happy path, auth-negative, validation | Underlying live parse module for the protected suite | Same as protected parse baseline | Env-backed `PARSE_REQUEST_BASE` and happy-path fixture | Raw parse response artifacts | Live API via `httpx` with GCS-backed fixture | Internal module mapping for parse categories | Keep as direct debug path; migrate into runner metadata, not the primary operator command | Subset of the protected baseline command; exposing it as primary would be confusing |
 | `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` | `/v1/documents/parse` | Opt-in matrix breadth across canonical file types | Runs matrix, captures terminal output, renders summary, optionally emits structured report | Core parse env above; wrapper sets `RUN_PARSE_MATRIX=1`; optional `PARSE_MATRIX_FIXTURES_JSON`; optional `REGRESSION_REPORT` / `REGRESSION_REPORT_TIER` | Canonical registry fixtures or explicit fixtures JSON; supports `--file-types`, `--fixtures-json`, `--k`, optional custom command | `reports/parse/matrix/latest-terminal.txt`, `reports/parse/matrix/latest-summary.md`, parse response artifacts, optional `reports/regression/<timestamp>/...`; `--mode apply` can update promotion-candidate docs | Live API via `httpx` with GCS-backed fixtures | Matrix engine for the canonical runner | Wrap first as `--endpoint parse --category matrix`; later deprecate as a direct operator command | Slow breadth surface; tied to summary-rendering behavior and optional doc-mutation mode |
 | `RUN_PARSE_MATRIX=1 ./.venv/bin/python -m pytest tests/endpoints/parse/test_parse_matrix.py -v` | `/v1/documents/parse` | Direct matrix module | Debug-level direct entry point for matrix contract coverage | Core parse env; `RUN_PARSE_MATRIX=1`; optional `PARSE_MATRIX_FIXTURES_JSON` | Canonical one-fixture-per-fileType selection from registry, or explicit fixture selection JSON | Raw parse response artifacts only; no wrapper-generated summary | Live API via `httpx` with GCS-backed fixtures | Internal/debug surface only | Keep as a debug path only; do not document as the primary operator path | Easy to misuse without summary output; collection must stay gated |
@@ -44,6 +45,7 @@ The roadmap previously named `scripts/run_regression.py`, but the repository's e
 
 ## Current-State Conclusions
 - The protected baseline is the only current default gate and must remain the default until parity is proven.
+- The new `smoke` suite is now real, but it must remain opt-in so the default gate does not silently broaden.
 - The repo already has orchestration logic worth reusing. This is especially true for:
   - `tools/run_parse_full_regression.py`
   - `tools/reporting/run_parse_matrix_with_summary.py`
@@ -68,6 +70,7 @@ Recommended initial user-facing interface:
 
     ./.venv/bin/python tools/run_regression.py
     ./.venv/bin/python tools/run_regression.py --suite protected
+    ./.venv/bin/python tools/run_regression.py --suite smoke
     ./.venv/bin/python tools/run_regression.py --suite full
     ./.venv/bin/python tools/run_regression.py --suite extended
     ./.venv/bin/python tools/run_regression.py --endpoint parse
@@ -114,11 +117,11 @@ Why this is the right default now:
 
 Tradeoff:
 - This default is narrower than an eventual cross-endpoint smoke suite.
-- That tradeoff is correct today because the repo does not yet have a proven, documented, stable cross-endpoint smoke suite.
+- That tradeoff is correct today because the current `smoke` suite is still an opt-in GET 200 lane rather than the full default regression.
 
 Future note:
-- A future `smoke` suite can exist once a deliberate cross-endpoint smoke composition is defined.
-- Until that exists, `protected` is the concrete default suite and should not be replaced by an undefined or aspirational `smoke` label.
+- `smoke` now exists as an opt-in cross-group GET suite.
+- `protected` remains the concrete default suite and should not be replaced by a broader smoke lane until runtime, coverage boundaries, and failure ownership are deliberately settled.
 
 ## Suite And Category Taxonomy
 Keep the model small and practical.
@@ -134,8 +137,8 @@ Keep the model small and practical.
   - Heavy or selective runs that are useful but not default
   - Examples: matrix subsets, selected-fixture batch runs, report-heavy runs
 - `smoke`
-  - Reserved for a later curated cross-endpoint minimal suite
-  - Do not make it the default until it is deliberately defined
+  - Current opt-in curated cross-endpoint GET smoke suite
+  - Do not make it the default until broader smoke semantics are deliberately defined
 
 ### Endpoints
 - `parse`

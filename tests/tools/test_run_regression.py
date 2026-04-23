@@ -45,6 +45,7 @@ def test_list_exits_zero_and_mentions_core_mappings():
     assert rc == 0
     assert stderr == ""
     assert "protected" in stdout
+    assert "smoke" in stdout
     assert "full" in stdout
     assert "parse" in stdout
     assert "batch" in stdout
@@ -85,6 +86,17 @@ def test_suite_full_dry_run_prints_full_wrapper_command():
     assert rc == 0
     assert "Selection: suite=full" in stdout
     assert "tools/run_parse_full_regression.py" in stdout
+
+
+def test_suite_smoke_dry_run_prints_get_smoke_pytest_command():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, _ = _invoke(module, ["--suite", "smoke", "--dry-run"])
+
+    assert rc == 0
+    assert "Selection: suite=smoke" in stdout
+    assert "-m pytest tests/endpoints/get_smoke/ -v" in stdout
 
 
 def test_suite_full_executes_full_wrapper_and_returns_subprocess_code():
@@ -209,6 +221,58 @@ def test_no_argument_invocation_executes_protected_live_path():
     assert "Executing command:" in stdout
 
 
+def test_suite_smoke_executes_smoke_live_path_and_returns_subprocess_code():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 5
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "smoke"])
+
+    assert rc == 5
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        "-m",
+        "pytest",
+        "tests/endpoints/get_smoke/",
+        "-v",
+    )
+    assert "Executing command:" in stdout
+
+
+def test_suite_smoke_executes_with_supported_k_flag():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 0
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "smoke", "--k", "health"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        "-m",
+        "pytest",
+        "tests/endpoints/get_smoke/",
+        "-v",
+        "-k",
+        "health",
+    )
+    assert "Executing command:" in stdout
+
+
 def test_suite_protected_executes_protected_live_path_and_returns_subprocess_code():
     module = _load_module()
     calls: list[tuple[str, ...]] = []
@@ -282,7 +346,7 @@ def test_planned_suite_reports_not_yet_mapped():
     module = _load_module()
     module._run_command = _no_call_runner
 
-    rc, stdout, stderr = _invoke(module, ["--suite", "smoke", "--dry-run"])
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--dry-run"])
 
     assert rc != 0
     assert stdout == ""
@@ -308,7 +372,7 @@ def test_parse_matrix_without_dry_run_exits_nonzero_without_execution():
 
     assert rc != 0
     assert stdout == ""
-    assert "Only protected and full live execution are implemented so far" in stderr
+    assert "Only protected, smoke, and full live execution are implemented so far" in stderr
 
 
 def test_batch_without_dry_run_exits_nonzero_without_execution():
@@ -319,7 +383,7 @@ def test_batch_without_dry_run_exits_nonzero_without_execution():
 
     assert rc != 0
     assert stdout == ""
-    assert "Only protected and full live execution are implemented so far" in stderr
+    assert "Only protected, smoke, and full live execution are implemented so far" in stderr
 
 
 def test_suite_extended_without_dry_run_exits_nonzero_without_execution():
@@ -330,4 +394,4 @@ def test_suite_extended_without_dry_run_exits_nonzero_without_execution():
 
     assert rc != 0
     assert stdout == ""
-    assert "Only protected and full live execution are implemented so far" in stderr
+    assert "Only protected, smoke, and full live execution are implemented so far" in stderr

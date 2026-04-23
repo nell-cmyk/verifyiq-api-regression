@@ -14,7 +14,7 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 - Run repo-local commands from the repo root.
 - Repo-local Python and pytest commands assume `.venv`; bootstrap with `python3 -m venv .venv`, then install deps with `./.venv/bin/python -m pip install -r requirements.txt`.
 - Tool-only deps are needed only for fixture-registry maintenance: `./.venv/bin/python -m pip install -r tools/requirements.txt`.
-- `/parse` baseline, matrix, full regression, and `/documents/batch` validation all require the live repo env.
+- `/parse` baseline, GET smoke, matrix, full regression, and `/documents/batch` validation all require the live repo env.
 - `PARSE_FIXTURE_FILE` must remain a `gs://` URI.
 - `VERIFYIQ_SKIP_DOTENV=1` disables repo `.env` loading so non-live tooling/reporting suites can prove they do not depend on live env bootstrap.
 - Mind is the canonical local memory/context layer. Install it with `curl -fsSL https://raw.githubusercontent.com/GabrielMartinMoran/mind/main/scripts/install.sh | bash`, then ensure `~/.local/bin` is on `PATH` for interactive `mind` usage.
@@ -36,6 +36,7 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 | --- | --- | --- | --- | --- |
 | `VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting/ tests/skills/ -v` | Canonical non-live validation for runner, reporting, and tooling changes | `.venv` only; no live secrets | none | no repo mutation |
 | `./.venv/bin/python tools/run_regression.py` | Canonical live runner entry point; the no-arg default is the parse-only protected suite | Live `/parse` env | `reports/parse/responses/parse_<timestamp>/...` | generated artifacts only |
+| `./.venv/bin/python tools/run_regression.py --suite smoke` | Canonical opt-in live GET smoke suite across safely testable VerifyIQ API GET endpoints | Live API env | none | no repo mutation |
 | `./.venv/bin/python tools/run_regression.py --suite full` | Stronger live gate: protected parse suite followed by delegated full wrapper execution | Live `/parse` env | `reports/parse/responses/parse_<timestamp>/...`, plus the existing matrix/report artifacts when delegation reaches the full wrapper | generated artifacts only |
 | `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` | Default opt-in `/parse` matrix run plus saved summary | Live `/parse` env | `reports/parse/matrix/latest-terminal.txt`, `reports/parse/matrix/latest-summary.md` | generated artifacts only in draft mode |
 | `./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"` | Guarded commit flow after review | Reviewed diff, staged changes, clean worktree | none | Git state only |
@@ -47,6 +48,7 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 | Command | Why It Is Not Primary | Primary Artifacts | Mutation Scope |
 | --- | --- | --- | --- |
 | `./.venv/bin/python -m pytest tests/endpoints/parse/ -v` | Exact protected `/parse` implementation and debug surface; the canonical operator path is now `tools/run_regression.py` | `reports/parse/responses/parse_<timestamp>/...` | generated artifacts only |
+| `./.venv/bin/python -m pytest tests/endpoints/get_smoke/ -v` | Exact GET smoke implementation/debug surface; the canonical operator path is `tools/run_regression.py --suite smoke` | none | no repo mutation |
 | `./.venv/bin/python -m pytest tests/endpoints/batch/ -v` | Direct live `/documents/batch` validation when batch-specific coverage is needed | `reports/batch/batch_<timestamp>/...` | generated artifacts only |
 | `./.venv/bin/python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` | Selected-fixture `/documents/batch` run | `reports/batch/batch_<timestamp>/...` | generated artifacts only |
 | `./.venv/bin/python tools/run_regression.py --list|--dry-run ...` | Non-executing canonical-runner discovery surface for inventory preview and command mapping | none | no repo mutation |
@@ -81,9 +83,9 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 ## Notes
 - The matrix wrapper sets `RUN_PARSE_MATRIX=1` for you.
 - Structured reporting under `reports/regression/<timestamp>/` is opt-in via `--report`.
-- `tools/run_regression.py` is the canonical operator path for the default protected live suite and the current delegated `--suite full` path.
-- `tools/run_regression.py` currently supports live execution for the protected baseline and `--suite full` only. Direct live parse-matrix, batch, extended, and other selections remain dry-run only.
-- `smoke` remains planned terminology, not a broader current default suite.
+- `tools/run_regression.py` is the canonical operator path for the default protected live suite, the opt-in `--suite smoke` GET smoke lane, and the current delegated `--suite full` path.
+- `tools/run_regression.py` currently supports live execution for the protected baseline, `--suite smoke`, and `--suite full` only. Direct live parse-matrix, batch, extended, and other selections remain dry-run only.
+- `smoke` is now a real opt-in suite, not the broader default suite.
 - `tools/generate_fixture_registry.py` and `tools/onboard_fixture_json.py` are maintenance surfaces, not ordinary validation steps.
 - The normal active-context path is automatic through `.opencode/plugins/verifyiq-mind-session.js`.
 - `tools/mind_session.py` is the repo-owned fallback surface for explicit recovery, checkpointing, summaries, and finish events.
