@@ -87,6 +87,66 @@ def test_suite_full_dry_run_prints_full_wrapper_command():
     assert "tools/run_parse_full_regression.py" in stdout
 
 
+def test_suite_full_executes_full_wrapper_and_returns_subprocess_code():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 9
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "full"])
+
+    assert rc == 9
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        str(module.FULL_WRAPPER),
+    )
+    assert "Executing command:" in stdout
+
+
+def test_suite_full_executes_wrapper_with_supported_forwarded_flags():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 0
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(
+        module,
+        [
+            "--suite",
+            "full",
+            "--report",
+            "--file-types",
+            "Payslip,TIN",
+            "--k",
+            "focus",
+        ],
+    )
+
+    assert rc == 0
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        str(module.FULL_WRAPPER),
+        "--report",
+        "--file-types",
+        "Payslip,TIN",
+        "--k",
+        "focus",
+    )
+    assert "Executing command:" in stdout
+
+
 def test_parse_matrix_dry_run_prints_matrix_wrapper_command():
     module = _load_module()
     module._run_command = _no_call_runner
@@ -229,15 +289,15 @@ def test_planned_suite_reports_not_yet_mapped():
     assert "planned but not mapped in this first slice" in stderr
 
 
-def test_suite_full_without_dry_run_exits_nonzero_without_execution():
+def test_suite_full_dry_run_does_not_call_subprocess():
     module = _load_module()
     module._run_command = _no_call_runner
 
-    rc, stdout, stderr = _invoke(module, ["--suite", "full"])
+    rc, stdout, stderr = _invoke(module, ["--suite", "full", "--dry-run"])
 
-    assert rc != 0
-    assert stdout == ""
-    assert "Only protected live execution is implemented so far" in stderr
+    assert rc == 0
+    assert stderr == ""
+    assert "Executing command:" not in stdout
 
 
 def test_parse_matrix_without_dry_run_exits_nonzero_without_execution():
@@ -248,7 +308,7 @@ def test_parse_matrix_without_dry_run_exits_nonzero_without_execution():
 
     assert rc != 0
     assert stdout == ""
-    assert "Only protected live execution is implemented so far" in stderr
+    assert "Only protected and full live execution are implemented so far" in stderr
 
 
 def test_batch_without_dry_run_exits_nonzero_without_execution():
@@ -259,4 +319,15 @@ def test_batch_without_dry_run_exits_nonzero_without_execution():
 
     assert rc != 0
     assert stdout == ""
-    assert "Only protected live execution is implemented so far" in stderr
+    assert "Only protected and full live execution are implemented so far" in stderr
+
+
+def test_suite_extended_without_dry_run_exits_nonzero_without_execution():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended"])
+
+    assert rc != 0
+    assert stdout == ""
+    assert "Only protected and full live execution are implemented so far" in stderr

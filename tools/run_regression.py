@@ -85,6 +85,7 @@ INVENTORY: tuple[InventoryItem, ...] = (
         notes=(
             "Delegates to the existing full-regression wrapper.",
             "Preserves current wrapper sequencing rather than expanding it inline.",
+            "This is the second live execution path implemented so far.",
         ),
     ),
     InventoryItem(
@@ -223,7 +224,18 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
         if suite not in IMPLEMENTED_SUITES and suite not in PLANNED_SUITES:
             return _usage_error(parser, f"Unknown suite: {suite!r}.")
         if suite in PLANNED_SUITES:
-            return _usage_error(parser, f"Suite {suite!r} is planned but not mapped in this first slice.")
+            if args.dry_run:
+                return _usage_error(parser, f"Suite {suite!r} is planned but not mapped in this first slice.")
+            return ResolvedPlan(
+                selector=f"suite={suite}",
+                description=f"Planned suite {suite!r} is not yet available for live execution.",
+                commands=(),
+                required_env=(),
+                notes=(
+                    "This live mapping is still pending.",
+                    "Use --dry-run for selections that already have a mapped command.",
+                ),
+            )
         if suite == "protected":
             if args.file_types:
                 return _usage_error(parser, "--file-types is not supported for --suite protected.")
@@ -253,8 +265,8 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
             commands=(_full_command(report=args.report, file_types=args.file_types, k_expr=args.k_expr),),
             required_env=PROTECTED_ENV_VARS,
             notes=(
-                "Live execution remains disabled in this first slice.",
-                "The full suite delegates to the existing full-regression wrapper.",
+                "Dry-run prints the exact delegated full-regression wrapper command without executing it.",
+                "The full suite delegates to the existing full-regression wrapper for live execution.",
             ),
             defaulted_to_protected=defaulted_to_protected,
         )
@@ -381,7 +393,7 @@ def render_list() -> str:
                 lines.append(f"    - {note}")
     lines.append("")
     lines.append(
-        "Only the protected suite supports live execution in this slice. "
+        "Only the protected and full suites support live execution in this slice. "
         "Use --dry-run to inspect every other mapping."
     )
     return "\n".join(lines) + "\n"
@@ -415,15 +427,15 @@ def _run_command(command: tuple[str, ...]) -> int:
 
 
 def execute_live(args: argparse.Namespace, plan: ResolvedPlan) -> int:
-    if plan.selector != "suite=protected":
+    if plan.selector not in {"suite=protected", "suite=full"}:
         print(
-            "Only protected live execution is implemented so far. "
-            "Use --dry-run for full, parse matrix, batch, and other selections.",
+            "Only protected and full live execution are implemented so far. "
+            "Use --dry-run for parse matrix, batch, extended, and other pending selections where supported.",
             file=sys.stderr,
         )
         return 2
 
-    if args.file_types or args.fixtures_json or args.k_expr or args.report:
+    if plan.selector == "suite=protected" and (args.file_types or args.fixtures_json or args.k_expr or args.report):
         print(
             "Live protected execution currently supports only the exact protected baseline command with no additional flags. "
             "Use --dry-run to inspect extended mappings.",

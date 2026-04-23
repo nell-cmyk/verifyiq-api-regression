@@ -8,7 +8,7 @@ The target operating model is a lean, risk-based regression suite that stays pra
 ## Current Repository Status
 - The existing roadmap already lived at `docs/knowledge-base/repo-roadmap.md`.
 - The runner-consolidation design artifact now lives at `docs/operations/regression-runner-plan.md`.
-- The first canonical runner slice now lives at `tools/run_regression.py` and supports inventory-backed `--list`, `--dry-run`, and live protected-baseline execution only.
+- The canonical runner now lives at `tools/run_regression.py` and supports inventory-backed `--list`, `--dry-run`, live protected-baseline execution, and live `--suite full` delegation to the existing full-regression wrapper.
 - The checked-in protected-baseline CI workflow now calls `python tools/run_regression.py --suite protected` via the `setup-python` interpreter while preserving the existing secret-aware skip behavior and protected baseline scope.
 - The repository is Python-first and uses `pytest`, `httpx`, `python-dotenv`, `google-auth`, and `pyyaml`.
 - Live endpoint tests are under `tests/`, with current automated endpoint coverage focused on `/v1/documents/parse` and `/v1/documents/batch`.
@@ -203,8 +203,8 @@ Expected reporting behavior for the canonical runner:
 
 ## Recommended Next Implementation Steps
 1. Use `docs/operations/regression-runner-plan.md` as the implementation design artifact for runner consolidation.
-2. Keep `./.venv/bin/python tools/run_regression.py` aligned with the exact protected baseline behavior while protected live execution settles.
-3. Add live execution mapping for `full`, parse matrix targeting, and targeted batch flows only after protected execution is stable.
+2. Keep `./.venv/bin/python tools/run_regression.py` aligned with the exact protected and full wrapper behavior while live execution settles.
+3. Add live execution mapping for direct parse matrix targeting and targeted batch flows only after the delegated full path is stable.
 4. Define metadata for current `/parse` and `/batch` tests so the future runner can target them by suite and category without duplicating logic.
 5. Pilot contract and schema drift detection on `/v1/documents/parse` using existing safe fixtures and artifacts.
 6. Update `docs/operations/command-registry.md`, `docs/operations/workflow.md`, and CI only after the broader canonical runner surface actually exists and has parity.

@@ -32,7 +32,7 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 | Command | Normal Use | High-Level Prereqs | Primary Artifacts | Mutation Scope |
 | --- | --- | --- | --- | --- |
 | `./.venv/bin/python -m pytest tests/endpoints/parse/ -v` | Protected `/parse` baseline validation | Live `/parse` env | `reports/parse/responses/parse_<timestamp>/...` | generated artifacts only |
-| `./.venv/bin/python tools/run_regression.py` | Canonical runner entry point; current slice executes the protected `/parse` baseline by default and via `--suite protected` | Live `/parse` env | `reports/parse/responses/parse_<timestamp>/...` | generated artifacts only |
+| `./.venv/bin/python tools/run_regression.py` | Canonical runner entry point; current slice executes the protected `/parse` baseline by default and supports `--suite protected` and `--suite full` live execution | Live `/parse` env | `reports/parse/responses/parse_<timestamp>/...`, plus the existing matrix/report artifacts when `--suite full` delegates to the full wrapper | generated artifacts only |
 | `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` | Default opt-in `/parse` matrix run plus saved summary | Live `/parse` env | `reports/parse/matrix/latest-terminal.txt`, `reports/parse/matrix/latest-summary.md` | generated artifacts only in draft mode |
 | `./.venv/bin/python tools/run_parse_full_regression.py` | Stronger gate: protected baseline, then matrix wrapper | Same env as baseline + matrix | same matrix artifacts; optional `reports/regression/<timestamp>/...` with `--report` | generated artifacts only |
 | `./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"` | Guarded commit flow after review | Reviewed diff, staged changes, clean worktree | none | Git state only |
@@ -76,7 +76,7 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 ## Notes
 - The matrix wrapper sets `RUN_PARSE_MATRIX=1` for you.
 - Structured reporting under `reports/regression/<timestamp>/` is opt-in via `--report`.
-- `tools/run_regression.py` currently executes only the protected baseline live path. Full, matrix, batch, and other live selections remain dry-run only.
+- `tools/run_regression.py` currently supports live execution for the protected baseline and `--suite full` only. Direct live parse-matrix, batch, extended, and other selections remain dry-run only.
 - `tools/generate_fixture_registry.py` and `tools/onboard_fixture_json.py` are maintenance surfaces, not ordinary validation steps.
 - The normal active-context path is automatic through `.opencode/plugins/verifyiq-mind-session.js`.
 - `tools/mind_session.py` is the repo-owned fallback surface for explicit recovery, checkpointing, summaries, and finish events.
