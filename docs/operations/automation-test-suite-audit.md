@@ -16,8 +16,8 @@ That rating is appropriate because the repository already has a disciplined prot
 
 | Dimension | Score | Reason |
 | --- | --- | --- |
-| Test strategy | 3/5 | `/parse` has a clear protected baseline and matrix/full layers, but there is no fully realized cross-endpoint smoke model or explicit per-endpoint minimum category bar. |
-| Runner ergonomics | 2/5 | `tools/run_regression.py` provides `--list` and `--dry-run`, but live execution parity and documentation convergence are incomplete. |
+| Test strategy | 3/5 | `/parse` has a clear protected baseline and matrix/full layers, and the repo now has an opt-in cross-group GET smoke lane, but the per-endpoint minimum category bar is still incomplete. |
+| Runner ergonomics | 3/5 | `tools/run_regression.py` now supports `--list`, `--dry-run`, live protected execution, live opt-in GET smoke, and live `--suite full`, but batch and other targeted execution parity are still incomplete. |
 | Regression discipline | 4/5 | The default gate stays narrow, the matrix uses one canonical fixture per file type, and `/documents/batch` caps default live request size at four items. |
 | Endpoint coverage | 1/5 | Live endpoint coverage is limited to `/v1/documents/parse` and `/v1/documents/batch` while the OpenAPI inventory exposes 218 paths across much broader groups. |
 | Contract/schema validation | 2/5 | Shared assertions are useful, but success-response validation is selective and there is no systematic OpenAPI drift workflow in operation yet. |
@@ -43,9 +43,9 @@ That rating is appropriate because the repository already has a disciplined prot
 
 ## Main Gaps
 - Live endpoint automation only covers `/v1/documents/parse` and `/v1/documents/batch`, while `official-openapi.json` exposes 218 paths across 11 top-level groups.
-- The suite has no explicit, enforced cross-endpoint smoke taxonomy yet. `protected` is real; `smoke` is still a planned label in `tools/run_regression.py` and the roadmap.
+- The suite now has an explicit opt-in cross-endpoint GET smoke lane. `protected` remains the real default gate, while `smoke` is now implemented as a 200-only GET suite rather than a broader default regression.
 - Contract and schema validation are still manual and selective. There is no checked-in OpenAPI validator, drift register, or observed-schema comparison workflow in operation.
-- The canonical runner is only partially real. `tools/run_regression.py` can list and dry-run multiple mappings, but only `--suite protected` and `--suite full` execute live today.
+- The canonical runner is still only partially real. `tools/run_regression.py` can list and dry-run multiple mappings and now executes live for `--suite protected`, `--suite smoke`, and `--suite full`, but batch and other targeted execution paths remain incomplete.
 - Offline pytest suites are not cleanly isolated from live env requirements because `tests/conftest.py` imports `tests.client`, which imports `tests.config` at module import time.
 - Auth coverage is shallow. `/parse` only checks missing and invalid tenant-token behavior; `/documents/batch` has no auth-negative coverage, and there is no deeper authz/permission model anywhere.
 - The repo has no maintained endpoint coverage inventory that maps endpoint groups to risk, owner area, required categories, or onboarding status.
@@ -56,7 +56,7 @@ That rating is appropriate because the repository already has a disciplined prot
 ## Detailed Assessment By Dimension
 
 ### 1. Test Strategy and Scope
-- Current state: The live strategy is strong for `/parse` and decent for `/documents/batch`. `/parse` has happy-path, auth-negative, validation, and opt-in matrix coverage in `tests/endpoints/parse/test_parse.py` and `tests/endpoints/parse/test_parse_matrix.py`. `/documents/batch` has happy-path, validation, limit handling, and partial-failure coverage in `tests/endpoints/batch/test_batch.py`. There is no real cross-endpoint smoke suite, workflow suite, or broader endpoint model.
+- Current state: The live strategy is strong for `/parse` and decent for `/documents/batch`, and the repo now has an opt-in cross-group GET smoke lane under `tests/endpoints/get_smoke/`. `/parse` has happy-path, auth-negative, validation, and opt-in matrix coverage in `tests/endpoints/parse/test_parse.py` and `tests/endpoints/parse/test_parse_matrix.py`. `/documents/batch` has happy-path, validation, limit handling, and partial-failure coverage in `tests/endpoints/batch/test_batch.py`. The new smoke lane covers status-200 checks for safely testable current GET endpoints, but setup-backed, query-backed, and unstable GET routes are still deferred.
 - Professional expectation: A professional API automation repo has a deliberately defined test model that distinguishes protected smoke, regression, contract/schema, auth/authz, negative, and extended lanes across the covered endpoint set.
 - Gap: The current taxonomy exists mostly in docs and roadmap text, not as an enforced runnable model beyond `protected`, `full`, and the parse matrix.
 - Recommended improvement: Define the minimum required category set per endpoint group and decide whether `protected` remains parse-only or evolves into a curated cross-endpoint smoke lane.
@@ -76,7 +76,7 @@ That rating is appropriate because the repository already has a disciplined prot
 ### 3. Runner and Command Ergonomics
 - Current state: `tools/run_regression.py` is a meaningful first step. It supports inventory-backed `--list`, `--dry-run`, default protected execution, and delegated `--suite full` execution. The wrapper surfaces are still heavily used and still documented.
 - Professional expectation: One clear operator command should front the suite, with precise list and dry-run behavior, predictable suite/endpoint/category targeting, and minimal overlap.
-- Gap: Live parse matrix and batch execution are still dry-run only from the canonical runner; `README.md` and `docs/operations/workflow.md` still lead with direct pytest and legacy wrappers; `tools/run_regression.py` itself contains small migration inconsistencies, including an outdated docstring and protected-suite flag support that is advertised more broadly than live execution actually permits.
+- Gap: Live parse matrix and batch execution are still dry-run only from the canonical runner, and broader smoke semantics beyond the current GET 200 lane are still evolving. `README.md` and `docs/operations/workflow.md` are closer to the runner story now, but batch and other targeted parity paths remain incomplete.
 - Recommended improvement: Either complete runner parity for the current useful surfaces or narrow the docs so the repo no longer presents multiple "primary" operator stories.
 - Priority: P1
 - Effort: Medium
@@ -303,7 +303,7 @@ Why:
 Remaining runner gaps:
 
 - parse matrix is not live-runnable from the canonical runner
-- batch is not live-runnable from the canonical runner
+- batch is not yet live-runnable from the canonical runner
 - categories such as `contract`, `auth`, and `negative` are planned but not mapped
 - operator docs still treat direct pytest and wrapper commands as primary paths
 - a few migration-state inconsistencies remain inside the runner itself

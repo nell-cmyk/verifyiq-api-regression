@@ -12,8 +12,6 @@ CASES = (
     GetSmokeCase("parser-categories-v1", "/parser_studio/api/v1/categories"),
     GetSmokeCase("parser-field-types-v1", "/parser_studio/api/v1/field-types"),
     GetSmokeCase("parser-audit-log-v1", "/parser_studio/api/v1/audit-log"),
-    GetSmokeCase("parser-categories-legacy", "/parser_studio/api/categories"),
-    GetSmokeCase("parser-field-types-legacy", "/parser_studio/api/field-types"),
     GetSmokeCase("parser-tenants-v1", "/parser_studio/api/v1/tenants"),
     GetSmokeCase("parser-fraud-thresholds-v1", "/parser_studio/api/v1/fraud-thresholds"),
 )

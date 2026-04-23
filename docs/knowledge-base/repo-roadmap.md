@@ -28,6 +28,7 @@ The target operating model is a lean, risk-based regression suite that stays pra
 - The protected `/parse` happy-path request now retries one `httpx.RemoteProtocolError` before failing so transient upstream disconnects are distinguished from persistent repo or service regressions without broad retry behavior.
 - The repo now has an opt-in GET smoke suite under `tests/endpoints/get_smoke/`, callable through `./.venv/bin/python tools/run_regression.py --suite smoke`.
 - The current GET smoke suite covers status-200 checks for safely testable no-path GET endpoints across `health`, `parser-studio`, `monitoring`, `qa`, `applications-api`, and selected gateway/benchmark utility surfaces; setup-backed, query-backed, and behavior-blocked GET endpoints remain sequenced follow-on tranches.
+- Legacy parser-studio aliases and duplicate BLS alias routes are intentionally excluded from GET smoke and called out in `docs/operations/endpoint-coverage-inventory.md` instead of padding the coverage count.
 
 ## Current Validation Surface
 
