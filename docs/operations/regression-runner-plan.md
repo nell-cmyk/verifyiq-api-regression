@@ -27,6 +27,9 @@ This plan advances the roadmap items in `docs/knowledge-base/repo-roadmap.md` th
 Repo reality note:
 The roadmap previously named `scripts/run_regression.py`, but the repository's established command convention is `tools/`. This plan recommends `tools/run_regression.py` and the roadmap should stay aligned with that repo-local convention.
 
+Current implementation note:
+`tools/run_regression.py` now has live parity for the currently supported surfaces: `--suite protected`, `--suite smoke`, `--suite full`, `--endpoint parse --category matrix`, `--endpoint batch`, and `--endpoint batch --fixtures-json ...`. The remaining work in this plan is about broader taxonomy, reporting consolidation, documentation follow-through, and later deprecation cleanup.
+
 ## Current Runner Inventory Matrix
 
 | Surface | Endpoint(s) | Test type | Current purpose | Requirements | Inputs | Outputs | Execution mode | Future role | Recommendation | Overlap / risk |
@@ -50,6 +53,7 @@ The roadmap previously named `scripts/run_regression.py`, but the repository's e
   - `tools/run_parse_full_regression.py`
   - `tools/reporting/run_parse_matrix_with_summary.py`
   - `tools/run_batch_with_fixtures.py`
+- Runner parity for the currently supported live surfaces is now in place through delegation to those existing wrappers and commands.
 - The direct pytest surfaces should remain valid for debugging, but they should stop being the primary operator story after consolidation.
 - `tools/run_parse_with_report.py` is the clearest direct-command candidate for later deprecation because it overlaps other surfaces and is already documented as advanced/internal.
 - Current contract validation is shared-assertion based, not full OpenAPI validation. The future runner must not blur that distinction.
@@ -228,6 +232,8 @@ Why:
 4. Do not remove or rename any wrapper.
 
 ### Phase B: Wrap Existing Parse Flows
+Status: implemented for the currently supported live parse surfaces.
+
 1. Map `--suite protected` to the exact current protected baseline command.
 2. Map `--suite full` to the existing full-regression behavior.
 3. Map `--endpoint parse --category matrix` to the matrix wrapper.
@@ -238,6 +244,8 @@ Why:
    - `--report`
 
 ### Phase C: Wrap Existing Batch Flows
+Status: implemented for the currently supported live batch surfaces.
+
 1. Map `--endpoint batch` to the direct batch pytest surface.
 2. Map `--endpoint batch --fixtures-json ...` to the batch wrapper behavior.
 3. Preserve chunking semantics and warning output from the current batch wrapper.

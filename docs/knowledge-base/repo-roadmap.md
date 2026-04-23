@@ -8,7 +8,7 @@ The target operating model is a lean, risk-based regression suite that stays pra
 ## Current Repository Status
 - The existing roadmap already lived at `docs/knowledge-base/repo-roadmap.md`.
 - The runner-consolidation design artifact now lives at `docs/operations/regression-runner-plan.md`.
-- The canonical runner now lives at `tools/run_regression.py` and supports inventory-backed `--list`, `--dry-run`, live protected-baseline execution, live opt-in `--suite smoke` GET coverage, and live `--suite full` delegation to the existing full-regression wrapper.
+- The canonical runner now lives at `tools/run_regression.py` and supports inventory-backed `--list`, `--dry-run`, live protected-baseline execution, live opt-in `--suite smoke` GET coverage, live `--suite full` delegation to the existing full-regression wrapper, live parse matrix execution via `--endpoint parse --category matrix`, and live batch execution via `--endpoint batch` with or without `--fixtures-json`.
 - The checked-in protected-baseline CI workflow now calls `python tools/run_regression.py --suite protected` via the `setup-python` interpreter while preserving the existing secret-aware skip behavior and protected baseline scope.
 - The repository is Python-first and uses `pytest`, `httpx`, `python-dotenv`, `google-auth`, and `pyyaml`.
 - Live endpoint tests are under `tests/`, with current automated endpoint coverage focused on `/v1/documents/parse`, `/v1/documents/batch`, and the new opt-in cross-group GET smoke lane.
@@ -34,13 +34,13 @@ The target operating model is a lean, risk-based regression suite that stays pra
 
 | Surface | Current entry point | Current purpose | Consolidation note |
 | --- | --- | --- | --- |
-| Protected `/parse` baseline | `./.venv/bin/python -m pytest tests/endpoints/parse/ -v` | Default live gate for `/parse` | Must remain behaviorally stable during migration |
+| Protected `/parse` baseline | `./.venv/bin/python tools/run_regression.py` | Default live gate for `/parse` | Implemented through the exact protected pytest surface and must remain behaviorally stable during migration |
 | Opt-in GET smoke suite | `./.venv/bin/python tools/run_regression.py --suite smoke` | Curated live GET smoke coverage: 200 assertions for safely testable current endpoints plus exact checks for known non-200 surfaces | Keep opt-in; do not let it silently replace the protected default |
-| `/parse` matrix | `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` | Opt-in broader fileType coverage plus saved summary | Good candidate to become a runner subcommand/category |
-| `/parse` full regression | `./.venv/bin/python tools/run_parse_full_regression.py` | Protected baseline followed by matrix | Strong signal that orchestration already exists but is fragmented |
+| `/parse` matrix | `./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix` | Opt-in broader fileType coverage plus saved summary | Implemented through delegation to the existing matrix wrapper |
+| `/parse` full regression | `./.venv/bin/python tools/run_regression.py --suite full` | Protected baseline followed by matrix | Implemented through delegation to the existing full-regression wrapper |
 | Targeted `/parse` reporting | `./.venv/bin/python tools/run_parse_with_report.py` | Internal reporting/debug helper | Should become internal-only after consolidation |
-| Direct `/documents/batch` suite | `./.venv/bin/python -m pytest tests/endpoints/batch/ -v` | Live batch validation | Should be callable through the canonical runner |
-| Selected-fixture `/documents/batch` wrapper | `./.venv/bin/python tools/run_batch_with_fixtures.py --fixtures-json ...` | Fixture-targeted batch runs | Useful migration input for endpoint/category targeting |
+| Direct `/documents/batch` suite | `./.venv/bin/python tools/run_regression.py --endpoint batch` | Live batch validation | Implemented through the existing direct pytest batch surface |
+| Selected-fixture `/documents/batch` wrapper | `./.venv/bin/python tools/run_regression.py --endpoint batch --fixtures-json ...` | Fixture-targeted batch runs | Implemented through delegation to the existing batch wrapper |
 
 ## Why Consolidation Is Needed
 - The repo already has multiple valid ways to run regression coverage, but the operator command surface is fragmented across direct `pytest` entry points and several Python wrappers.
@@ -222,7 +222,7 @@ Expected reporting behavior for the canonical runner:
 ## Recommended Next Implementation Steps
 1. Use `docs/operations/regression-runner-plan.md` as the implementation design artifact for runner consolidation.
 2. Keep `./.venv/bin/python tools/run_regression.py` aligned with the exact protected and full wrapper behavior while live execution settles.
-3. Add live execution mapping for direct parse matrix targeting and targeted batch flows only after the delegated full path is stable.
+3. Keep direct parse matrix targeting and targeted batch flows aligned with the delegated wrappers and docs as reporting consolidation continues.
 4. Define metadata for current `/parse` and `/batch` tests so the future runner can target them by suite and category without duplicating logic.
 5. Extend the `/v1/documents/parse` drift pilot with fresh safe response artifacts so the remaining spec-vs-behavior questions can be resolved explicitly.
 6. Re-run the opt-in `/documents/batch` auth characterization until both missing and invalid tenant-token requests return confirmed 401/403 rejection; current evidence is still blocking because missing-token requests time out while invalid-token requests can return `200`, so keep the blocker out of the default batch suite and keep the auth gap open. See `docs/knowledge-base/batch/auth-negative-blocker.md`.

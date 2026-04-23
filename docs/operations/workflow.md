@@ -112,34 +112,46 @@ VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting
 ./.venv/bin/python tools/run_regression.py
 ```
 
-8. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix wrapper:
+8. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix path through the runner:
 
 ```bash
-./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
+./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix
 ```
 
-9. If you want the stronger explicit gate, run full regression:
+9. If the change touches `/documents/batch`, run the canonical batch path through the runner:
+
+```bash
+./.venv/bin/python tools/run_regression.py --endpoint batch
+```
+
+Use selected-fixture batch runs when needed:
+
+```bash
+./.venv/bin/python tools/run_regression.py --endpoint batch --fixtures-json /path/to/fixtures.json
+```
+
+10. If you want the stronger explicit gate, run full regression:
 
 ```bash
 ./.venv/bin/python tools/run_regression.py --suite full
 ```
 
-10. If the change touches the GET smoke lane or cross-group GET coverage, run the canonical smoke suite:
+11. If the change touches the GET smoke lane or cross-group GET coverage, run the canonical smoke suite:
 
 ```bash
 ./.venv/bin/python tools/run_regression.py --suite smoke
 ```
 
-11. Review generated artifacts from the validation surface you used.
-12. Update `docs/knowledge-base/repo-roadmap.md` when the work changes project status, sequencing, risks, blockers, assumptions, milestones, priorities, or next steps.
-13. Before handoff or commit, save an explicit durable Mind summary only when the automatic session flow is not enough:
+12. Review generated artifacts from the validation surface you used.
+13. Update `docs/knowledge-base/repo-roadmap.md` when the work changes project status, sequencing, risks, blockers, assumptions, milestones, priorities, or next steps.
+14. Before handoff or commit, save an explicit durable Mind summary only when the automatic session flow is not enough:
 
 ```bash
 ./.venv/bin/python tools/mind_session.py save-summary --title "short-title" --body "Durable summary"
 ./.venv/bin/python tools/mind_session.py finish
 ```
 
-14. Review the diff, stage the intended files, and use the guarded Git flow:
+15. Review the diff, stage the intended files, and use the guarded Git flow:
 
 ```bash
 ./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"
@@ -200,7 +212,7 @@ Current suite rule:
 Canonical opt-in matrix surface:
 
 ```bash
-./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
+./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix
 ```
 
 Use it:
@@ -208,10 +220,16 @@ Use it:
 - when triaging matrix-only behavior
 - when you want saved terminal output plus the rendered matrix summary
 
+Exact underlying implementation/debug path:
+
+```bash
+./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
+```
+
 Optional structured reporting:
 
 ```bash
-./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py --report
+./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix --report
 ```
 
 Use [Matrix Triage](matrix.md) for deeper matrix-specific debugging guidance.
@@ -237,6 +255,31 @@ Optional structured reporting:
 
 ```bash
 ./.venv/bin/python tools/run_parse_full_regression.py --report
+```
+
+## Batch Flow
+Canonical `/documents/batch` surface:
+
+```bash
+./.venv/bin/python tools/run_regression.py --endpoint batch
+```
+
+Selected-fixture batch surface:
+
+```bash
+./.venv/bin/python tools/run_regression.py --endpoint batch --fixtures-json /path/to/fixtures.json
+```
+
+Use it:
+- when touching `/documents/batch` endpoint coverage
+- when you need the default batch suite through the canonical runner
+- when you need selected-fixture batch validation without bypassing the existing wrapper's chunking and warning behavior
+
+Exact underlying implementation/debug paths:
+
+```bash
+./.venv/bin/python -m pytest tests/endpoints/batch/ -v
+./.venv/bin/python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json
 ```
 
 ## Batch Auth Characterization
