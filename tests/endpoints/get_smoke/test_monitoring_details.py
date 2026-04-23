@@ -202,3 +202,17 @@ def test_monitoring_gcs_preview_get_smoke_returns_200(
             ),
         ),
     )
+
+
+@pytest.mark.parametrize(
+    "metric",
+    ("requests", "errors", "latency", "latency_p95"),
+)
+def test_monitoring_timeseries_get_smoke_returns_200(client, metric: str):
+    assert_get_smoke_200(
+        client,
+        GetSmokeCase(
+            f"monitoring-timeseries-{metric}",
+            f"/monitoring/api/v1/timeseries/{metric}",
+        ),
+    )
