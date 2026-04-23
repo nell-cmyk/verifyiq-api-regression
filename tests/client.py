@@ -1,6 +1,6 @@
 import httpx
 
-from tests.config import API_KEY, BASE_URL, IAP_CLIENT_ID, TENANT_TOKEN
+from tests import config
 from tests.endpoints.batch.artifacts import attach as attach_batch_artifacts
 from tests.endpoints.parse.artifacts import attach as attach_parse_artifacts
 
@@ -28,11 +28,12 @@ def get_iap_bearer() -> str:
         ) from exc
 
     request = google.auth.transport.requests.Request()
+    audience = config.require("IAP_CLIENT_ID")
     try:
-        _iap_token_cache = id_token.fetch_id_token(request, IAP_CLIENT_ID)
+        _iap_token_cache = id_token.fetch_id_token(request, audience)
     except Exception as exc:
         raise RuntimeError(
-            f"Failed to mint IAP OIDC token for audience {IAP_CLIENT_ID!r}. "
+            f"Failed to mint IAP OIDC token for audience {audience!r}. "
             "Verify GOOGLE_APPLICATION_CREDENTIALS points to a service account JSON "
             "with roles/iap.httpsResourceAccessor on the backend. "
             f"Underlying error: {exc}"
@@ -48,16 +49,16 @@ def platform_auth_headers() -> dict[str, str]:
     """
     return {
         "Proxy-Authorization": f"Bearer {get_iap_bearer()}",
-        "Authorization": f"Bearer {API_KEY}",
+        "Authorization": f"Bearer {config.require('API_KEY')}",
     }
 
 
 def make_client(timeout: float = 60.0) -> httpx.Client:
     client = httpx.Client(
-        base_url=BASE_URL,
+        base_url=config.require("BASE_URL"),
         headers={
             **platform_auth_headers(),
-            "X-Tenant-Token": TENANT_TOKEN,
+            "X-Tenant-Token": config.require("TENANT_TOKEN"),
         },
         timeout=timeout,
     )

@@ -4,7 +4,8 @@
 This slice supports:
 - `--list`
 - `--dry-run`
-- live execution for the protected baseline only
+- live execution for the protected suite
+- live execution for `--suite full` via delegation
 
 All other live execution paths remain intentionally disabled.
 """

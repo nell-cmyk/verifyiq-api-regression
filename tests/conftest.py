@@ -4,13 +4,17 @@ from pathlib import Path
 
 import pytest
 
-from tests.client import make_client
 from tests.reporting import is_enabled
 from tests.reporting.collector import CURRENT_NODEID, get_collector
 
 
 @pytest.fixture(scope="session")
 def client():
+    # Keep the live client import inside the fixture so offline suites under
+    # tests/tools/, tests/reporting/, and tests/skills/ do not require live env
+    # configuration just to import or collect.
+    from tests.client import make_client
+
     with make_client() as c:
         yield c
 
@@ -165,9 +169,11 @@ def pytest_sessionfinish(session, exitstatus):
     if not is_enabled():
         return
     try:
-        from tests.config import BASE_URL
+        from tests.config import optional
     except Exception:
         BASE_URL = ""
+    else:
+        BASE_URL = optional("BASE_URL")
     try:
         from tests.reporting.writer import run_output_dir, write_run
         col = get_collector()

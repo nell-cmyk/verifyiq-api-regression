@@ -5,12 +5,14 @@ Python-first live API regression automation for VerifyIQ, centered on the protec
 ## Quick Start
 1. `python3 -m venv .venv`
 2. `./.venv/bin/python -m pip install -r requirements.txt`
-3. `./.venv/bin/python -m pytest tests/endpoints/parse/ -v`
+3. Non-live validation: `VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting/ tests/skills/ -v`
+4. Live protected default after configuring `.env`: `./.venv/bin/python tools/run_regression.py`
 
 ## Canonical Commands
-- Protected baseline: `./.venv/bin/python -m pytest tests/endpoints/parse/ -v`
+- Protected default runner: `./.venv/bin/python tools/run_regression.py`
+- Stronger live gate: `./.venv/bin/python tools/run_regression.py --suite full`
 - Matrix run + saved summary: `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
-- Full regression: `./.venv/bin/python tools/run_parse_full_regression.py`
+- Non-live tooling/reporting validation: `VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting/ tests/skills/ -v`
 - Safe Git commit flow: `./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"`
 - Command registry: `docs/operations/command-registry.md`
 - Workflow runbook: `docs/operations/workflow.md`
@@ -43,7 +45,9 @@ Python-first live API regression automation for VerifyIQ, centered on the protec
   Generated run output only. Treat it as disposable local output, not durable repo truth.
 
 ## Notes
-- The protected baseline remains the default validation gate.
+- The protected parse-only suite remains the default live validation gate.
+- `tools/run_regression.py` is the canonical operator path for the default protected live suite.
 - The matrix remains opt-in and separate from the default baseline.
+- `smoke` remains planned terminology, not a broader current default.
 - The human-facing reporting commands live under `tools/reporting/`.
 - `docs/operations/current-handoff.md` is pointer-only; active session continuity now lives in Mind.

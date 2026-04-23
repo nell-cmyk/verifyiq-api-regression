@@ -12,7 +12,7 @@ import httpx
 import pytest
 
 from tests.client import platform_auth_headers
-from tests.config import BASE_URL
+from tests.config import require
 from tests.diagnostics import (
     diagnose,
     parse_json_or_fail,
@@ -186,7 +186,7 @@ class TestParseAuth:
         # Platform auth (IAP + Bearer API key) present so we exercise the app's
         # tenant-token layer, not IAP or BearerAuth.
         with httpx.Client(
-            base_url=BASE_URL,
+            base_url=require("BASE_URL"),
             headers=platform_auth_headers(),
             timeout=_AUTH_NEGATIVE_TIMEOUT_SECS,
         ) as c:
@@ -194,7 +194,7 @@ class TestParseAuth:
 
     def test_invalid_token_rejected(self):
         with httpx.Client(
-            base_url=BASE_URL,
+            base_url=require("BASE_URL"),
             headers={
                 **platform_auth_headers(),
                 "X-Tenant-Token": "invalid-token-xyz",

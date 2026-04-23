@@ -1,11 +1,16 @@
+from __future__ import annotations
+
 import os
 
 from dotenv import load_dotenv
 
-load_dotenv()
+SKIP_DOTENV_ENV_VAR = "VERIFYIQ_SKIP_DOTENV"
+
+if os.getenv(SKIP_DOTENV_ENV_VAR, "").strip() != "1":
+    load_dotenv()
 
 
-def _require(name: str) -> str:
+def require(name: str) -> str:
     value = os.getenv(name, "").strip()
     if not value:
         raise RuntimeError(
@@ -15,7 +20,8 @@ def _require(name: str) -> str:
     return value
 
 
-BASE_URL: str = _require("BASE_URL")
-TENANT_TOKEN: str = _require("TENANT_TOKEN")
-API_KEY: str = _require("API_KEY")
-IAP_CLIENT_ID: str = _require("IAP_CLIENT_ID")
+def optional(name: str, default: str = "") -> str:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip()

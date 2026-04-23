@@ -31,17 +31,18 @@
 - Operator command source of truth: `docs/operations/command-registry.md`.
 
 ## Canonical Validation Commands
-- Protected baseline: `./.venv/bin/python -m pytest tests/endpoints/parse/ -v`
+- Protected default runner: `./.venv/bin/python tools/run_regression.py`
+- Exact protected implementation/debug path: `./.venv/bin/python -m pytest tests/endpoints/parse/ -v`
 - Matrix wrapper: `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
-- Full regression: `./.venv/bin/python tools/run_parse_full_regression.py`
+- Full regression: `./.venv/bin/python tools/run_regression.py --suite full`
 - Batch suite: `./.venv/bin/python -m pytest tests/endpoints/batch/ -v`
 - Tooling/reporting suites:
-  - `./.venv/bin/python -m pytest tests/tools/ -v`
-  - `./.venv/bin/python -m pytest tests/skills/ -v`
-  - `./.venv/bin/python -m pytest tests/reporting/ -v`
+  - `VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ -v`
+  - `VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/skills/ -v`
+  - `VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/reporting/ -v`
 
 ## Test Tiers And When To Run Each
-- Protected baseline: default gate for ordinary repo changes and before handoff or merge.
+- Protected baseline: default parse-only live gate through `./.venv/bin/python tools/run_regression.py` for ordinary repo changes and before handoff or merge.
 - Matrix: when touching fileType mapping, registry selection, reporting, or matrix triage.
 - Full regression: when a stronger `/parse` gate is intentionally required.
 - Batch suite: when touching `/documents/batch` tests, fixtures, or wrappers.
@@ -50,6 +51,8 @@
 
 ## Safe/Unsafe Commands
 - Safe discovery and validation:
+  - `./.venv/bin/python tools/run_regression.py --list`
+  - `./.venv/bin/python tools/run_regression.py --dry-run`
   - `--help` on repo-owned tools
   - protected baseline
   - matrix wrapper

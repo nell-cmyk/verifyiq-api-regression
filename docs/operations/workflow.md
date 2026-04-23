@@ -13,7 +13,7 @@ Use it for the normal end-to-end flow:
 - review artifacts
 - use the guarded Git flow
 
-Use [Command Registry](command-registry.md) for command classification, [Regression Runner Plan](regression-runner-plan.md) for the canonical-runner consolidation design, and [Matrix Triage](matrix.md) for deeper matrix-specific triage details.
+Use [Command Registry](command-registry.md) for command classification, [Regression Runner Plan](regression-runner-plan.md) for the canonical-runner consolidation design, [Endpoint Coverage Inventory](endpoint-coverage-inventory.md) for current suite breadth, and [Matrix Triage](matrix.md) for deeper matrix-specific triage details.
 
 Planning governance for development work lives in `AGENTS.md`: use `docs/knowledge-base/repo-roadmap.md` as the planning source of truth, and treat the repo itself as the source of truth for current implementation details.
 
@@ -72,6 +72,25 @@ At a high level, the repo expects:
 - `/parse` happy-path tests use live API access; keep environment values aligned with the current target.
 - The matrix remains opt-in; do not treat it as part of the default baseline.
 
+## Non-live Validation
+Canonical non-live validation for runner, reporting, and tooling changes:
+
+```bash
+VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting/ tests/skills/ -v
+```
+
+Use it:
+- before touching live suites when the change is purely tooling, reporting, docs-adjacent runner behavior, or automation infrastructure
+- to prove the offline suites do not depend on `.env`, API secrets, or IAP bootstrap
+- as the default CI lane for non-live repo validation
+
+Safe runner discovery checks:
+
+```bash
+./.venv/bin/python tools/run_regression.py --list
+./.venv/bin/python tools/run_regression.py --dry-run
+```
+
 ## Normal Development Flow
 1. Install deps and configure `.env` for the current target.
 2. Install Mind and run `mind setup opencode` if this machine has not been bootstrapped yet.
@@ -85,10 +104,11 @@ At a high level, the repo expects:
 
 5. Read `docs/knowledge-base/repo-roadmap.md`, identify the roadmap phase, milestone, or next step the task advances, and inspect the relevant repo files before editing. If the task does not map cleanly, update the roadmap before or alongside the work.
 6. Make a narrow repo change aligned with the roadmap and the current repo state.
-7. Run the relevant validation command for the change. Use the protected baseline by default:
+7. Run the relevant validation command for the change. Use the non-live suite first for tooling/reporting changes, and use the canonical protected runner by default for live validation:
 
 ```bash
-./.venv/bin/python -m pytest tests/endpoints/parse/ -v
+VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting/ tests/skills/ -v
+./.venv/bin/python tools/run_regression.py
 ```
 
 8. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix wrapper:
@@ -100,7 +120,7 @@ At a high level, the repo expects:
 9. If you want the stronger explicit gate, run full regression:
 
 ```bash
-./.venv/bin/python tools/run_parse_full_regression.py
+./.venv/bin/python tools/run_regression.py --suite full
 ```
 
 10. Review generated artifacts from the validation surface you used.
@@ -122,6 +142,12 @@ At a high level, the repo expects:
 Mandatory default validation surface:
 
 ```bash
+./.venv/bin/python tools/run_regression.py
+```
+
+Exact underlying implementation/debug path:
+
+```bash
 ./.venv/bin/python -m pytest tests/endpoints/parse/ -v
 ```
 
@@ -129,6 +155,10 @@ Use it:
 - for ordinary `/parse` changes
 - before handoff or merge when baseline validation is needed
 - as the default validation gate unless a task explicitly calls for broader coverage
+
+Current default-suite rule:
+- `tools/run_regression.py` currently maps to the parse-only protected suite.
+- `smoke` remains a planned future label, not a broader current default.
 
 Do not replace this with the matrix or full regression by default.
 
@@ -159,6 +189,12 @@ Use [Matrix Triage](matrix.md) for deeper matrix-specific debugging guidance.
 
 ## Full Regression Flow
 Canonical stronger gate:
+
+```bash
+./.venv/bin/python tools/run_regression.py --suite full
+```
+
+Exact underlying implementation/debug path:
 
 ```bash
 ./.venv/bin/python tools/run_parse_full_regression.py

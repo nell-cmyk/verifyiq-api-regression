@@ -1,0 +1,37 @@
+name: Non-live Validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tooling-and-reporting:
+    runs-on: ubuntu-latest
+    env:
+      VERIFYIQ_SKIP_DOTENV: '1'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run non-live pytest suites
+        run: |
+          python -m pytest tests/tools/ -v
+          python -m pytest tests/reporting/ -v
+          python -m pytest tests/skills/ -v
+
+      - name: Check runner discovery surfaces
+        run: |
+          python tools/run_regression.py --list
+          python tools/run_regression.py --dry-run

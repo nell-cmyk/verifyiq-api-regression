@@ -2,7 +2,7 @@
 
 This folder is the durable reference layer for `/parse`. Keep workflow steps and commands in `docs/operations/`; keep this folder focused on stable behavior boundaries, fixture knowledge, and recurring triage context that should survive beyond any single session.
 
-See also: [Matrix Triage](../../operations/matrix.md), [Fixtures and Promotion](fixtures-and-promotion.md), [Triage Patterns](triage-patterns.md), [Promotion Candidates](promotion-candidates.md)
+See also: [Matrix Triage](../../operations/matrix.md), [Fixtures and Promotion](fixtures-and-promotion.md), [Triage Patterns](triage-patterns.md), [OpenAPI Drift Pilot](openapi-drift-pilot.md), [Promotion Candidates](promotion-candidates.md)
 
 ## Coverage Boundaries
 
@@ -23,6 +23,7 @@ See also: [Matrix Triage](../../operations/matrix.md), [Fixtures and Promotion](
 ## Pages In This Folder
 - [Fixtures and Promotion](fixtures-and-promotion.md): how spreadsheet fixtures become canonical matrix inputs and what promotion-candidate status means.
 - [Triage Patterns](triage-patterns.md): explicit fileType remap policy plus durable endpoint and failure signals.
+- [OpenAPI Drift Pilot](openapi-drift-pilot.md): current safe contract-vs-repo comparison for `/v1/documents/parse`.
 - [Promotion Candidates](promotion-candidates.md): reviewed candidate ledger only.
 
 ## What Does Not Belong Here

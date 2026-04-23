@@ -21,6 +21,10 @@ The target operating model is a lean, risk-based regression suite that stays pra
 - Current contract coverage is manual and selective. Shared assertions live in `tests/endpoints/document_contracts.py`, and no full OpenAPI-driven validator or generated-schema workflow is currently in place.
 - Current automated endpoint coverage is narrower than the OpenAPI inventory. The repo currently validates `/v1/documents/parse` and `/v1/documents/batch`; the remaining endpoint surface is still largely unrepresented in regression automation.
 - The current repo-wide assessment artifact now lives at `docs/operations/automation-test-suite-audit.md` and should be used as the concrete gap and prioritization reference for near-term suite improvements.
+- Offline tooling, reporting, and runner suites no longer depend on eager live client bootstrap at pytest import time; `VERIFYIQ_SKIP_DOTENV=1` is the explicit non-live validation switch for disabling repo `.env` loading.
+- The repo now has a dedicated non-live CI lane at `.github/workflows/non-live-validation.yml` for `tests/tools/`, `tests/reporting/`, `tests/skills/`, and safe runner discovery checks.
+- The current endpoint-group coverage inventory now lives at `docs/operations/endpoint-coverage-inventory.md`.
+- The current `/v1/documents/parse` contract-drift pilot now lives at `docs/knowledge-base/parse/openapi-drift-pilot.md`.
 
 ## Current Validation Surface
 
@@ -207,5 +211,5 @@ Expected reporting behavior for the canonical runner:
 2. Keep `./.venv/bin/python tools/run_regression.py` aligned with the exact protected and full wrapper behavior while live execution settles.
 3. Add live execution mapping for direct parse matrix targeting and targeted batch flows only after the delegated full path is stable.
 4. Define metadata for current `/parse` and `/batch` tests so the future runner can target them by suite and category without duplicating logic.
-5. Pilot contract and schema drift detection on `/v1/documents/parse` using existing safe fixtures and artifacts.
-6. Update `docs/operations/command-registry.md`, `docs/operations/workflow.md`, and CI only after the broader canonical runner surface actually exists and has parity.
+5. Extend the `/v1/documents/parse` drift pilot with fresh safe response artifacts so the remaining spec-vs-behavior questions can be resolved explicitly.
+6. Add representative `/documents/batch` auth-negative coverage after the endpoint's safe auth-failure behavior is characterized.
