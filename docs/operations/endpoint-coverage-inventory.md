@@ -33,6 +33,12 @@ This is intentionally not a path-by-path busywork matrix. The current repo cover
 - Parse matrix breadth is opt-in and intentionally limited to one canonical enabled fixture per registry file type.
 - Batch coverage reuses registry-backed fixtures and enforces a safe default request size of 4 items.
 
+## GET Smoke Selection Basis
+- This repo does not contain the VerifyIQ server/router implementation or product UI/backend source, so there is no in-repo router-registration evidence to inspect directly.
+- Current active GET inclusion therefore relies on the repo-native evidence that does exist: maintained smoke tests, the shared authenticated client in `tests/client.py`, current runner/doc command surfaces, live 200 characterization, and current v1 route structure in `official-openapi.json`.
+- `official-openapi.json` is a supporting input, not sole truth.
+- When a current v1 route and an unversioned or alias route coexist, only the current explicit route is counted in smoke; legacy/duplicate aliases are excluded and documented rather than padded into coverage totals.
+
 ## GET Smoke Coverage Implemented Now
 Canonical runner path:
 
@@ -84,9 +90,9 @@ GET endpoints covered only after prerequisite/setup handling in this tranche:
 - `/sentry-debug` and `/api/v1/sentry-debug` are explicit debug/error routes and should stay out of smoke
 
 ## Sequenced Next Tranches For Remaining GET Work
-1. Add required-query or input-backed GET smoke coverage for `/v1/admin/cache/stats`, `/monitoring/api/v1/providers`, `/api/v1/applications/documents/export`, `/api/v1/documents/export`, and `/ai-gateway/s3/s3/list` once their safe request inputs are characterized.
+1. Add required-query or input-backed GET smoke coverage for `/v1/admin/cache/stats`, `/monitoring/api/v1/providers`, `/api/v1/applications/documents/export`, and `/ai-gateway/s3/s3/list` once their safe request inputs are characterized.
 2. Add setup-backed detail GET smoke coverage by deriving identifiers from the already-covered list/status endpoints for the deferred path-parameter routes under `document-processing-adjacent`, `parser-studio`, `monitoring`, `qa`, `benchmark`, and `applications-api`.
-3. Resolve the current GET auth/behavior blockers before promoting them into smoke: `/api/v1/health/database-pools`, `/api/v1/health/database-pools/metrics`, `/v1/admin/cache/health`, `/parser_studio/api/document-types`, and `/monitoring/api/v1/golden-dataset/gcs/structure`.
+3. Resolve the current GET auth/behavior blockers before promoting them into smoke: `/api/v1/health/database-pools`, `/api/v1/health/database-pools/metrics`, `/v1/admin/cache/health`, and `/monitoring/api/v1/golden-dataset/gcs/structure`.
 4. Decide whether UI/debug and explicit admin/storage surfaces such as `/parser_studio`, `/parser_studio/auth/login`, `/qa`, `/sentry-debug`, `/api/v1/sentry-debug`, and the AI Gateway file routes belong in API automation at all.
 
 ## Onboarding Rule For New Endpoint Groups

@@ -42,13 +42,13 @@ That rating is appropriate because the repository already has a disciplined prot
 - Preserves safety for live `/documents/batch` runs. `tests/endpoints/batch/fixtures.py` caps default request size at four items, and `tools/run_batch_with_fixtures.py` chunks larger selected sets.
 
 ## Main Gaps
-- Live endpoint automation only covers `/v1/documents/parse` and `/v1/documents/batch`, while `official-openapi.json` exposes 218 paths across 11 top-level groups.
+- Live endpoint automation still covers only a small subset of the OpenAPI inventory, but it now extends beyond `/v1/documents/parse` and `/v1/documents/batch` through the opt-in GET smoke lane.
 - The suite now has an explicit opt-in cross-endpoint GET smoke lane. `protected` remains the real default gate, while `smoke` is now implemented as a 200-only GET suite rather than a broader default regression.
 - Contract and schema validation are still manual and selective. There is no checked-in OpenAPI validator, drift register, or observed-schema comparison workflow in operation.
 - The canonical runner is still only partially real. `tools/run_regression.py` can list and dry-run multiple mappings and now executes live for `--suite protected`, `--suite smoke`, and `--suite full`, but batch and other targeted execution paths remain incomplete.
 - Offline pytest suites are not cleanly isolated from live env requirements because `tests/conftest.py` imports `tests.client`, which imports `tests.config` at module import time.
-- Auth coverage is shallow. `/parse` only checks missing and invalid tenant-token behavior; `/documents/batch` has no auth-negative coverage, and there is no deeper authz/permission model anywhere.
-- The repo has no maintained endpoint coverage inventory that maps endpoint groups to risk, owner area, required categories, or onboarding status.
+- Auth coverage is still shallow. `/parse` only checks missing and invalid tenant-token behavior; `/documents/batch` still has only an opt-in auth blocker characterization rather than a closed auth lane, and there is no deeper authz/permission model anywhere.
+- The repo now has a maintained endpoint coverage inventory, but owner-area mapping and an explicit onboarding standard are still thin.
 - CI only covers the live protected baseline. It does not run the offline tool/reporting suites and does not publish artifacts.
 - The command story is still mixed across direct pytest, wrappers, and the partial canonical runner, which increases operator ambiguity.
 - There is no explicit repo-level decision yet on whether this repository remains parse/batch-focused or becomes the broader multi-endpoint automation hub implied by the roadmap's endpoint-expansion phase.
@@ -186,6 +186,7 @@ The current live-covered endpoint groups are:
 
 - `/v1/documents/parse`
 - `/v1/documents/batch`
+- opt-in GET smoke coverage across current active no-path GET endpoints in `health`, `parser-studio`, `monitoring`, `qa`, `applications-api`, and selected utility surfaces
 
 Supporting offline endpoint-adjacent coverage exists for:
 
@@ -198,15 +199,12 @@ OpenAPI inventory context:
 - `official-openapi.json` currently exposes 218 path entries.
 - Top-level groups include `v1`, `api`, `monitoring`, `parser_studio`, `qa`, `health`, `admin`, `ai-gateway`, `ai_parse`, `ai_parse_batch`, `ai_crosscheck`, and `sentry-debug`.
 
-Endpoint groups apparently not yet automated in this repo include at least:
+Endpoint groups and sub-surfaces still not yet fully automated in this repo include at least:
 
-- document-adjacent paths such as `/v1/documents/check-cache`, `/v1/documents/cache`, `/v1/documents/crosscheck`, and `/v1/documents/fraud-status/{job_id}`
-- health surfaces such as `/health`, `/health/live`, and `/health/ready`
-- broader application flows under `/api/v1/applications/*`
-- operational and analysis surfaces under `/monitoring/api/v1/*`
-- configuration and testing surfaces under `/parser_studio/api/v1/*`
-- QA-specific review surfaces under `/qa/api/v1/*`
-- admin-style cache and truncate paths
+- document-adjacent GETs such as `/v1/documents/check-cache`, `/v1/documents/cache`, `/v1/documents/crosscheck`, and `/v1/documents/fraud-status/{job_id}`
+- setup-backed application, monitoring, benchmark, and QA detail routes that need identifiers before they can assert 200 cleanly
+- required-query or input-backed GETs such as cache stats, provider stats, export routes, and gateway storage list routes
+- admin-style cache paths and other explicitly safety-filtered surfaces
 
 Which gaps matter most depends on repo charter.
 
@@ -297,8 +295,8 @@ Why:
 
 - Good first slice.
 - It supports inventory-backed `--list` and `--dry-run` for protected, full, parse matrix, batch, and batch-with-fixtures mappings.
-- It supports live execution for `--suite protected` and `--suite full` only.
-- Planned suites and categories are visible, but not yet runnable.
+- It supports live execution for `--suite protected`, `--suite smoke`, and `--suite full`.
+- Planned suites and categories are still visible, but most targeted mappings are not yet runnable.
 
 Remaining runner gaps:
 
