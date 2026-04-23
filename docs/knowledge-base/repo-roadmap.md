@@ -20,6 +20,7 @@ The target operating model is a lean, risk-based regression suite that stays pra
 - `official-openapi.json` is OpenAPI `3.1.0` and contains many endpoint groups beyond current automated coverage, including `documents`, `applications`, `monitoring`, `parser_studio`, `qa`, `health`, and admin-style paths.
 - Current contract coverage is manual and selective. Shared assertions live in `tests/endpoints/document_contracts.py`, and no full OpenAPI-driven validator or generated-schema workflow is currently in place.
 - Current automated endpoint coverage is narrower than the OpenAPI inventory. The repo currently validates `/v1/documents/parse` and `/v1/documents/batch`; the remaining endpoint surface is still largely unrepresented in regression automation.
+- The current repo-wide assessment artifact now lives at `docs/operations/automation-test-suite-audit.md` and should be used as the concrete gap and prioritization reference for near-term suite improvements.
 
 ## Current Validation Surface
 
