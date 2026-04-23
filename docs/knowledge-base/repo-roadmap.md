@@ -27,7 +27,7 @@ The target operating model is a lean, risk-based regression suite that stays pra
 - The current `/v1/documents/parse` contract-drift pilot now lives at `docs/knowledge-base/parse/openapi-drift-pilot.md`.
 - The protected `/parse` happy-path request now retries one `httpx.RemoteProtocolError` before failing so transient upstream disconnects are distinguished from persistent repo or service regressions without broad retry behavior.
 - The repo now has an opt-in GET smoke suite under `tests/endpoints/get_smoke/`, callable through `./.venv/bin/python tools/run_regression.py --suite smoke`.
-- The current GET smoke suite covers status-200 checks for safely testable no-path GET endpoints plus a growing setup-backed detail layer across `parser-studio`, `monitoring`, `qa`, `benchmark`, and `applications-api`; the remaining query-backed, setup-blocked, and behavior-blocked GET endpoints remain sequenced follow-on tranches.
+- The current GET smoke suite covers status-200 checks for safely testable no-path GET endpoints plus a growing setup-backed detail layer across `parser-studio`, `monitoring`, `qa`, `benchmark`, and `applications-api`; the remaining query-backed and setup-blocked GET endpoints remain sequenced follow-on tranches, while a small set of expected-status surfaces stays explicitly outside the 200-smoke objective.
 - Legacy parser-studio aliases and duplicate BLS alias routes are intentionally excluded from GET smoke and called out in `docs/operations/endpoint-coverage-inventory.md` instead of padding the coverage count.
 
 ## Current Validation Surface
@@ -229,6 +229,7 @@ Expected reporting behavior for the canonical runner:
 
 ## Sequenced Next Tranches For GET Smoke
 1. Resolve the remaining query/input-backed current GETs that still lack a legitimate 200 path: `/v1/admin/cache/stats`, `/monitoring/api/v1/providers`, and `/ai-gateway/s3/s3/list`. The canonical applications export route `/api/v1/applications/documents/export` is now covered with `format=json`.
-2. Add the remaining setup-backed current GETs that still lack legitimate derived inputs: `/v1/documents/fraud-status/{job_id}`, `/parser_studio/api/v1/document-types/{doc_type}/prompt/versions/{version_id}`, and `/monitoring/api/v1/timeseries/{metric}`.
-3. Resolve current GET auth or behavior blockers before promotion into smoke: `/api/v1/health/database-pools`, `/api/v1/health/database-pools/metrics`, `/v1/admin/cache/health`, and `/monitoring/api/v1/golden-dataset/gcs/structure`.
-4. Decide whether UI, debug, and explicit admin/storage GET surfaces such as `/parser_studio`, `/parser_studio/auth/login`, `/qa`, `/sentry-debug`, `/api/v1/sentry-debug`, and the AI Gateway file download/presign routes belong in API automation at all.
+2. Add the remaining setup-backed current GET that still lacks a legitimate derived input: `/v1/documents/fraud-status/{job_id}`.
+3. Resolve the remaining query/input-backed current GETs that still lack a legitimate 200 path: `/v1/admin/cache/stats`, `/monitoring/api/v1/providers`, and `/ai-gateway/s3/s3/list`.
+4. Preserve the explicit expected-status exclusions for `/api/v1/health/database-pools` (`401`), `/api/v1/health/database-pools/metrics` (`401`), `/v1/admin/cache/health` (`403`), and `/monitoring/api/v1/golden-dataset/gcs/structure` (`502`) so they do not get misreported as 200-smoke failures.
+5. Decide whether UI, debug, and explicit admin/storage GET surfaces such as `/parser_studio`, `/parser_studio/auth/login`, `/qa`, `/sentry-debug`, `/api/v1/sentry-debug`, and the AI Gateway file download/presign routes belong in API automation at all.
