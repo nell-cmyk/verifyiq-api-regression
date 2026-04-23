@@ -9,6 +9,7 @@ See also: [Matrix Triage](../../operations/matrix.md), [Fixtures and Promotion](
 ### Protected baseline
 - The protected baseline is the default `/parse` regression gate for this repo.
 - It covers one happy-path parse request plus auth-negative and request-validation behavior.
+- The happy-path request now retries once only when the server disconnects before sending any HTTP response at all (`httpx.RemoteProtocolError`). Persistent disconnects still fail the baseline with explicit transport diagnostics.
 - It intentionally excludes matrix collection so the default baseline signal stays stable and easy to compare across changes.
 
 ### Matrix

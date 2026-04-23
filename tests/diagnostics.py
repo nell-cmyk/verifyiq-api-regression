@@ -10,6 +10,19 @@ import httpx
 import pytest
 
 
+def is_remote_disconnect_error(exc: Exception) -> bool:
+    return isinstance(exc, httpx.RemoteProtocolError)
+
+
+def should_retry_transient_disconnect(
+    exc: Exception,
+    *,
+    attempt: int,
+    max_retries: int,
+) -> bool:
+    return attempt < max_retries and is_remote_disconnect_error(exc)
+
+
 def diagnose(resp: httpx.Response, *, fixture_file: str | None = None) -> str:
     """Return a multiline diagnostic block for an httpx.Response.
 
@@ -131,7 +144,7 @@ def request_error_diagnostics(
     file_type: str | None = None,
     extra_context: str = "",
 ) -> str:
-    return (
+    details = (
         f"{context} transport error ({type(exc).__name__})."
         + _request_failure_block(
             exc,
@@ -140,6 +153,15 @@ def request_error_diagnostics(
             extra_context=extra_context,
         )
     )
+    if is_remote_disconnect_error(exc):
+        details += (
+            "\nThis connection was closed by the server before any HTTP response was sent."
+            " This usually points to transient staging or upstream parser instability,"
+            " or to fixture-specific processing failure after request acceptance."
+            " Re-run the single happy-path parse test once before changing the repo"
+            " default baseline fixture."
+        )
+    return details
 
 
 def parse_json_or_fail(

@@ -25,6 +25,7 @@ The target operating model is a lean, risk-based regression suite that stays pra
 - The repo now has a dedicated non-live CI lane at `.github/workflows/non-live-validation.yml` for `tests/tools/`, `tests/reporting/`, `tests/skills/`, and safe runner discovery checks.
 - The current endpoint-group coverage inventory now lives at `docs/operations/endpoint-coverage-inventory.md`.
 - The current `/v1/documents/parse` contract-drift pilot now lives at `docs/knowledge-base/parse/openapi-drift-pilot.md`.
+- The protected `/parse` happy-path request now retries one `httpx.RemoteProtocolError` before failing so transient upstream disconnects are distinguished from persistent repo or service regressions without broad retry behavior.
 
 ## Current Validation Surface
 

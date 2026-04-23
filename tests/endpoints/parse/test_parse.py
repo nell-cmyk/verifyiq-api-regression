@@ -15,8 +15,10 @@ from tests.client import platform_auth_headers
 from tests.config import require
 from tests.diagnostics import (
     diagnose,
+    is_remote_disconnect_error,
     parse_json_or_fail,
     request_error_diagnostics,
+    should_retry_transient_disconnect,
     timeout_diagnostics,
 )
 from tests.endpoints.document_contracts import (
@@ -43,39 +45,68 @@ ENDPOINT = "/v1/documents/parse"
 # redundant round trips.
 
 PARSE_HAPPY_TIMEOUT_SECS = 300.0
+PARSE_HAPPY_REMOTE_DISCONNECT_RETRIES = 1
 
 
 @pytest.fixture(scope="session")
 def parse_response(client):
-    try:
-        return client.post(
-            ENDPOINT,
-            json=PARSE_REQUEST_BASE,
-            timeout=PARSE_HAPPY_TIMEOUT_SECS,
-        )
-    except httpx.TimeoutException as exc:
-        pytest.fail(
-            timeout_diagnostics(
-                exc,
-                context="Parse happy-path request",
-                timeout_secs=PARSE_HAPPY_TIMEOUT_SECS,
-                fixture_file=PARSE_FIXTURE_FILE,
-                file_type=PARSE_FIXTURE_FILE_TYPE,
+    # Keep the protected baseline strict, but allow one reconnect attempt when
+    # staging disconnects before sending any HTTP response at all. Persistent
+    # disconnects still fail the suite with explicit diagnostics.
+    for attempt in range(PARSE_HAPPY_REMOTE_DISCONNECT_RETRIES + 1):
+        try:
+            return client.post(
+                ENDPOINT,
+                json=PARSE_REQUEST_BASE,
+                timeout=PARSE_HAPPY_TIMEOUT_SECS,
             )
-            + "\nConsider: (a) raising PARSE_HAPPY_TIMEOUT_SECS if this fixture is "
-            "legitimately heavy, (b) switching PARSE_FIXTURE_FILE to a lighter "
-            "document for the regression baseline, (c) checking staging health / "
-            "LLM latency upstream."
-        )
-    except httpx.RequestError as exc:
-        pytest.fail(
-            request_error_diagnostics(
-                exc,
-                context="Parse happy-path request",
-                fixture_file=PARSE_FIXTURE_FILE,
-                file_type=PARSE_FIXTURE_FILE_TYPE,
+        except httpx.TimeoutException as exc:
+            pytest.fail(
+                timeout_diagnostics(
+                    exc,
+                    context="Parse happy-path request",
+                    timeout_secs=PARSE_HAPPY_TIMEOUT_SECS,
+                    fixture_file=PARSE_FIXTURE_FILE,
+                    file_type=PARSE_FIXTURE_FILE_TYPE,
+                )
+                + "\nConsider: (a) raising PARSE_HAPPY_TIMEOUT_SECS if this fixture is "
+                "legitimately heavy, (b) switching PARSE_FIXTURE_FILE to a lighter "
+                "document for the regression baseline, (c) checking staging health / "
+                "LLM latency upstream."
             )
-        )
+        except httpx.RequestError as exc:
+            if should_retry_transient_disconnect(
+                exc,
+                attempt=attempt,
+                max_retries=PARSE_HAPPY_REMOTE_DISCONNECT_RETRIES,
+            ):
+                warnings.warn(
+                    request_error_diagnostics(
+                        exc,
+                        context="Parse happy-path request",
+                        fixture_file=PARSE_FIXTURE_FILE,
+                        file_type=PARSE_FIXTURE_FILE_TYPE,
+                    )
+                    + "\nRetrying the protected happy-path request once after a transport disconnect.",
+                    stacklevel=2,
+                )
+                continue
+
+            extra_context = ""
+            if is_remote_disconnect_error(exc):
+                extra_context = (
+                    "\nRetry budget exhausted after "
+                    f"{PARSE_HAPPY_REMOTE_DISCONNECT_RETRIES} reconnect attempt(s)."
+                )
+            pytest.fail(
+                request_error_diagnostics(
+                    exc,
+                    context="Parse happy-path request",
+                    fixture_file=PARSE_FIXTURE_FILE,
+                    file_type=PARSE_FIXTURE_FILE_TYPE,
+                )
+                + extra_context
+            )
 
 
 # ── Happy path ────────────────────────────────────────────────────────────────
