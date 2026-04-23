@@ -131,6 +131,107 @@ Successful closure criteria for this tranche:
 - invalid `X-Tenant-Token` returns confirmed `401` or `403`
 - neither case times out, hangs, or returns `200`
 
+## Tracker-Ready Defect Drafts
+
+### Draft 1: Missing Tenant Token Does Not Reject on `/v1/documents/batch`
+
+**Title**
+`/v1/documents/batch` missing `X-Tenant-Token` request hangs for 30s instead of returning confirmed auth rejection
+
+**Scope**
+- endpoint: `/v1/documents/batch`
+- auth scope: representative tenant-token auth-negative case only
+- case: missing `X-Tenant-Token`
+
+**Safe Repo State**
+- the default batch suite remains green: `./.venv/bin/python -m pytest tests/endpoints/batch/ -v`
+- auth characterization remains opt-in behind `RUN_BATCH_AUTH_CHARACTERIZATION=1`
+
+**Prerequisites**
+- use the normal live `/documents/batch` environment documented in `AGENTS.md`
+- set `RUN_BATCH_AUTH_CHARACTERIZATION=1`
+
+**Exact Reproduction**
+```bash
+RUN_BATCH_AUTH_CHARACTERIZATION=1 ./.venv/bin/python -m pytest tests/endpoints/batch/test_batch_auth_characterization.py -v
+```
+
+Focus on:
+- `tests/endpoints/batch/test_batch_auth_characterization.py::TestBatchAuth::test_missing_token_rejected`
+
+**Expected Behavior**
+- the representative missing-token request should return confirmed rejection semantics
+- current repo closure rule: `401` or `403`
+
+**Actual Behavior**
+- the request keeps platform auth headers and omits only `X-Tenant-Token`
+- `POST /v1/documents/batch` failed with `ReadTimeout` after 30 seconds
+- no HTTP response was received
+
+**Impact**
+- representative batch auth-negative coverage cannot close for the missing-token case
+- current backend behavior is non-rejecting for a representative unauthorized request
+
+**Post-Fix Verification**
+Rerun exactly:
+```bash
+RUN_BATCH_AUTH_CHARACTERIZATION=1 ./.venv/bin/python -m pytest tests/endpoints/batch/test_batch_auth_characterization.py -v
+```
+
+Pass condition for this defect:
+- `test_missing_token_rejected` returns confirmed `401` or `403`
+- the case no longer times out or hangs
+
+### Draft 2: Invalid Tenant Token Does Not Reject Reliably on `/v1/documents/batch`
+
+**Title**
+`/v1/documents/batch` invalid `X-Tenant-Token` request does not reject reliably; observed as both `200` and 30s timeout
+
+**Scope**
+- endpoint: `/v1/documents/batch`
+- auth scope: representative tenant-token auth-negative case only
+- case: invalid `X-Tenant-Token`
+
+**Safe Repo State**
+- the default batch suite remains green: `./.venv/bin/python -m pytest tests/endpoints/batch/ -v`
+- auth characterization remains opt-in behind `RUN_BATCH_AUTH_CHARACTERIZATION=1`
+
+**Prerequisites**
+- use the normal live `/documents/batch` environment documented in `AGENTS.md`
+- set `RUN_BATCH_AUTH_CHARACTERIZATION=1`
+
+**Exact Reproduction**
+```bash
+RUN_BATCH_AUTH_CHARACTERIZATION=1 ./.venv/bin/python -m pytest tests/endpoints/batch/test_batch_auth_characterization.py -v
+```
+
+Focus on:
+- `tests/endpoints/batch/test_batch_auth_characterization.py::TestBatchAuth::test_invalid_token_rejected`
+
+**Expected Behavior**
+- the representative invalid-token request should return confirmed rejection semantics
+- current repo closure rule: `401` or `403`
+
+**Actual Behavior**
+- the request keeps platform auth headers and sends `X-Tenant-Token: invalid-token-xyz`
+- on one opt-in run, `POST /v1/documents/batch` returned success-shaped `HTTP 200`
+- on a later opt-in rerun, the same representative case failed with `ReadTimeout` after 30 seconds
+- the case therefore lacks stable confirmed rejection behavior; it has been observed as both accepted and non-responsive
+
+**Impact**
+- representative batch auth-negative coverage cannot close for the invalid-token case
+- current backend behavior is inconsistent for a representative unauthorized request
+
+**Post-Fix Verification**
+Rerun exactly:
+```bash
+RUN_BATCH_AUTH_CHARACTERIZATION=1 ./.venv/bin/python -m pytest tests/endpoints/batch/test_batch_auth_characterization.py -v
+```
+
+Pass condition for this defect:
+- `test_invalid_token_rejected` returns confirmed `401` or `403`
+- the case no longer returns `200`, times out, or hangs
+
 ## Decision Boundary
 - do not move these cases back into the default batch suite until both representative cases return confirmed rejection semantics
 - do not declare the batch auth gap closed while either case times out, hangs, or returns `200`
