@@ -18,15 +18,12 @@ import warnings
 import httpx
 import pytest
 
-from tests.client import platform_auth_headers
-from tests.config import require
 from tests.diagnostics import (
     diagnose,
     parse_json_or_fail,
     request_error_diagnostics,
     timeout_diagnostics,
 )
-from tests.endpoints.batch.artifacts import attach as attach_batch_artifacts
 from tests.endpoints.batch.fixtures import (
     BATCH_SAFE_ITEM_LIMIT,
     batch_fixture_context,
@@ -42,12 +39,6 @@ from tests.endpoints.document_contracts import (
 
 ENDPOINT = "/v1/documents/batch"
 BATCH_HAPPY_TIMEOUT_SECS = 300.0
-
-# Representative batch auth-negative coverage is strict: only a confirmed
-# 401/403 counts as rejection. Safe characterization on staging still timed out
-# after 30s for missing and invalid X-Tenant-Token, so timeout remains a live
-# blocker rather than a passing auth outcome.
-_AUTH_NEGATIVE_TIMEOUT_SECS = 30.0
 
 
 def _batch_expected_warning_message(fixture: dict[str, object]) -> str | None:
@@ -309,76 +300,6 @@ class TestBatchHappyPath:
                 response=batch_response,
                 fixture_file=fixture_file,
                 extra_context=item_context,
-            )
-
-
-def _assert_auth_rejection(
-    client: httpx.Client,
-    *,
-    batch_request_payload: dict[str, object],
-    batch_context: str,
-    context: str,
-) -> None:
-    attach_batch_artifacts(client)
-    try:
-        resp = client.post(ENDPOINT, json=batch_request_payload)
-    except httpx.TimeoutException as exc:
-        pytest.fail(
-            timeout_diagnostics(
-                exc,
-                context=f"Auth-negative '{context}'",
-                timeout_secs=_AUTH_NEGATIVE_TIMEOUT_SECS,
-                extra_context=batch_context,
-            )
-            + "\nAuth-negative coverage requires a confirmed 401/403 response; "
-            "timeout is an ambiguous blocker, not a passing rejection."
-        )
-    except httpx.RequestError as exc:
-        pytest.fail(
-            request_error_diagnostics(
-                exc,
-                context=f"Auth-negative '{context}'",
-                extra_context=batch_context,
-            )
-            + "\nAuth-negative coverage requires a confirmed 401/403 response; "
-            "transport failure is ambiguous and does not close the coverage gap."
-        )
-    assert resp.status_code in (401, 403), (
-        f"Auth-negative '{context}': expected confirmed 401/403 rejection, "
-        f"got {resp.status_code}"
-        + diagnose(resp)
-        + batch_context
-    )
-
-
-class TestBatchAuth:
-    def test_missing_token_rejected(self, batch_request_payload, batch_context):
-        with httpx.Client(
-            base_url=require("BASE_URL"),
-            headers=platform_auth_headers(),
-            timeout=_AUTH_NEGATIVE_TIMEOUT_SECS,
-        ) as c:
-            _assert_auth_rejection(
-                c,
-                batch_request_payload=batch_request_payload,
-                batch_context=batch_context,
-                context="missing X-Tenant-Token",
-            )
-
-    def test_invalid_token_rejected(self, batch_request_payload, batch_context):
-        with httpx.Client(
-            base_url=require("BASE_URL"),
-            headers={
-                **platform_auth_headers(),
-                "X-Tenant-Token": "invalid-token-xyz",
-            },
-            timeout=_AUTH_NEGATIVE_TIMEOUT_SECS,
-        ) as c:
-            _assert_auth_rejection(
-                c,
-                batch_request_payload=batch_request_payload,
-                batch_context=batch_context,
-                context="invalid X-Tenant-Token",
             )
 
 

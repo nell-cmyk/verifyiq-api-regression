@@ -16,7 +16,7 @@ This is intentionally not a path-by-path busywork matrix. The current repo cover
 | Endpoint group | Approx. OpenAPI paths | Current automated coverage | Current categories covered | Minimum required categories | Priority | Onboarding status | Notes / blockers |
 | --- | ---: | --- | --- | --- | --- | --- | --- |
 | `parse` | 1 | Yes | protected live default, happy-path, auth-negative, request validation, selective contract, extended matrix | protected/smoke, contract, auth, negative | Critical | Covered | Current default suite. Success schema in `official-openapi.json` is still too generic; see `docs/knowledge-base/parse/openapi-drift-pilot.md`. |
-| `batch` | 1 | Yes | happy-path, selective contract, validation, negative, partial-failure, safe-limit handling | smoke/protected candidate, contract, auth, negative | High | Partially covered | Representative tenant-token auth-negative tests now require confirmed 401/403 rejection. Current staging characterization is still blocked because missing and invalid `X-Tenant-Token` requests timed out after 30s instead of returning a confirmed auth rejection. Default live selection is capped at 4 items. |
+| `batch` | 1 | Yes | happy-path, selective contract, validation, negative, partial-failure, safe-limit handling | smoke/protected candidate, contract, auth, negative | High | Partially covered | The default batch suite stays green; strict tenant-token auth characterization is quarantined behind `RUN_BATCH_AUTH_CHARACTERIZATION=1` until staging returns confirmed 401/403 rejection. Current opt-in evidence is still blocking: missing `X-Tenant-Token` timed out after 30s, while invalid `X-Tenant-Token` returned `200`. Default live selection is capped at 4 items. |
 | `document-processing-adjacent` | 4 | No | none | smoke, contract, negative | High | Not onboarded | `/v1/documents/check-cache`, `/v1/documents/cache`, `/v1/documents/crosscheck`, `/v1/documents/fraud-status/{job_id}` are the most natural next expansion candidates if repo scope grows beyond parse/batch. |
 | `health` | 5 | No | none | smoke, basic contract | Medium | Not onboarded | Good future candidate only after the repo decides whether a broader cross-endpoint smoke suite should exist. |
 | `applications-api` | 35 | No | none | smoke, contract, auth, negative | Medium | Scope-blocked | Large surface under `/api/v1/applications/*`; requires an explicit repo-scope decision before onboarding. |
@@ -42,6 +42,6 @@ Before a new endpoint group is added here as "in progress" or "covered", define:
 5. Which fixtures or live prerequisites the endpoint needs.
 
 ## Immediate Follow-ups
-- Resolve the current `batch` auth-negative blocker: missing and invalid tenant-token requests still time out instead of returning a confirmed 401/403 rejection.
+- Re-run the opt-in `batch` auth characterization after any auth-layer or staging change; the blocker remains open until both missing and invalid tenant-token requests return confirmed 401/403 rejection.
 - Extend the parse OpenAPI drift pilot with safe observed artifacts from a future protected run.
 - Do not broaden the default suite until a deliberate cross-endpoint smoke composition exists.

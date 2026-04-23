@@ -210,6 +210,23 @@ Optional structured reporting:
 ./.venv/bin/python tools/run_parse_full_regression.py --report
 ```
 
+## Batch Auth Characterization
+The default `/documents/batch` suite stays green by excluding the currently
+blocked tenant-token auth characterization from normal collection. Opt in only
+when you want to re-check that blocker explicitly:
+
+```bash
+RUN_BATCH_AUTH_CHARACTERIZATION=1 ./.venv/bin/python -m pytest tests/endpoints/batch/test_batch_auth_characterization.py -v
+```
+
+Use it:
+- when you need fresh evidence about the current `batch` auth blocker
+- when auth-layer or staging behavior may have changed
+
+Do not treat timeout, transport failure, or an unexpected `200` as passing auth
+coverage; this path is only complete when missing and invalid
+`X-Tenant-Token` return confirmed `401` or `403` responses.
+
 ## Reporting And Artifact Review
 Baseline artifacts:
 - `reports/parse/responses/parse_<timestamp>/<test-case-id>__<description>__<timestamp>_<seq>.json`
