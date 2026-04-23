@@ -8,6 +8,7 @@ from tests.endpoints.get_smoke.helpers import GetSmokeCase, assert_get_smoke_200
 CASES = (
     GetSmokeCase("bls-applications-list", "/api/v1/applications/"),
     GetSmokeCase("bls-application-pages-list", "/api/v1/applications/documents/pages"),
+    GetSmokeCase("bls-documents-export-json", "/api/v1/applications/documents/export", params=(("format", "json"),)),
     GetSmokeCase("bls-document-statistics", "/api/v1/document-statistics"),
     GetSmokeCase("bls-activities-list", "/api/v1/activities/"),
     GetSmokeCase("benchmark-jobs-list", "/api/v1/benchmark/jobs"),
