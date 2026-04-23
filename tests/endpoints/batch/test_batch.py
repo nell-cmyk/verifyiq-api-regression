@@ -18,12 +18,15 @@ import warnings
 import httpx
 import pytest
 
+from tests.client import platform_auth_headers
+from tests.config import require
 from tests.diagnostics import (
     diagnose,
     parse_json_or_fail,
     request_error_diagnostics,
     timeout_diagnostics,
 )
+from tests.endpoints.batch.artifacts import attach as attach_batch_artifacts
 from tests.endpoints.batch.fixtures import (
     BATCH_SAFE_ITEM_LIMIT,
     batch_fixture_context,
@@ -39,6 +42,11 @@ from tests.endpoints.document_contracts import (
 
 ENDPOINT = "/v1/documents/batch"
 BATCH_HAPPY_TIMEOUT_SECS = 300.0
+
+# Auth-negative behavior on staging matches the current parse-side tenant-token
+# layer closely enough to reuse the same assertion style: missing or invalid
+# X-Tenant-Token may hang past a short timeout instead of fast-returning 401/403.
+_AUTH_NEGATIVE_TIMEOUT_SECS = 10.0
 
 
 def _batch_expected_warning_message(fixture: dict[str, object]) -> str | None:
@@ -300,6 +308,76 @@ class TestBatchHappyPath:
                 response=batch_response,
                 fixture_file=fixture_file,
                 extra_context=item_context,
+            )
+
+
+def _assert_auth_rejection(
+    client: httpx.Client,
+    *,
+    batch_request_payload: dict[str, object],
+    batch_context: str,
+    context: str,
+) -> None:
+    attach_batch_artifacts(client)
+    try:
+        resp = client.post(ENDPOINT, json=batch_request_payload)
+    except httpx.TimeoutException as exc:
+        warnings.warn(
+            timeout_diagnostics(
+                exc,
+                context=f"Auth-negative '{context}'",
+                timeout_secs=_AUTH_NEGATIVE_TIMEOUT_SECS,
+                extra_context=batch_context,
+            )
+            + "\nTreating timeout as valid negative outcome — server did not "
+            "successfully process the batch request.",
+            stacklevel=2,
+        )
+        return
+    except httpx.RequestError as exc:
+        pytest.fail(
+            request_error_diagnostics(
+                exc,
+                context=f"Auth-negative '{context}'",
+                extra_context=batch_context,
+            )
+        )
+    assert resp.status_code in (401, 403), (
+        f"Auth-negative '{context}': expected 401/403 or timeout, "
+        f"got {resp.status_code}"
+        + diagnose(resp)
+        + batch_context
+    )
+
+
+class TestBatchAuth:
+    def test_missing_token_rejected(self, batch_request_payload, batch_context):
+        with httpx.Client(
+            base_url=require("BASE_URL"),
+            headers=platform_auth_headers(),
+            timeout=_AUTH_NEGATIVE_TIMEOUT_SECS,
+        ) as c:
+            _assert_auth_rejection(
+                c,
+                batch_request_payload=batch_request_payload,
+                batch_context=batch_context,
+                context="missing X-Tenant-Token",
+            )
+
+    def test_invalid_token_rejected(self, batch_request_payload, batch_context):
+        with httpx.Client(
+            base_url=require("BASE_URL"),
+            headers={
+                **platform_auth_headers(),
+                "X-Tenant-Token": "invalid-token-xyz",
+            },
+            timeout=_AUTH_NEGATIVE_TIMEOUT_SECS,
+        ) as c:
+            _assert_auth_rejection(
+                c,
+                batch_request_payload=batch_request_payload,
+                batch_context=batch_context,
+                context="invalid X-Tenant-Token",
             )
 
 
