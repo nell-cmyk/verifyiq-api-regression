@@ -223,6 +223,9 @@ Use it:
 - when you need fresh evidence about the current `batch` auth blocker
 - when auth-layer or staging behavior may have changed
 
+Current blocker note:
+- `docs/knowledge-base/batch/auth-negative-blocker.md`
+
 Do not treat timeout, transport failure, or an unexpected `200` as passing auth
 coverage; this path is only complete when missing and invalid
 `X-Tenant-Token` return confirmed `401` or `403` responses.
