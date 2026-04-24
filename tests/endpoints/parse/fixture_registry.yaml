@@ -6,8 +6,9 @@ source: tools/fixture_registry_source/qa_fixture_registry.xlsx
 total: 1969
 composite_rows_split: 318
 counts:
-  confirmed: 1563
+  confirmed: 1559
   excluded: 152
+  unknown: 4
   unverified: 254
 fixtures:
 - name: 56035_Articles of Incorporation_2
@@ -4437,12 +4438,12 @@ fixtures:
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/Gemini-OCR for 3127_Bank Statement_Bank of the philippine islands (1).png.xlsx
   source_folder: BankStatement
   source_file_type: BankStatement
-  source_file_type_status: ✓
+  source_file_type_status: Invalid
   source_assignee: Thor
-  source_workflow_status: Pending
+  source_workflow_status: Invalid - unsupported extension; excluded from normal batch ground-truth execution.
   source_row: 58
-  verification_status: confirmed
-  enabled: true
+  verification_status: unknown
+  enabled: false
   fixture_unsupported_reason: 'unsupported file extension ''.xlsx'' (supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)'
 - name: METROBANK 2025_09_14_statement_main
   file_type: BankStatement
@@ -4524,24 +4525,24 @@ fixtures:
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/OCR-Gemini for 4007_Bank Statement_Bank of the philippine islands (2).png.xlsx
   source_folder: BankStatement
   source_file_type: BankStatement
-  source_file_type_status: ✓
+  source_file_type_status: Invalid
   source_assignee: Thor
-  source_workflow_status: Pending
+  source_workflow_status: Invalid - unsupported extension; excluded from normal batch ground-truth execution.
   source_row: 65
-  verification_status: confirmed
-  enabled: true
+  verification_status: unknown
+  enabled: false
   fixture_unsupported_reason: 'unsupported file extension ''.xlsx'' (supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)'
 - name: OCR-Gemini of 1160_Bank statement_PBCOM.png
   file_type: BankStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/OCR-Gemini of 1160_Bank statement_PBCOM.png.xlsx
   source_folder: BankStatement
   source_file_type: BankStatement
-  source_file_type_status: ✓
+  source_file_type_status: Invalid
   source_assignee: Thor
-  source_workflow_status: Pending
+  source_workflow_status: Invalid - unsupported extension; excluded from normal batch ground-truth execution.
   source_row: 66
-  verification_status: confirmed
-  enabled: true
+  verification_status: unknown
+  enabled: false
   fixture_unsupported_reason: 'unsupported file extension ''.xlsx'' (supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)'
 - name: 2025_08_05_barangay_certificate_additional_2
   file_type: BarangayCertificate
@@ -14030,12 +14031,12 @@ fixtures:
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/ID/UMID/Helios 12572.mp4
   source_folder: ID / UMID
   source_file_type: UMID
-  source_file_type_status: ✓
+  source_file_type_status: Invalid
   source_assignee: Thor
-  source_workflow_status: Pending
+  source_workflow_status: Invalid - unsupported extension; excluded from normal batch ground-truth execution.
   source_row: 1452
-  verification_status: confirmed
-  enabled: true
+  verification_status: unknown
+  enabled: false
   fixture_unsupported_reason: 'unsupported file extension ''.mp4'' (supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)'
 - name: IMG20250217093406
   file_type: UMID
