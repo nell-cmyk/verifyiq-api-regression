@@ -90,6 +90,15 @@ def build_parser() -> argparse.ArgumentParser:
             "Defaults to 1 for the current sequential behavior."
         ),
     )
+    parser.add_argument(
+        "--max-concurrent-file-types",
+        type=_positive_int,
+        default=1,
+        help=(
+            "Maximum number of fileTypes to export at once. Defaults to 1 "
+            "to preserve fileType-sequential execution."
+        ),
+    )
     return parser
 
 
@@ -125,6 +134,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Curated source workbook: {parsed.source_workbook}")
     print(f"Reference workbook: {Path(args.reference_workbook).expanduser().resolve()}")
     print(f"Selected fileTypes: {len(plans)}")
+    print(f"Max concurrent fileTypes: {args.max_concurrent_file_types}")
+    print(f"Max concurrent chunks per fileType: {args.max_concurrent_chunks}")
+    print(
+        "Approx max in-flight batch requests: "
+        f"{args.max_concurrent_file_types * args.max_concurrent_chunks}"
+    )
     for plan in plans:
         print(
             f"- {plan.file_type}: total_rows={plan.total_rows}, executable_rows={plan.executable_rows}, "
@@ -143,6 +158,7 @@ def main(argv: list[str] | None = None) -> int:
             selected_file_types=selected,
             template_layout=layout,
             max_concurrent_chunks=args.max_concurrent_chunks,
+            max_concurrent_file_types=args.max_concurrent_file_types,
         )
     except RuntimeError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

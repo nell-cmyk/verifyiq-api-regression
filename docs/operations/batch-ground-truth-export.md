@@ -56,6 +56,17 @@ Run one fileType with bounded in-fileType chunk concurrency:
   --max-concurrent-chunks 2
 ```
 
+Run selected fileTypes with bounded fileType and chunk concurrency:
+
+```bash
+./.venv/bin/python tools/reporting/export_batch_ground_truth.py \
+  --reference-workbook /absolute/path/to/reference.xlsx \
+  --file-type Payslip \
+  --file-type TIN,ACR \
+  --max-concurrent-file-types 2 \
+  --max-concurrent-chunks 2
+```
+
 Plan only, with no live API calls:
 
 ```bash
@@ -79,10 +90,13 @@ Optional registry and output overrides:
 - `tools/generate_fixture_registry.py` writes that shared registry plus `tests/endpoints/parse/fixture_registry.yaml` as a generated `/parse` compatibility copy.
 - `--source-workbook` is retained only as a migration guard and no longer drives normal export execution. To change export inputs, edit the curated workbook or supplemental YAML, run `./.venv/bin/python tools/generate_fixture_registry.py`, then rerun the exporter.
 
-## Chunk Concurrency
-- `--max-concurrent-chunks` controls how many `/documents/batch` chunks can be in flight at once within a single fileType.
-- The default is `1`, which preserves the original sequential chunk behavior.
-- Chunk concurrency is bounded per fileType only. FileTypes still run one at a time, and workbook plus manifest writing stay single-threaded.
+## Concurrency
+- `--max-concurrent-file-types` controls how many fileTypes can execute at the same time.
+- `--max-concurrent-chunks` controls how many `/documents/batch` chunks can be in flight at once within each fileType.
+- Both defaults are `1`, which preserves the original fileType-sequential and chunk-sequential behavior.
+- A starting setting for a full export is `--max-concurrent-file-types 2 --max-concurrent-chunks 2`.
+- The approximate configured maximum in-flight `/documents/batch` requests is `max_concurrent_file_types * max_concurrent_chunks`; the manifest records this as `effective_max_concurrent_batch_requests`.
+- Workbook and manifest writing stay single-threaded after fileType execution returns, and all raw batch response artifacts still land in one shared batch artifact run folder.
 - The safe request size limit is unchanged: each batch request still contains at most `4` items.
 
 ## Inclusion And Skipping Rules

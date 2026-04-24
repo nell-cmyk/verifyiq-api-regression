@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,14 @@ from .source import grouped_fixtures_by_file_type, parse_source_registry
 BATCH_ENDPOINT = "/v1/documents/batch"
 DEFAULT_OUTPUT_ROOT = Path("reports") / "batch_ground_truth"
 BATCH_TIMEOUT_SECS = 300.0
+
+
+@dataclass(frozen=True)
+class _FileTypeExecution:
+    plan: FileTypePlan
+    fixtures: list[SourceFixtureRecord]
+    export_rows: list[ExportRow]
+    chunk_count: int
 
 
 def _utc_iso_now() -> str:
@@ -446,6 +455,75 @@ def _execute_file_type(
     return ordered_rows, len(chunk_specs)
 
 
+def _execute_file_type_plan(
+    *,
+    plan: FileTypePlan,
+    fixtures: list[SourceFixtureRecord],
+    output_generated_at: str,
+    max_concurrent_chunks: int,
+) -> _FileTypeExecution:
+    try:
+        export_rows, chunk_count = _execute_file_type(
+            fixtures=fixtures,
+            output_generated_at=output_generated_at,
+            max_concurrent_chunks=max_concurrent_chunks,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Batch ground-truth export failed for fileType {plan.file_type}: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+    return _FileTypeExecution(
+        plan=plan,
+        fixtures=fixtures,
+        export_rows=export_rows,
+        chunk_count=chunk_count,
+    )
+
+
+def _execute_file_type_plans(
+    *,
+    plans: list[FileTypePlan],
+    grouped: dict[str, list[SourceFixtureRecord]],
+    output_generated_at: str,
+    max_concurrent_chunks: int,
+    max_concurrent_file_types: int,
+) -> list[_FileTypeExecution]:
+    if max_concurrent_file_types < 1:
+        raise ValueError("max_concurrent_file_types must be a positive integer")
+
+    if max_concurrent_file_types == 1 or len(plans) <= 1:
+        return [
+            _execute_file_type_plan(
+                plan=plan,
+                fixtures=grouped[plan.file_type],
+                output_generated_at=output_generated_at,
+                max_concurrent_chunks=max_concurrent_chunks,
+            )
+            for plan in plans
+        ]
+
+    max_workers = min(max_concurrent_file_types, len(plans))
+    ordered_results: list[_FileTypeExecution | None] = [None] * len(plans)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_index = {
+            executor.submit(
+                _execute_file_type_plan,
+                plan=plan,
+                fixtures=grouped[plan.file_type],
+                output_generated_at=output_generated_at,
+                max_concurrent_chunks=max_concurrent_chunks,
+            ): index
+            for index, plan in enumerate(plans)
+        }
+        for future in as_completed(future_to_index):
+            index = future_to_index[future]
+            ordered_results[index] = future.result()
+
+    return [result for result in ordered_results if result is not None]
+
+
 def plan_file_types(
     *,
     fixture_registry: Path | str,
@@ -477,9 +555,12 @@ def run_batch_ground_truth_export(
     selected_file_types: set[str] | None,
     template_layout: TemplateLayout,
     max_concurrent_chunks: int = 1,
+    max_concurrent_file_types: int = 1,
 ) -> BatchGroundTruthRunResult:
     if max_concurrent_chunks < 1:
         raise ValueError("max_concurrent_chunks must be a positive integer")
+    if max_concurrent_file_types < 1:
+        raise ValueError("max_concurrent_file_types must be a positive integer")
 
     parsed, grouped, plans = plan_file_types(
         fixture_registry=fixture_registry,
@@ -489,17 +570,21 @@ def run_batch_ground_truth_export(
     workbooks_dir = output_root / "workbooks"
     batch_artifact_run_dir = _artifact_run_dir()
     output_generated_at = _utc_iso_now()
+    execution_results = _execute_file_type_plans(
+        plans=plans,
+        grouped=grouped,
+        output_generated_at=output_generated_at,
+        max_concurrent_chunks=max_concurrent_chunks,
+        max_concurrent_file_types=max_concurrent_file_types,
+    )
 
     results: list[FileTypeExportResult] = []
     manifest_file_types: dict[str, Any] = {}
 
-    for plan in plans:
-        fixtures = grouped[plan.file_type]
-        export_rows, chunk_count = _execute_file_type(
-            fixtures=fixtures,
-            output_generated_at=output_generated_at,
-            max_concurrent_chunks=max_concurrent_chunks,
-        )
+    for execution in execution_results:
+        plan = execution.plan
+        fixtures = execution.fixtures
+        export_rows = execution.export_rows
         workbook_path = workbooks_dir / workbook_filename_for(plan.file_type)
         headers = write_workbook(
             file_type=plan.file_type,
@@ -520,7 +605,7 @@ def run_batch_ground_truth_export(
             success_rows=success_rows,
             failed_rows=failed_rows,
             skipped_rows=skipped_rows,
-            chunk_count=chunk_count,
+            chunk_count=execution.chunk_count,
         )
         results.append(result)
         manifest_file_types[plan.file_type] = {
@@ -531,7 +616,7 @@ def run_batch_ground_truth_export(
             "success_rows": success_rows,
             "failed_rows": failed_rows,
             "skipped_rows": skipped_rows,
-            "chunk_count": chunk_count,
+            "chunk_count": execution.chunk_count,
         }
 
     manifest_path = output_root / "manifest.json"
@@ -544,6 +629,10 @@ def run_batch_ground_truth_export(
         "batch_artifact_run_dir": str(batch_artifact_run_dir),
         "safe_batch_item_limit": BATCH_SAFE_ITEM_LIMIT,
         "max_concurrent_chunks": max_concurrent_chunks,
+        "max_concurrent_file_types": max_concurrent_file_types,
+        "effective_max_concurrent_batch_requests": (
+            max_concurrent_file_types * max_concurrent_chunks
+        ),
         "selected_file_types": [plan.file_type for plan in plans],
         "skipped_rows": [
             {

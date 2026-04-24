@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from copy import copy
+import json
 from pathlib import Path
 from types import SimpleNamespace
 import threading
@@ -14,6 +15,10 @@ from openpyxl import Workbook, load_workbook
 
 import tools.reporting.batch_ground_truth.workflow as batch_ground_truth_workflow
 import tools.reporting.export_batch_ground_truth as export_batch_ground_truth
+from tests.endpoints.batch.artifacts import (
+    BATCH_RESPONSE_ARTIFACT_DIR_ENV_VAR,
+    BATCH_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR,
+)
 from tools.generate_fixture_registry import build_registry_document, write_registry_document
 from tools.reporting.batch_ground_truth.excel import write_workbook
 from tools.reporting.batch_ground_truth.models import ExportRow, FileTypePlan, SourceFixtureRecord
@@ -101,6 +106,45 @@ def _write_fixture_registry_from_source_workbook(source_path: Path, registry_pat
     return registry_path
 
 
+def _write_fixture_registry(
+    registry_path: Path,
+    *,
+    file_type_counts: dict[str, int],
+) -> Path:
+    fixtures: list[dict[str, object]] = []
+    source_row = 5
+    for file_type, count in file_type_counts.items():
+        for index in range(1, count + 1):
+            fixtures.append(
+                {
+                    "name": f"{file_type.lower()}-{index}",
+                    "file_type": file_type,
+                    "gcs_uri": f"gs://bucket/{file_type.lower()}-{index}.pdf",
+                    "source_folder": file_type,
+                    "source_file_type": file_type,
+                    "source_file_type_status": "✓",
+                    "source_assignee": "Thor",
+                    "source_workflow_status": "Pending",
+                    "source_row": source_row,
+                    "verification_status": "confirmed",
+                    "enabled": True,
+                }
+            )
+            source_row += 1
+
+    write_registry_document(
+        {
+            "schema_version": 2,
+            "total": len(fixtures),
+            "composite_rows_split": 0,
+            "counts": {"confirmed": len(fixtures)},
+            "fixtures": fixtures,
+        },
+        output_paths=(registry_path,),
+    )
+    return registry_path
+
+
 def _write_reference_workbook(path: Path) -> Path:
     workbook = Workbook()
     sheet = workbook.active
@@ -129,6 +173,7 @@ def _write_reference_workbook(path: Path) -> Path:
 def _make_fixture(
     record_id: int,
     *,
+    file_type: str = "Payslip",
     include_in_batch: bool = True,
     skip_reason: str | None = None,
     batch_expected_error_type: str | None = None,
@@ -137,10 +182,10 @@ def _make_fixture(
     return SourceFixtureRecord(
         record_id=record_id,
         source_row=100 + record_id,
-        source_folder="Payslip",
-        source_file_type="Payslip",
-        file_type="Payslip",
-        request_file_type="Payslip",
+        source_folder=file_type,
+        source_file_type=file_type,
+        file_type=file_type,
+        request_file_type=file_type,
         gcs_uri=f"gs://bucket/fixture-{record_id}.pdf",
         source_basename=f"fixture-{record_id}.pdf",
         file_type_status="✓",
@@ -213,6 +258,26 @@ def _chunk_key(fixtures: list[SourceFixtureRecord]) -> tuple[str, ...]:
     return tuple(fixture.gcs_uri for fixture in fixtures)
 
 
+def _registry_chunk_key(file_type: str, indexes: range) -> tuple[str, ...]:
+    return tuple(f"gs://bucket/{file_type.lower()}-{index}.pdf" for index in indexes)
+
+
+def _success_body_for_key(key: tuple[str, ...]) -> dict[str, object]:
+    return {
+        "results": [
+            _success_result(record_id=index + 1, index=index)
+            for index, _gcs_uri in enumerate(key)
+        ]
+    }
+
+
+def _configure_batch_artifact_dir(monkeypatch, tmp_path: Path) -> Path:
+    artifact_root = tmp_path / "batch-artifacts"
+    monkeypatch.setenv(BATCH_RESPONSE_ARTIFACT_DIR_ENV_VAR, str(artifact_root))
+    monkeypatch.setenv(BATCH_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR, "batch-test-run")
+    return artifact_root / "batch-test-run"
+
+
 def _install_fake_make_client(monkeypatch, plans: dict[tuple[str, ...], dict[str, object]]) -> dict[str, object]:
     state: dict[str, object] = {
         "client_count": 0,
@@ -246,7 +311,7 @@ def _install_fake_make_client(monkeypatch, plans: dict[tuple[str, ...], dict[str
                 barrier = plan.get("barrier")
                 if barrier is not None:
                     assert isinstance(barrier, threading.Barrier)
-                    barrier.wait(timeout=1.0)
+                    barrier.wait(timeout=5.0)
 
                 delay = float(plan.get("delay", 0.0))
                 if delay:
@@ -829,6 +894,226 @@ def test_execute_file_type_keeps_classification_identical_in_sequential_and_conc
     ]
 
 
+def test_run_export_preserves_file_type_sequential_default(monkeypatch, tmp_path):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    registry_path = _write_fixture_registry(
+        tmp_path / "fixture_registry.yaml",
+        file_type_counts={"ACR": 1, "TIN": 1},
+    )
+    output_dir = tmp_path / "output"
+    artifact_run_dir = _configure_batch_artifact_dir(monkeypatch, tmp_path)
+    layout = load_reference_template(reference_path)
+    acr_key = _registry_chunk_key("ACR", range(1, 2))
+    tin_key = _registry_chunk_key("TIN", range(1, 2))
+    plans = {
+        acr_key: {
+            "kind": "json",
+            "body": _success_body_for_key(acr_key),
+            "delay": 0.03,
+            "name": "ACR",
+        },
+        tin_key: {
+            "kind": "json",
+            "body": _success_body_for_key(tin_key),
+            "name": "TIN",
+        },
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    result = batch_ground_truth_workflow.run_batch_ground_truth_export(
+        fixture_registry=registry_path,
+        reference_workbook=reference_path,
+        output_dir=output_dir,
+        selected_file_types=None,
+        template_layout=layout,
+        max_concurrent_chunks=1,
+        max_concurrent_file_types=1,
+    )
+
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    assert state["client_count"] == 2
+    assert state["max_active"] == 1
+    assert state["completion_order"] == ["ACR", "TIN"]
+    assert result.batch_artifact_run_dir == artifact_run_dir
+    assert result.selected_file_types == ("ACR", "TIN")
+    assert [file_type_result.file_type for file_type_result in result.file_type_results] == [
+        "ACR",
+        "TIN",
+    ]
+    assert manifest["max_concurrent_file_types"] == 1
+    assert manifest["max_concurrent_chunks"] == 1
+    assert manifest["effective_max_concurrent_batch_requests"] == 1
+    assert manifest["selected_file_types"] == ["ACR", "TIN"]
+
+
+def test_run_export_runs_file_types_concurrently_and_keeps_manifest_order(monkeypatch, tmp_path):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    registry_path = _write_fixture_registry(
+        tmp_path / "fixture_registry.yaml",
+        file_type_counts={"ACR": 1, "TIN": 1},
+    )
+    output_dir = tmp_path / "output"
+    _configure_batch_artifact_dir(monkeypatch, tmp_path)
+    layout = load_reference_template(reference_path)
+    acr_key = _registry_chunk_key("ACR", range(1, 2))
+    tin_key = _registry_chunk_key("TIN", range(1, 2))
+    barrier = threading.Barrier(2)
+    plans = {
+        acr_key: {
+            "kind": "json",
+            "body": _success_body_for_key(acr_key),
+            "barrier": barrier,
+            "delay": 0.03,
+            "name": "ACR",
+        },
+        tin_key: {
+            "kind": "json",
+            "body": _success_body_for_key(tin_key),
+            "barrier": barrier,
+            "name": "TIN",
+        },
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    result = batch_ground_truth_workflow.run_batch_ground_truth_export(
+        fixture_registry=registry_path,
+        reference_workbook=reference_path,
+        output_dir=output_dir,
+        selected_file_types=None,
+        template_layout=layout,
+        max_concurrent_chunks=1,
+        max_concurrent_file_types=2,
+    )
+
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    assert state["max_active"] == 2
+    assert state["completion_order"] == ["TIN", "ACR"]
+    assert result.selected_file_types == ("ACR", "TIN")
+    assert [file_type_result.file_type for file_type_result in result.file_type_results] == [
+        "ACR",
+        "TIN",
+    ]
+    assert manifest["selected_file_types"] == ["ACR", "TIN"]
+    assert list(manifest["file_types"]) == ["ACR", "TIN"]
+    assert manifest["max_concurrent_file_types"] == 2
+    assert manifest["max_concurrent_chunks"] == 1
+    assert manifest["effective_max_concurrent_batch_requests"] == 2
+
+
+def test_run_export_keeps_workbook_paths_associated_with_file_types(monkeypatch, tmp_path):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    registry_path = _write_fixture_registry(
+        tmp_path / "fixture_registry.yaml",
+        file_type_counts={"ACR": 1, "TIN": 1},
+    )
+    output_dir = tmp_path / "output"
+    _configure_batch_artifact_dir(monkeypatch, tmp_path)
+    layout = load_reference_template(reference_path)
+    acr_key = _registry_chunk_key("ACR", range(1, 2))
+    tin_key = _registry_chunk_key("TIN", range(1, 2))
+    plans = {
+        acr_key: {"kind": "json", "body": _success_body_for_key(acr_key), "name": "ACR"},
+        tin_key: {"kind": "json", "body": _success_body_for_key(tin_key), "name": "TIN"},
+    }
+    _install_fake_make_client(monkeypatch, plans)
+
+    result = batch_ground_truth_workflow.run_batch_ground_truth_export(
+        fixture_registry=registry_path,
+        reference_workbook=reference_path,
+        output_dir=output_dir,
+        selected_file_types=None,
+        template_layout=layout,
+        max_concurrent_chunks=1,
+        max_concurrent_file_types=2,
+    )
+
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    result_by_type = {
+        file_type_result.file_type: file_type_result
+        for file_type_result in result.file_type_results
+    }
+    for file_type in ("ACR", "TIN"):
+        workbook_path = result_by_type[file_type].workbook_path
+        assert workbook_path == Path(manifest["file_types"][file_type]["workbook_path"])
+        assert workbook_path.exists()
+        workbook = load_workbook(workbook_path, data_only=True)
+        assert workbook.sheetnames == [file_type, "_meta"]
+        meta_sheet = workbook["_meta"]
+        headers = [meta_sheet.cell(1, column).value for column in range(1, meta_sheet.max_column + 1)]
+        normalized_file_type_column = headers.index("normalized_file_type") + 1
+        assert meta_sheet.cell(2, normalized_file_type_column).value == file_type
+
+
+def test_run_export_keeps_chunk_numbers_stable_under_file_type_concurrency(monkeypatch, tmp_path):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    registry_path = _write_fixture_registry(
+        tmp_path / "fixture_registry.yaml",
+        file_type_counts={"ACR": 5, "TIN": 5},
+    )
+    output_dir = tmp_path / "output"
+    _configure_batch_artifact_dir(monkeypatch, tmp_path)
+    layout = load_reference_template(reference_path)
+    acr_chunk_one = _registry_chunk_key("ACR", range(1, 5))
+    acr_chunk_two = _registry_chunk_key("ACR", range(5, 6))
+    tin_chunk_one = _registry_chunk_key("TIN", range(1, 5))
+    tin_chunk_two = _registry_chunk_key("TIN", range(5, 6))
+    barrier = threading.Barrier(4)
+    plans = {
+        acr_chunk_one: {
+            "kind": "json",
+            "body": _success_body_for_key(acr_chunk_one),
+            "barrier": barrier,
+            "delay": 0.03,
+            "name": "ACR-1",
+        },
+        acr_chunk_two: {
+            "kind": "json",
+            "body": _success_body_for_key(acr_chunk_two),
+            "barrier": barrier,
+            "name": "ACR-2",
+        },
+        tin_chunk_one: {
+            "kind": "json",
+            "body": _success_body_for_key(tin_chunk_one),
+            "barrier": barrier,
+            "delay": 0.03,
+            "name": "TIN-1",
+        },
+        tin_chunk_two: {
+            "kind": "json",
+            "body": _success_body_for_key(tin_chunk_two),
+            "barrier": barrier,
+            "name": "TIN-2",
+        },
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    result = batch_ground_truth_workflow.run_batch_ground_truth_export(
+        fixture_registry=registry_path,
+        reference_workbook=reference_path,
+        output_dir=output_dir,
+        selected_file_types=None,
+        template_layout=layout,
+        max_concurrent_chunks=2,
+        max_concurrent_file_types=2,
+    )
+
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    assert state["max_active"] == 4
+    assert manifest["effective_max_concurrent_batch_requests"] == 4
+    for file_type_result in result.file_type_results:
+        assert file_type_result.chunk_count == 2
+        assert manifest["file_types"][file_type_result.file_type]["chunk_count"] == 2
+        workbook = load_workbook(file_type_result.workbook_path, data_only=True)
+        meta_sheet = workbook["_meta"]
+        headers = [meta_sheet.cell(1, column).value for column in range(1, meta_sheet.max_column + 1)]
+        chunk_column = headers.index("batch_chunk_number") + 1
+        assert [
+            meta_sheet.cell(row, chunk_column).value
+            for row in range(2, meta_sheet.max_row + 1)
+        ] == [1, 1, 1, 1, 2]
+
+
 @pytest.mark.parametrize("value", ["0", "-1", "not-an-int"])
 def test_build_parser_rejects_invalid_max_concurrent_chunks(value):
     parser = export_batch_ground_truth.build_parser()
@@ -846,7 +1131,24 @@ def test_build_parser_rejects_invalid_max_concurrent_chunks(value):
     assert exc.value.code == 2
 
 
-def test_main_passes_max_concurrent_chunks_to_workflow(monkeypatch, tmp_path):
+@pytest.mark.parametrize("value", ["0", "-1", "not-an-int"])
+def test_build_parser_rejects_invalid_max_concurrent_file_types(value):
+    parser = export_batch_ground_truth.build_parser()
+
+    with pytest.raises(SystemExit) as exc:
+        parser.parse_args(
+            [
+                "--reference-workbook",
+                "reference.xlsx",
+                "--max-concurrent-file-types",
+                value,
+            ]
+        )
+
+    assert exc.value.code == 2
+
+
+def test_main_passes_concurrency_values_to_workflow(monkeypatch, tmp_path):
     reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
     source_path = _write_source_workbook(tmp_path / "source.xlsx")
     registry_path = _write_fixture_registry_from_source_workbook(
@@ -901,9 +1203,12 @@ def test_main_passes_max_concurrent_chunks_to_workflow(monkeypatch, tmp_path):
             str(reference_path),
             "--max-concurrent-chunks",
             "4",
+            "--max-concurrent-file-types",
+            "3",
         ]
     )
 
     assert exit_code == 0
     assert captured["max_concurrent_chunks"] == 4
+    assert captured["max_concurrent_file_types"] == 3
     assert captured["fixture_registry"] == str(registry_path)
