@@ -47,10 +47,10 @@ class ExcludedSourceRow:
 
 
 @dataclass(frozen=True)
-class SourceWorkbookParseResult:
-    source_workbook: Path
-    sheet_name: str
-    headers: tuple[str | None, ...]
+class SourceRegistryParseResult:
+    source_registry: Path | None
+    source_workbook: Path | None
+    schema_version: int
     fixtures: tuple[SourceFixtureRecord, ...]
     excluded_rows: tuple[ExcludedSourceRow, ...]
 

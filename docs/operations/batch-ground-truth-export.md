@@ -1,9 +1,9 @@
 # Batch Ground-Truth Export
 
 ## Purpose
-Use this workflow to run live `/v1/documents/batch` coverage across the local fixture source workbook and generate one Excel workbook per fileType for comparison, review, and future model-improvement work.
+Use this workflow to run live `/v1/documents/batch` coverage across the shared generated fixture registry and generate one Excel workbook per fileType for comparison, review, and future model-improvement work.
 
-It does not mutate the source workbook or the reference workbook.
+The curated Excel workbook remains the human source. Regenerate `tests/fixtures/fixture_registry.yaml` from that workbook before exporting when fixture curation changes. The exporter itself does not mutate the source workbook, generated registry, or reference workbook.
 
 ## Default Output Location
 If you do not pass `--output-dir`, the workflow writes to:
@@ -40,7 +40,7 @@ Run selected fileTypes:
   --file-type TIN,ACR
 ```
 
-Run all discovered fileTypes from the source workbook:
+Run all feasible fileTypes from the shared generated registry:
 
 ```bash
 ./.venv/bin/python tools/reporting/export_batch_ground_truth.py \
@@ -64,15 +64,20 @@ Plan only, with no live API calls:
   --plan
 ```
 
-Optional source and output overrides:
+Optional registry and output overrides:
 
 ```bash
 ./.venv/bin/python tools/reporting/export_batch_ground_truth.py \
-  --source-workbook /absolute/path/to/qa_fixture_registry.xlsx \
+  --fixture-registry /absolute/path/to/fixture_registry.yaml \
   --reference-workbook /absolute/path/to/reference.xlsx \
   --output-dir /absolute/path/to/output-dir \
   --file-type Payslip
 ```
+
+## Fixture Registry Source
+- The normal exporter path reads `tests/fixtures/fixture_registry.yaml`.
+- `tools/generate_fixture_registry.py` writes that shared registry plus `tests/endpoints/parse/fixture_registry.yaml` as a generated `/parse` compatibility copy.
+- `--source-workbook` is retained only as a migration guard and no longer drives normal export execution. To change export inputs, edit the curated workbook or supplemental YAML, run `./.venv/bin/python tools/generate_fixture_registry.py`, then rerun the exporter.
 
 ## Chunk Concurrency
 - `--max-concurrent-chunks` controls how many `/documents/batch` chunks can be in flight at once within a single fileType.
@@ -81,7 +86,7 @@ Optional source and output overrides:
 - The safe request size limit is unchanged: each batch request still contains at most `4` items.
 
 ## Inclusion And Skipping Rules
-- `⚠ Verify` and other non-final status rows are included. Status is preserved in the output workbook and is not used as a batch gate.
+- `⚠ Verify` and other non-final status rows are included. Status is preserved in the generated registry and output workbook, and is not used as a batch gate.
 - Composite source labels such as `BIRForm2303 || BIRExemptionCertificate` are split into one output row per normalized fileType.
 - `No fileType` and `Fraud - Skipped` stay out of batch execution and are recorded in the run manifest as excluded source rows.
 - Unsupported or malformed fixture paths are not silently dropped. They are surfaced in `manifest.json`, and the affected workbook row is marked failed with empty mapped value columns.

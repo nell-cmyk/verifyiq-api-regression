@@ -337,7 +337,7 @@ This command:
 - checks the JSON input against the current registry flow
 - skips unsupported file formats explicitly before onboarding
 - writes only missing supported fixtures into `tools/fixture_registry_source/supplemental_fixture_registry.yaml`
-- regenerates `tests/endpoints/parse/fixture_registry.yaml` only when additions are required
+- regenerates `tests/fixtures/fixture_registry.yaml` and the generated `/parse` compatibility copy at `tests/endpoints/parse/fixture_registry.yaml` only when additions are required
 
 Do not use it:
 - as part of ordinary baseline or matrix runs

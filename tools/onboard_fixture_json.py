@@ -15,7 +15,9 @@ if str(REPO_ROOT) not in sys.path:
 from tests.endpoints.parse.fixture_json import normalize_fixture_json_entries
 from tests.endpoints.parse.registry import load_registry
 
-OUTPUT_YAML = REPO_ROOT / "tests" / "endpoints" / "parse" / "fixture_registry.yaml"
+SHARED_OUTPUT_YAML = REPO_ROOT / "tests" / "fixtures" / "fixture_registry.yaml"
+PARSE_COMPAT_OUTPUT_YAML = REPO_ROOT / "tests" / "endpoints" / "parse" / "fixture_registry.yaml"
+OUTPUT_YAML = SHARED_OUTPUT_YAML
 SUPPLEMENTAL_YAML = (
     REPO_ROOT / "tools" / "fixture_registry_source" / "supplemental_fixture_registry.yaml"
 )
@@ -140,7 +142,7 @@ def _regenerate_registry_or_exit() -> None:
         if exc.name == "openpyxl":
             raise SystemExit(
                 "Fixture onboarding needs the tool dependencies to regenerate "
-                "tests/endpoints/parse/fixture_registry.yaml. Install them with "
+                "the generated fixture registries. Install them with "
                 "`./.venv/bin/python -m pip install -r tools/requirements.txt` and rerun the command."
             ) from exc
         raise
@@ -284,7 +286,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Added to supplemental registry: {added}")
     if added:
         print(f"Updated supplemental source: {SUPPLEMENTAL_YAML}")
-        print(f"Regenerated derived registry: {OUTPUT_YAML}")
+        print(f"Regenerated derived registry: {SHARED_OUTPUT_YAML}")
+        print(f"Regenerated /parse compatibility registry: {PARSE_COMPAT_OUTPUT_YAML}")
     else:
         print("No source-of-truth changes were required.")
     return 0

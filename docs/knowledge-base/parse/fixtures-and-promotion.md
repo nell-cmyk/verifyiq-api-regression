@@ -7,14 +7,16 @@ See also: [Promotion Candidates](promotion-candidates.md), [Matrix Triage](../..
 ## Fixture Lifecycle
 1. The human-maintained fixture source lives in `tools/fixture_registry_source/qa_fixture_registry.xlsx`.
 2. JSON-driven onboarding can add supplemental fixtures into `tools/fixture_registry_source/supplemental_fixture_registry.yaml`.
-3. `tools/generate_fixture_registry.py` materializes the curated sources into `tests/endpoints/parse/fixture_registry.yaml`.
-4. Pytest reads the generated YAML through `tests/endpoints/parse/registry.py`.
-5. Happy-path `/parse` requests use remote `gs://` fixtures because the API fetches files server-side.
+3. `tools/generate_fixture_registry.py` materializes the curated sources into the shared generated registry at `tests/fixtures/fixture_registry.yaml`.
+4. The generator also writes `tests/endpoints/parse/fixture_registry.yaml` as a generated `/parse` compatibility copy.
+5. Pytest reads the shared generated YAML through `tests/endpoints/parse/registry.py` and `tests/fixtures/registry.py`.
+6. Happy-path `/parse` requests use remote `gs://` fixtures because the API fetches files server-side.
 
 ## Registry Normalization
 - Rows without a `gs://` path do not enter the generated registry.
 - Composite spreadsheet labels such as `A || B` are split into one generated record per individual `file_type`, while preserving the original source label and row for traceability.
 - `No fileType` and `Fraud - Skipped` stay in the generated registry as `excluded` records instead of canonical coverage.
+- Source fileType status, assignee, workflow status, unsupported-format annotations, and known batch warning/error metadata are preserved in the generated registry for shared endpoint tooling.
 - JSON-driven onboarding and selected-fixture execution normalize imported `gs://` paths before they touch the supplemental registry or the opt-in selected run.
 - Unsupported JSON-imported formats are skipped explicitly instead of being added to the supplemental registry or selected for execution. Current supported `/parse` extensions are `pdf`, `png`, `jpg`, `jpeg`, `tiff`, `tif`, `heic`, and `heif`.
 
@@ -39,6 +41,6 @@ See also: [Promotion Candidates](promotion-candidates.md), [Matrix Triage](../..
 - Candidate status records review state such as `pending`, `needs another run`, or `rejected`; it does not change pytest behavior on its own.
 
 ## Durable Boundary
-- Updating the spreadsheet or supplemental YAML and regenerating YAML changes fixture status.
+- Updating the spreadsheet or supplemental YAML and regenerating YAML changes fixture status for `/parse`, `/documents/batch`, and future registry-backed endpoint tooling.
 - `./.venv/bin/python tools/onboard_fixture_json.py --json /path/to/fixtures.json` is the reusable path for JSON-driven additions; it writes only missing supported fixtures into the supplemental YAML, reports skipped unsupported entries, and regenerates the tracked registry when needed.
 - Adding or editing a promotion-candidate entry preserves context for humans; it does not mutate the registry.

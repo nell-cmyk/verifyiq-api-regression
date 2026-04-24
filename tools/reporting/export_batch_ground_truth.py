@@ -10,7 +10,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from tools.generate_fixture_registry import SOURCE_XLSX
+from tests.fixtures.registry import REGISTRY_PATH as SHARED_REGISTRY_PATH
 from tools.reporting.batch_ground_truth.schema import load_reference_template
 from tools.reporting.batch_ground_truth.workflow import (
     DEFAULT_OUTPUT_ROOT,
@@ -44,9 +44,17 @@ def build_parser() -> argparse.ArgumentParser:
         description=__doc__,
     )
     parser.add_argument(
+        "--fixture-registry",
+        default=str(SHARED_REGISTRY_PATH),
+        help="Generated fixture registry YAML to read. Defaults to tests/fixtures/fixture_registry.yaml.",
+    )
+    parser.add_argument(
         "--source-workbook",
-        default=str(SOURCE_XLSX),
-        help="Local fixture workbook to read. Defaults to the repo fixture source workbook.",
+        default="",
+        help=(
+            "Deprecated migration guard. The exporter now reads the generated YAML registry; "
+            "edit the workbook, run tools/generate_fixture_registry.py, then use --fixture-registry if needed."
+        ),
     )
     parser.add_argument(
         "--reference-workbook",
@@ -71,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--plan",
         action="store_true",
-        help="Inspect workbook coverage and planned chunking without calling the live endpoint.",
+        help="Inspect registry coverage and planned chunking without calling the live endpoint.",
     )
     parser.add_argument(
         "--max-concurrent-chunks",
@@ -89,11 +97,19 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.source_workbook:
+        print(
+            "ERROR: --source-workbook no longer drives normal batch export execution. "
+            "Regenerate the shared fixture registry, then use --fixture-registry.",
+            file=sys.stderr,
+        )
+        return 2
+
     selected_file_types = _parse_file_types(args.file_types)
     selected = selected_file_types or None
     try:
-        _parsed, _grouped, plans = plan_file_types(
-            source_workbook=args.source_workbook,
+        parsed, _grouped, plans = plan_file_types(
+            fixture_registry=args.fixture_registry,
             selected_file_types=selected,
         )
     except RuntimeError as exc:
@@ -101,10 +117,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if not plans:
-        print("ERROR: No matching fileTypes were found in the source workbook.", file=sys.stderr)
+        print("ERROR: No matching fileTypes were found in the fixture registry.", file=sys.stderr)
         return 2
 
-    print(f"Source workbook: {Path(args.source_workbook).expanduser().resolve()}")
+    print(f"Fixture registry: {Path(args.fixture_registry).expanduser().resolve()}")
+    if parsed.source_workbook is not None:
+        print(f"Curated source workbook: {parsed.source_workbook}")
     print(f"Reference workbook: {Path(args.reference_workbook).expanduser().resolve()}")
     print(f"Selected fileTypes: {len(plans)}")
     for plan in plans:
@@ -119,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         layout = load_reference_template(args.reference_workbook)
         result = run_batch_ground_truth_export(
-            source_workbook=args.source_workbook,
+            fixture_registry=args.fixture_registry,
             reference_workbook=args.reference_workbook,
             output_dir=args.output_dir or None,
             selected_file_types=selected,

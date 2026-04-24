@@ -52,7 +52,7 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 | `./.venv/bin/python -m pytest tests/endpoints/get_smoke/ -v` | Exact GET smoke implementation/debug surface; the canonical operator path is `tools/run_regression.py --suite smoke` | none | no repo mutation |
 | `./.venv/bin/python -m pytest tests/endpoints/batch/ -v` | Direct live `/documents/batch` validation when batch-specific coverage is needed | `reports/batch/batch_<timestamp>/...` | generated artifacts only |
 | `./.venv/bin/python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` | Selected-fixture `/documents/batch` run | `reports/batch/batch_<timestamp>/...` | generated artifacts only |
-| `./.venv/bin/python tools/reporting/export_batch_ground_truth.py --reference-workbook /absolute/path/to/reference.xlsx [--file-type ...] [--max-concurrent-chunks N]` | Live batch export workflow for ground-truth comparison workbooks keyed by fileType; chunk execution stays sequential by default and can be opt-in bounded within one fileType | `reports/batch_ground_truth/batch_ground_truth_<timestamp>/workbooks/*.xlsx`, `manifest.json`, plus raw batch artifacts under `reports/batch/batch_<timestamp>/...` | generated artifacts only |
+| `./.venv/bin/python tools/reporting/export_batch_ground_truth.py --reference-workbook /absolute/path/to/reference.xlsx [--fixture-registry tests/fixtures/fixture_registry.yaml] [--file-type ...] [--max-concurrent-chunks N]` | Live batch export workflow for ground-truth comparison workbooks keyed by fileType from the shared generated fixture registry; chunk execution stays sequential by default and can be opt-in bounded within one fileType | `reports/batch_ground_truth/batch_ground_truth_<timestamp>/workbooks/*.xlsx`, `manifest.json`, plus raw batch artifacts under `reports/batch/batch_<timestamp>/...` | generated artifacts only |
 | `./.venv/bin/python tools/run_regression.py --list|--dry-run ...` | Non-executing canonical-runner discovery surface for inventory preview and command mapping | none | no repo mutation |
 | `RUN_PARSE_MATRIX=1 ./.venv/bin/python -m pytest tests/endpoints/parse/test_parse_matrix.py -v` | Valid direct matrix surface for debugging, but the wrapper is the normal path | none unless you capture output separately | no repo mutation by default |
 | `./.venv/bin/python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt` | Re-renders from saved terminal output; not the primary run surface | `reports/parse/matrix/latest-summary.md` by default | generated summary only in draft mode |
@@ -69,8 +69,8 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 ## Mutating Commands
 | Command | What It Can Mutate |
 | --- | --- |
-| `./.venv/bin/python tools/generate_fixture_registry.py` | tracked `tests/endpoints/parse/fixture_registry.yaml` |
-| `./.venv/bin/python tools/onboard_fixture_json.py --json /path/to/fixtures.json` | tracked `tools/fixture_registry_source/supplemental_fixture_registry.yaml` and, when needed, tracked `tests/endpoints/parse/fixture_registry.yaml` |
+| `./.venv/bin/python tools/generate_fixture_registry.py` | tracked `tests/fixtures/fixture_registry.yaml` and generated compatibility copy `tests/endpoints/parse/fixture_registry.yaml` |
+| `./.venv/bin/python tools/onboard_fixture_json.py --json /path/to/fixtures.json` | tracked `tools/fixture_registry_source/supplemental_fixture_registry.yaml` and, when needed, tracked shared and `/parse` compatibility fixture registry YAML |
 | `./.venv/bin/python tools/reporting/render_regression_summary.py --mode apply ...` | summary output plus tracked `docs/knowledge-base/parse/promotion-candidates.md` |
 | `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py --mode apply` | generated matrix outputs plus tracked `docs/knowledge-base/parse/promotion-candidates.md` |
 | `mind setup opencode` | `~/.config/opencode/opencode.json`, `~/.config/opencode/instructions/*`, `~/.config/opencode/plugins/*`, and Mind-installed skills |
@@ -89,7 +89,7 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 - `tools/run_regression.py` currently supports live execution for the protected baseline, `--suite smoke`, and `--suite full` only. Direct live parse-matrix, batch, extended, and other selections remain dry-run only.
 - `smoke` is now a real opt-in suite, not the broader default suite.
 - `tools/generate_fixture_registry.py` and `tools/onboard_fixture_json.py` are maintenance surfaces, not ordinary validation steps.
-- `tools/reporting/export_batch_ground_truth.py` is a reusable reporting/export surface for local ground-truth comparison work; see `docs/operations/batch-ground-truth-export.md`.
+- `tools/reporting/export_batch_ground_truth.py` is a reusable reporting/export surface for local ground-truth comparison work and reads the shared generated registry by default; see `docs/operations/batch-ground-truth-export.md`.
 - The normal active-context path is automatic through `.opencode/plugins/verifyiq-mind-session.js` in OpenCode and through trusted `.codex/config.toml` plus `.codex/hooks.json` in Codex.
 - `tools/mind_session.py` is the repo-owned fallback surface for explicit recovery, checkpointing, summaries, and finish events.
 - `mind setup opencode` installs global OpenCode Mind wiring, while `.opencode/opencode.json` and trusted `.codex/config.toml` add repo-local automation for their respective clients.

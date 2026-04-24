@@ -26,11 +26,11 @@ from .models import (
     FileTypeExportResult,
     FileTypePlan,
     SourceFixtureRecord,
-    SourceWorkbookParseResult,
+    SourceRegistryParseResult,
     TemplateLayout,
 )
 from .schema import build_failure_template_values, build_success_template_values
-from .source import grouped_fixtures_by_file_type, parse_source_workbook
+from .source import grouped_fixtures_by_file_type, parse_source_registry
 
 BATCH_ENDPOINT = "/v1/documents/batch"
 DEFAULT_OUTPUT_ROOT = Path("reports") / "batch_ground_truth"
@@ -448,10 +448,10 @@ def _execute_file_type(
 
 def plan_file_types(
     *,
-    source_workbook: Path | str,
+    fixture_registry: Path | str,
     selected_file_types: set[str] | None = None,
-) -> tuple[SourceWorkbookParseResult, dict[str, list[SourceFixtureRecord]], list[FileTypePlan]]:
-    parsed = parse_source_workbook(source_workbook)
+) -> tuple[SourceRegistryParseResult, dict[str, list[SourceFixtureRecord]], list[FileTypePlan]]:
+    parsed = parse_source_registry(fixture_registry)
     grouped = grouped_fixtures_by_file_type(parsed, selected_file_types=selected_file_types)
     plans = []
     for file_type, fixtures in sorted(grouped.items()):
@@ -471,7 +471,7 @@ def plan_file_types(
 
 def run_batch_ground_truth_export(
     *,
-    source_workbook: Path | str,
+    fixture_registry: Path | str,
     reference_workbook: Path | str,
     output_dir: Path | str | None,
     selected_file_types: set[str] | None,
@@ -482,7 +482,7 @@ def run_batch_ground_truth_export(
         raise ValueError("max_concurrent_chunks must be a positive integer")
 
     parsed, grouped, plans = plan_file_types(
-        source_workbook=source_workbook,
+        fixture_registry=fixture_registry,
         selected_file_types=selected_file_types,
     )
     output_root = _ensure_output_dir(output_dir)
@@ -537,7 +537,8 @@ def run_batch_ground_truth_export(
     manifest_path = output_root / "manifest.json"
     manifest_payload = {
         "generated_at": output_generated_at,
-        "source_workbook": str(Path(source_workbook).expanduser().resolve()),
+        "fixture_registry": str(Path(fixture_registry).expanduser().resolve()),
+        "source_workbook": str(parsed.source_workbook) if parsed.source_workbook is not None else None,
         "reference_workbook": str(Path(reference_workbook).expanduser().resolve()),
         "output_dir": str(output_root),
         "batch_artifact_run_dir": str(batch_artifact_run_dir),

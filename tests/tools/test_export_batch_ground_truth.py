@@ -14,6 +14,7 @@ from openpyxl import Workbook, load_workbook
 
 import tools.reporting.batch_ground_truth.workflow as batch_ground_truth_workflow
 import tools.reporting.export_batch_ground_truth as export_batch_ground_truth
+from tools.generate_fixture_registry import build_registry_document, write_registry_document
 from tools.reporting.batch_ground_truth.excel import write_workbook
 from tools.reporting.batch_ground_truth.models import ExportRow, FileTypePlan, SourceFixtureRecord
 from tools.reporting.batch_ground_truth.schema import (
@@ -21,7 +22,10 @@ from tools.reporting.batch_ground_truth.schema import (
     build_success_template_values,
     load_reference_template,
 )
-from tools.reporting.batch_ground_truth.source import parse_source_workbook
+from tools.reporting.batch_ground_truth.source import (
+    parse_source_registry,
+    parse_source_workbook_for_comparison,
+)
 from tools.reporting.batch_ground_truth.workflow import plan_file_types
 
 
@@ -56,12 +60,31 @@ def _write_source_workbook(path: Path) -> Path:
             "Pending",
         ),
         (
+            "BankStatement",
+            "BankStatement",
+            (
+                "gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/"
+                "MJRL_MV Dela Cruz_Bank Statement (1).pdf"
+            ),
+            "✓",
+            "Jane",
+            "Pending",
+        ),
+        (
             "Missing",
             "No fileType",
             "gs://verifyiq-internal-testing/QA/GroundTruth/Missing/example.pdf",
             "✓",
             "Alex",
             "Pending",
+        ),
+        (
+            "Fraud",
+            "Fraud - Skipped",
+            "gs://verifyiq-internal-testing/QA/GroundTruth/Fraud/example.pdf",
+            "✓",
+            "Alex",
+            "Skipped",
         ),
     ]
     for row_index, row in enumerate(rows, start=5):
@@ -70,6 +93,12 @@ def _write_source_workbook(path: Path) -> Path:
 
     workbook.save(path)
     return path
+
+
+def _write_fixture_registry_from_source_workbook(source_path: Path, registry_path: Path) -> Path:
+    doc = build_registry_document(source_xlsx=source_path, supplemental_yaml=None)
+    write_registry_document(doc, output_paths=(registry_path,))
+    return registry_path
 
 
 def _write_reference_workbook(path: Path) -> Path:
@@ -268,15 +297,20 @@ def _row_signatures(rows: list[ExportRow]) -> list[tuple[dict[str, object], dict
     ]
 
 
-def test_parse_source_workbook_splits_and_keeps_verify_rows(tmp_path):
+def test_parse_source_workbook_comparison_helper_splits_and_keeps_verify_rows(tmp_path):
     source_path = _write_source_workbook(tmp_path / "qa_fixture_registry.xlsx")
 
-    parsed = parse_source_workbook(source_path)
+    parsed = parse_source_workbook_for_comparison(source_path)
 
-    assert parsed.sheet_name == "All"
-    assert len(parsed.fixtures) == 3
+    assert parsed.source_workbook == source_path.resolve()
+    assert len(parsed.fixtures) == 4
     split_types = [fixture.file_type for fixture in parsed.fixtures]
-    assert split_types == ["BIRForm2303", "BIRExemptionCertificate", "BankStatement"]
+    assert split_types == [
+        "BIRForm2303",
+        "BIRExemptionCertificate",
+        "BankStatement",
+        "BankStatement",
+    ]
 
     bir_fixture = parsed.fixtures[0]
     assert bir_fixture.include_in_batch is True
@@ -284,26 +318,82 @@ def test_parse_source_workbook_splits_and_keeps_verify_rows(tmp_path):
     assert bir_fixture.verification_status == "unverified"
     assert bir_fixture.source_file_type == "BIRForm2303 || BIRExemptionCertificate"
 
-    bank_fixture = parsed.fixtures[-1]
+    bank_fixture = parsed.fixtures[2]
     assert bank_fixture.include_in_batch is False
     assert bank_fixture.skip_reason == "unsupported file extension '.xlsx' (supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)"
 
-    assert len(parsed.excluded_rows) == 1
+    warning_fixture = parsed.fixtures[3]
+    assert warning_fixture.batch_expected_error_type == "DocumentSizeGuardError"
+    assert "Page count (456)" in str(warning_fixture.batch_expected_error)
+    assert "page-limit warning" in str(warning_fixture.batch_expected_warning)
+
+    assert len(parsed.excluded_rows) == 2
     assert parsed.excluded_rows[0].raw_file_type == "No fileType"
     assert parsed.excluded_rows[0].reason == "excluded_file_type"
+    assert parsed.excluded_rows[1].raw_file_type == "Fraud - Skipped"
+    assert parsed.excluded_rows[1].reason == "excluded_file_type"
+
+
+def test_registry_batch_planning_matches_legacy_workbook_parser(tmp_path):
+    source_path = _write_source_workbook(tmp_path / "qa_fixture_registry.xlsx")
+    registry_path = _write_fixture_registry_from_source_workbook(
+        source_path,
+        tmp_path / "fixture_registry.yaml",
+    )
+
+    legacy = parse_source_workbook_for_comparison(source_path)
+    registry = parse_source_registry(registry_path)
+
+    def fixture_signature(fixture: SourceFixtureRecord) -> tuple[object, ...]:
+        return (
+            fixture.source_row,
+            fixture.source_folder,
+            fixture.source_file_type,
+            fixture.file_type,
+            fixture.request_file_type,
+            fixture.gcs_uri,
+            fixture.source_basename,
+            fixture.file_type_status,
+            fixture.workflow_status,
+            fixture.assignee,
+            fixture.verification_status,
+            fixture.include_in_batch,
+            fixture.skip_reason,
+            fixture.batch_expected_warning,
+            fixture.batch_expected_error_type,
+            fixture.batch_expected_error,
+        )
+
+    assert [fixture_signature(fixture) for fixture in registry.fixtures] == [
+        fixture_signature(fixture) for fixture in legacy.fixtures
+    ]
+    assert registry.excluded_rows == legacy.excluded_rows
 
 
 def test_plan_file_types_reports_executable_and_skipped_counts(tmp_path):
     source_path = _write_source_workbook(tmp_path / "qa_fixture_registry.xlsx")
+    registry_path = _write_fixture_registry_from_source_workbook(
+        source_path,
+        tmp_path / "fixture_registry.yaml",
+    )
 
-    parsed, grouped, plans = plan_file_types(source_workbook=source_path)
+    parsed, grouped, plans = plan_file_types(fixture_registry=registry_path)
 
-    assert len(parsed.fixtures) == 3
+    assert len(parsed.fixtures) == 4
     assert sorted(grouped) == ["BIRExemptionCertificate", "BIRForm2303", "BankStatement"]
 
     plan_by_type = {plan.file_type: plan for plan in plans}
     assert plan_by_type["BIRForm2303"].executable_rows == 1
+    assert plan_by_type["BankStatement"].total_rows == 2
+    assert plan_by_type["BankStatement"].executable_rows == 1
     assert plan_by_type["BankStatement"].skipped_rows == 1
+
+    _selected_parsed, selected_grouped, selected_plans = plan_file_types(
+        fixture_registry=registry_path,
+        selected_file_types={"BankStatement"},
+    )
+    assert sorted(selected_grouped) == ["BankStatement"]
+    assert [plan.file_type for plan in selected_plans] == ["BankStatement"]
 
 
 def test_build_success_template_values_maps_common_and_extra_fields():
@@ -759,13 +849,17 @@ def test_build_parser_rejects_invalid_max_concurrent_chunks(value):
 def test_main_passes_max_concurrent_chunks_to_workflow(monkeypatch, tmp_path):
     reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
     source_path = _write_source_workbook(tmp_path / "source.xlsx")
+    registry_path = _write_fixture_registry_from_source_workbook(
+        source_path,
+        tmp_path / "fixture_registry.yaml",
+    )
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(
         export_batch_ground_truth,
         "plan_file_types",
         lambda **kwargs: (
-            None,
+            SimpleNamespace(source_workbook=source_path.resolve()),
             {},
             [
                 FileTypePlan(
@@ -801,8 +895,8 @@ def test_main_passes_max_concurrent_chunks_to_workflow(monkeypatch, tmp_path):
 
     exit_code = export_batch_ground_truth.main(
         [
-            "--source-workbook",
-            str(source_path),
+            "--fixture-registry",
+            str(registry_path),
             "--reference-workbook",
             str(reference_path),
             "--max-concurrent-chunks",
@@ -812,3 +906,4 @@ def test_main_passes_max_concurrent_chunks_to_workflow(monkeypatch, tmp_path):
 
     assert exit_code == 0
     assert captured["max_concurrent_chunks"] == 4
+    assert captured["fixture_registry"] == str(registry_path)
