@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
+import threading
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -11,7 +13,7 @@ from typing import Any
 
 import httpx
 
-from tests.client import make_client
+from tests.client import clear_iap_token_cache, make_client
 from tests.diagnostics import diagnose, request_error_diagnostics, timeout_diagnostics
 from tests.endpoints.artifact_runs import readable_utc_timestamp
 from tests.endpoints.batch.artifacts import (
@@ -36,6 +38,12 @@ from .source import grouped_fixtures_by_file_type, parse_source_registry
 BATCH_ENDPOINT = "/v1/documents/batch"
 DEFAULT_OUTPUT_ROOT = Path("reports") / "batch_ground_truth"
 BATCH_TIMEOUT_SECS = 300.0
+DEFAULT_TOKEN_EXPIRY_RETRIES = 1
+DEFAULT_TRANSIENT_CHUNK_RETRIES = 1
+_TOKEN_EXPIRY_EXACT_MARKERS = (
+    "openid connect token expired",
+    "jwt has expired",
+)
 
 
 @dataclass(frozen=True)
@@ -105,6 +113,9 @@ def _metadata_for_fixture(
     batch_http_status: int | None,
     batch_result_correlation_id: str | None,
     batch_elapsed_ms: float | int | None,
+    batch_attempt_count: int | None,
+    batch_retry_reason: str | None,
+    batch_final_attempt_error_type: str | None,
     ok: bool,
     failure_tag: str | None,
     error_type: str | None,
@@ -127,6 +138,9 @@ def _metadata_for_fixture(
         "batch_http_status": batch_http_status,
         "batch_result_correlation_id": batch_result_correlation_id,
         "batch_elapsed_ms": batch_elapsed_ms,
+        "batch_attempt_count": batch_attempt_count,
+        "batch_retry_reason": batch_retry_reason,
+        "batch_final_attempt_error_type": batch_final_attempt_error_type,
         "ok": ok,
         "failure_tag": failure_tag,
         "error_type": error_type,
@@ -147,6 +161,9 @@ def _skipped_export_row(fixture: SourceFixtureRecord, *, output_generated_at: st
             batch_http_status=None,
             batch_result_correlation_id=None,
             batch_elapsed_ms=None,
+            batch_attempt_count=None,
+            batch_retry_reason=None,
+            batch_final_attempt_error_type=None,
             ok=False,
             failure_tag=_skip_failure_tag(fixture.skip_reason),
             error_type=None,
@@ -169,6 +186,10 @@ def _request_failure_rows(
     failure_tag: str,
     error_type: str | None,
     error: str,
+    batch_http_status: int | None = None,
+    batch_attempt_count: int | None = 1,
+    batch_retry_reason: str | None = None,
+    batch_final_attempt_error_type: str | None = None,
 ) -> dict[int, ExportRow]:
     rows: dict[int, ExportRow] = {}
     for fixture in fixtures:
@@ -178,9 +199,12 @@ def _request_failure_rows(
                 output_generated_at=output_generated_at,
                 batch_chunk_number=batch_chunk_number,
                 batch_result_index=None,
-                batch_http_status=None,
+                batch_http_status=batch_http_status,
                 batch_result_correlation_id=None,
                 batch_elapsed_ms=None,
+                batch_attempt_count=batch_attempt_count,
+                batch_retry_reason=batch_retry_reason,
+                batch_final_attempt_error_type=batch_final_attempt_error_type,
                 ok=False,
                 failure_tag=failure_tag,
                 error_type=error_type,
@@ -203,6 +227,8 @@ def _result_export_row(
     batch_chunk_number: int,
     batch_http_status: int,
     output_generated_at: str,
+    batch_attempt_count: int,
+    batch_retry_reason: str | None,
 ) -> ExportRow:
     ok = bool(result.get("ok"))
     warning_value = result.get("warning")
@@ -228,6 +254,9 @@ def _result_export_row(
                     batch_http_status=batch_http_status,
                     batch_result_correlation_id=correlation_id,
                     batch_elapsed_ms=elapsed_ms,
+                    batch_attempt_count=batch_attempt_count,
+                    batch_retry_reason=batch_retry_reason,
+                    batch_final_attempt_error_type=None,
                     ok=False,
                     failure_tag="unusable_result",
                     error_type=type(exc).__name__,
@@ -250,6 +279,9 @@ def _result_export_row(
                 batch_http_status=batch_http_status,
                 batch_result_correlation_id=correlation_id,
                 batch_elapsed_ms=elapsed_ms,
+                batch_attempt_count=batch_attempt_count,
+                batch_retry_reason=batch_retry_reason,
+                batch_final_attempt_error_type=None,
                 ok=True,
                 failure_tag=None,
                 error_type=None,
@@ -275,6 +307,9 @@ def _result_export_row(
             batch_http_status=batch_http_status,
             batch_result_correlation_id=correlation_id,
             batch_elapsed_ms=elapsed_ms,
+            batch_attempt_count=batch_attempt_count,
+            batch_retry_reason=batch_retry_reason,
+            batch_final_attempt_error_type=None,
             ok=False,
             failure_tag=failure_tag,
             error_type=str(error_type) if error_type not in (None, "") else None,
@@ -289,122 +324,344 @@ def _result_export_row(
     )
 
 
+def _retry_reason_text(retry_reasons: list[str]) -> str | None:
+    if not retry_reasons:
+        return None
+    return ",".join(dict.fromkeys(retry_reasons))
+
+
+def _retry_summary(rows: list[ExportRow]) -> dict[str, Any]:
+    attempt_counts = [
+        row.metadata.get("batch_attempt_count")
+        for row in rows
+        if isinstance(row.metadata.get("batch_attempt_count"), int)
+    ]
+    return {
+        "rows_with_retries": sum(1 for count in attempt_counts if count > 1),
+        "max_batch_attempt_count": max(attempt_counts, default=0),
+        "batch_retry_reasons": dict(
+            Counter(
+                str(row.metadata["batch_retry_reason"])
+                for row in rows
+                if row.metadata.get("batch_retry_reason")
+            )
+        ),
+        "batch_final_attempt_error_types": dict(
+            Counter(
+                str(row.metadata["batch_final_attempt_error_type"])
+                for row in rows
+                if row.metadata.get("batch_final_attempt_error_type")
+            )
+        ),
+    }
+
+
+def _response_text_for_detection(response: httpx.Response, body: Any | None = None) -> str:
+    parts: list[str] = []
+    if body not in (None, "", [], {}):
+        if isinstance(body, str):
+            parts.append(body)
+        else:
+            parts.append(_json_dumps(body) or str(body))
+    try:
+        if response.text:
+            parts.append(response.text)
+    except Exception:
+        pass
+    return "\n".join(parts)
+
+
+def _is_token_expiry_response(response: httpx.Response, body: Any | None = None) -> bool:
+    text = _response_text_for_detection(response, body=body).lower()
+    if not text:
+        return False
+    if any(marker in text for marker in _TOKEN_EXPIRY_EXACT_MARKERS):
+        return True
+    return (
+        response.status_code in (401, 403)
+        and "expired" in text
+        and any(marker in text for marker in ("token", "jwt", "oidc", "openid connect"))
+    )
+
+
+class _BatchClientHandle:
+    def __init__(self) -> None:
+        self.client: httpx.Client | None = None
+        self._lock = threading.Lock()
+
+    def __enter__(self) -> _BatchClientHandle:
+        self.client = make_client(timeout=BATCH_TIMEOUT_SECS)
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> bool:
+        self.close()
+        return False
+
+    def close(self) -> None:
+        client = self.client
+        if client is None:
+            return
+        close = getattr(client, "close", None)
+        if callable(close):
+            close()
+        self.client = None
+
+    def iap_token(self) -> str | None:
+        client = self.client
+        if client is None:
+            return None
+        headers = getattr(client, "headers", {})
+        proxy_authorization = (
+            headers.get("Proxy-Authorization") if hasattr(headers, "get") else None
+        )
+        if not isinstance(proxy_authorization, str):
+            return None
+        prefix = "Bearer "
+        if not proxy_authorization.startswith(prefix):
+            return None
+        return proxy_authorization[len(prefix) :].strip() or None
+
+    def refresh_iap_token(self) -> None:
+        with self._lock:
+            clear_iap_token_cache(expired_token=self.iap_token())
+            self.close()
+            self.client = make_client(timeout=BATCH_TIMEOUT_SECS)
+
+    def post(self, url: str, *, json: dict[str, object], timeout: float) -> httpx.Response:
+        if self.client is None:
+            raise RuntimeError("Batch ground-truth HTTP client is not initialized.")
+        return self.client.post(url, json=json, timeout=timeout)
+
+
 def _execute_chunk(
     *,
     chunk_number: int,
     fixtures: list[SourceFixtureRecord],
     output_generated_at: str,
-    client: httpx.Client | None = None,
+    client_handle: _BatchClientHandle | None = None,
+    token_expiry_retries: int = DEFAULT_TOKEN_EXPIRY_RETRIES,
+    transient_chunk_retries: int = DEFAULT_TRANSIENT_CHUNK_RETRIES,
 ) -> dict[int, ExportRow]:
-    if client is None:
-        with make_client(timeout=BATCH_TIMEOUT_SECS) as owned_client:
+    if token_expiry_retries < 0:
+        raise ValueError("token_expiry_retries must be a non-negative integer")
+    if transient_chunk_retries < 0:
+        raise ValueError("transient_chunk_retries must be a non-negative integer")
+
+    if client_handle is None:
+        with _BatchClientHandle() as owned_client_handle:
             return _execute_chunk(
                 chunk_number=chunk_number,
                 fixtures=fixtures,
                 output_generated_at=output_generated_at,
-                client=owned_client,
+                client_handle=owned_client_handle,
+                token_expiry_retries=token_expiry_retries,
+                transient_chunk_retries=transient_chunk_retries,
             )
 
     row_map: dict[int, ExportRow] = {}
     payload = build_batch_request([fixture.as_batch_fixture() for fixture in fixtures])
-    try:
-        response = client.post(BATCH_ENDPOINT, json=payload, timeout=BATCH_TIMEOUT_SECS)
-    except httpx.TimeoutException as exc:
-        return _request_failure_rows(
-            fixtures,
-            output_generated_at=output_generated_at,
-            batch_chunk_number=chunk_number,
-            failure_tag="request_timeout",
-            error_type=type(exc).__name__,
-            error=timeout_diagnostics(
-                exc,
-                context=f"Batch ground-truth chunk {chunk_number}",
-                timeout_secs=BATCH_TIMEOUT_SECS,
-            ),
-        )
-    except httpx.RequestError as exc:
-        return _request_failure_rows(
-            fixtures,
-            output_generated_at=output_generated_at,
-            batch_chunk_number=chunk_number,
-            failure_tag="request_error",
-            error_type=type(exc).__name__,
-            error=request_error_diagnostics(
-                exc,
-                context=f"Batch ground-truth chunk {chunk_number}",
-            ),
-        )
+    attempt_count = 0
+    token_expiry_retry_count = 0
+    transient_retry_count = 0
+    retry_reasons: list[str] = []
 
-    batch_http_status = response.status_code
-    try:
-        body = response.json()
-    except ValueError:
-        error_text = diagnose(response)
-        return _request_failure_rows(
-            fixtures,
-            output_generated_at=output_generated_at,
-            batch_chunk_number=chunk_number,
-            failure_tag="invalid_json_response",
-            error_type=None,
-            error=error_text,
-        )
+    while True:
+        attempt_count += 1
+        try:
+            response = client_handle.post(BATCH_ENDPOINT, json=payload, timeout=BATCH_TIMEOUT_SECS)
+        except httpx.ReadTimeout as exc:
+            if transient_retry_count < transient_chunk_retries:
+                transient_retry_count += 1
+                retry_reasons.append("read_timeout")
+                continue
+            return _request_failure_rows(
+                fixtures,
+                output_generated_at=output_generated_at,
+                batch_chunk_number=chunk_number,
+                failure_tag="request_timeout",
+                error_type=type(exc).__name__,
+                error=timeout_diagnostics(
+                    exc,
+                    context=f"Batch ground-truth chunk {chunk_number}",
+                    timeout_secs=BATCH_TIMEOUT_SECS,
+                ),
+                batch_attempt_count=attempt_count,
+                batch_retry_reason=_retry_reason_text(retry_reasons),
+                batch_final_attempt_error_type=type(exc).__name__,
+            )
+        except httpx.RemoteProtocolError as exc:
+            if transient_retry_count < transient_chunk_retries:
+                transient_retry_count += 1
+                retry_reasons.append("remote_protocol_error")
+                continue
+            return _request_failure_rows(
+                fixtures,
+                output_generated_at=output_generated_at,
+                batch_chunk_number=chunk_number,
+                failure_tag="request_error",
+                error_type=type(exc).__name__,
+                error=request_error_diagnostics(
+                    exc,
+                    context=f"Batch ground-truth chunk {chunk_number}",
+                ),
+                batch_attempt_count=attempt_count,
+                batch_retry_reason=_retry_reason_text(retry_reasons),
+                batch_final_attempt_error_type=type(exc).__name__,
+            )
+        except httpx.TimeoutException as exc:
+            return _request_failure_rows(
+                fixtures,
+                output_generated_at=output_generated_at,
+                batch_chunk_number=chunk_number,
+                failure_tag="request_timeout",
+                error_type=type(exc).__name__,
+                error=timeout_diagnostics(
+                    exc,
+                    context=f"Batch ground-truth chunk {chunk_number}",
+                    timeout_secs=BATCH_TIMEOUT_SECS,
+                ),
+                batch_attempt_count=attempt_count,
+                batch_retry_reason=_retry_reason_text(retry_reasons),
+                batch_final_attempt_error_type=type(exc).__name__,
+            )
+        except httpx.RequestError as exc:
+            return _request_failure_rows(
+                fixtures,
+                output_generated_at=output_generated_at,
+                batch_chunk_number=chunk_number,
+                failure_tag="request_error",
+                error_type=type(exc).__name__,
+                error=request_error_diagnostics(
+                    exc,
+                    context=f"Batch ground-truth chunk {chunk_number}",
+                ),
+                batch_attempt_count=attempt_count,
+                batch_retry_reason=_retry_reason_text(retry_reasons),
+                batch_final_attempt_error_type=type(exc).__name__,
+            )
 
-    if batch_http_status != 200:
-        error_text = body if isinstance(body, str) else _json_dumps(body) or diagnose(response)
-        return _request_failure_rows(
-            fixtures,
-            output_generated_at=output_generated_at,
-            batch_chunk_number=chunk_number,
-            failure_tag=f"http_{batch_http_status}",
-            error_type=None,
-            error=error_text,
-        )
-
-    results = body.get("results")
-    if not isinstance(results, list):
-        return _request_failure_rows(
-            fixtures,
-            output_generated_at=output_generated_at,
-            batch_chunk_number=chunk_number,
-            failure_tag="missing_results_array",
-            error_type=None,
-            error="batch response did not include a list `results` field",
-        )
-
-    for index, fixture in enumerate(fixtures):
-        if index >= len(results):
-            row_map[fixture.record_id] = ExportRow(
-                metadata=_metadata_for_fixture(
-                    fixture,
+        batch_http_status = response.status_code
+        try:
+            body = response.json()
+        except ValueError:
+            error_text = diagnose(response)
+            if _is_token_expiry_response(response):
+                if token_expiry_retry_count < token_expiry_retries:
+                    token_expiry_retry_count += 1
+                    retry_reasons.append("token_expired")
+                    client_handle.refresh_iap_token()
+                    continue
+                return _request_failure_rows(
+                    fixtures,
                     output_generated_at=output_generated_at,
                     batch_chunk_number=chunk_number,
-                    batch_result_index=index,
+                    failure_tag="persistent_token_expired",
+                    error_type="TokenExpired",
+                    error=error_text,
                     batch_http_status=batch_http_status,
-                    batch_result_correlation_id=None,
-                    batch_elapsed_ms=None,
-                    ok=False,
-                    failure_tag="missing_result",
-                    error_type=None,
-                    error="batch response returned fewer results than requested items",
-                    warning=fixture.batch_expected_warning,
-                    raw_result_json=None,
-                ),
-                template_values=build_failure_template_values(
-                    source_basename=fixture.source_basename,
-                    error="batch response returned fewer results than requested items",
-                ),
+                    batch_attempt_count=attempt_count,
+                    batch_retry_reason=_retry_reason_text(retry_reasons),
+                    batch_final_attempt_error_type="TokenExpired",
+                )
+            return _request_failure_rows(
+                fixtures,
+                output_generated_at=output_generated_at,
+                batch_chunk_number=chunk_number,
+                failure_tag="invalid_json_response",
+                error_type=None,
+                error=error_text,
+                batch_http_status=batch_http_status,
+                batch_attempt_count=attempt_count,
+                batch_retry_reason=_retry_reason_text(retry_reasons),
             )
-            continue
 
-        row_map[fixture.record_id] = _result_export_row(
-            fixture,
-            result=results[index],
-            batch_chunk_number=chunk_number,
-            batch_http_status=batch_http_status,
-            output_generated_at=output_generated_at,
-        )
+        if _is_token_expiry_response(response, body=body):
+            error_text = body if isinstance(body, str) else _json_dumps(body) or diagnose(response)
+            if token_expiry_retry_count < token_expiry_retries:
+                token_expiry_retry_count += 1
+                retry_reasons.append("token_expired")
+                client_handle.refresh_iap_token()
+                continue
+            return _request_failure_rows(
+                fixtures,
+                output_generated_at=output_generated_at,
+                batch_chunk_number=chunk_number,
+                failure_tag="persistent_token_expired",
+                error_type="TokenExpired",
+                error=str(error_text),
+                batch_http_status=batch_http_status,
+                batch_attempt_count=attempt_count,
+                batch_retry_reason=_retry_reason_text(retry_reasons),
+                batch_final_attempt_error_type="TokenExpired",
+            )
 
-    return row_map
+        if batch_http_status != 200:
+            error_text = body if isinstance(body, str) else _json_dumps(body) or diagnose(response)
+            return _request_failure_rows(
+                fixtures,
+                output_generated_at=output_generated_at,
+                batch_chunk_number=chunk_number,
+                failure_tag=f"http_{batch_http_status}",
+                error_type=None,
+                error=str(error_text),
+                batch_http_status=batch_http_status,
+                batch_attempt_count=attempt_count,
+                batch_retry_reason=_retry_reason_text(retry_reasons),
+            )
+
+        results = body.get("results")
+        if not isinstance(results, list):
+            return _request_failure_rows(
+                fixtures,
+                output_generated_at=output_generated_at,
+                batch_chunk_number=chunk_number,
+                failure_tag="missing_results_array",
+                error_type=None,
+                error="batch response did not include a list `results` field",
+                batch_http_status=batch_http_status,
+                batch_attempt_count=attempt_count,
+                batch_retry_reason=_retry_reason_text(retry_reasons),
+            )
+
+        for index, fixture in enumerate(fixtures):
+            if index >= len(results):
+                row_map[fixture.record_id] = ExportRow(
+                    metadata=_metadata_for_fixture(
+                        fixture,
+                        output_generated_at=output_generated_at,
+                        batch_chunk_number=chunk_number,
+                        batch_result_index=index,
+                        batch_http_status=batch_http_status,
+                        batch_result_correlation_id=None,
+                        batch_elapsed_ms=None,
+                        batch_attempt_count=attempt_count,
+                        batch_retry_reason=_retry_reason_text(retry_reasons),
+                        batch_final_attempt_error_type=None,
+                        ok=False,
+                        failure_tag="missing_result",
+                        error_type=None,
+                        error="batch response returned fewer results than requested items",
+                        warning=fixture.batch_expected_warning,
+                        raw_result_json=None,
+                    ),
+                    template_values=build_failure_template_values(
+                        source_basename=fixture.source_basename,
+                        error="batch response returned fewer results than requested items",
+                    ),
+                )
+                continue
+
+            row_map[fixture.record_id] = _result_export_row(
+                fixture,
+                result=results[index],
+                batch_chunk_number=chunk_number,
+                batch_http_status=batch_http_status,
+                output_generated_at=output_generated_at,
+                batch_attempt_count=attempt_count,
+                batch_retry_reason=_retry_reason_text(retry_reasons),
+            )
+
+        return row_map
 
 
 def _execute_file_type(
@@ -412,9 +669,15 @@ def _execute_file_type(
     fixtures: list[SourceFixtureRecord],
     output_generated_at: str,
     max_concurrent_chunks: int = 1,
+    token_expiry_retries: int = DEFAULT_TOKEN_EXPIRY_RETRIES,
+    transient_chunk_retries: int = DEFAULT_TRANSIENT_CHUNK_RETRIES,
 ) -> tuple[list[ExportRow], int]:
     if max_concurrent_chunks < 1:
         raise ValueError("max_concurrent_chunks must be a positive integer")
+    if token_expiry_retries < 0:
+        raise ValueError("token_expiry_retries must be a non-negative integer")
+    if transient_chunk_retries < 0:
+        raise ValueError("transient_chunk_retries must be a non-negative integer")
 
     row_map: dict[int, ExportRow] = {}
 
@@ -426,14 +689,16 @@ def _execute_file_type(
     chunk_specs = list(enumerate(_chunked(executable, BATCH_SAFE_ITEM_LIMIT), start=1))
     if max_concurrent_chunks == 1 or len(chunk_specs) <= 1:
         if chunk_specs:
-            with make_client(timeout=BATCH_TIMEOUT_SECS) as client:
+            with _BatchClientHandle() as client_handle:
                 for chunk_number, chunk in chunk_specs:
                     row_map.update(
                         _execute_chunk(
                             chunk_number=chunk_number,
                             fixtures=chunk,
                             output_generated_at=output_generated_at,
-                            client=client,
+                            client_handle=client_handle,
+                            token_expiry_retries=token_expiry_retries,
+                            transient_chunk_retries=transient_chunk_retries,
                         )
                     )
     else:
@@ -445,6 +710,8 @@ def _execute_file_type(
                     chunk_number=chunk_number,
                     fixtures=chunk,
                     output_generated_at=output_generated_at,
+                    token_expiry_retries=token_expiry_retries,
+                    transient_chunk_retries=transient_chunk_retries,
                 )
                 for chunk_number, chunk in chunk_specs
             ]
@@ -461,12 +728,16 @@ def _execute_file_type_plan(
     fixtures: list[SourceFixtureRecord],
     output_generated_at: str,
     max_concurrent_chunks: int,
+    token_expiry_retries: int,
+    transient_chunk_retries: int,
 ) -> _FileTypeExecution:
     try:
         export_rows, chunk_count = _execute_file_type(
             fixtures=fixtures,
             output_generated_at=output_generated_at,
             max_concurrent_chunks=max_concurrent_chunks,
+            token_expiry_retries=token_expiry_retries,
+            transient_chunk_retries=transient_chunk_retries,
         )
     except Exception as exc:
         raise RuntimeError(
@@ -489,6 +760,8 @@ def _execute_file_type_plans(
     output_generated_at: str,
     max_concurrent_chunks: int,
     max_concurrent_file_types: int,
+    token_expiry_retries: int,
+    transient_chunk_retries: int,
 ) -> list[_FileTypeExecution]:
     if max_concurrent_file_types < 1:
         raise ValueError("max_concurrent_file_types must be a positive integer")
@@ -500,6 +773,8 @@ def _execute_file_type_plans(
                 fixtures=grouped[plan.file_type],
                 output_generated_at=output_generated_at,
                 max_concurrent_chunks=max_concurrent_chunks,
+                token_expiry_retries=token_expiry_retries,
+                transient_chunk_retries=transient_chunk_retries,
             )
             for plan in plans
         ]
@@ -514,6 +789,8 @@ def _execute_file_type_plans(
                 fixtures=grouped[plan.file_type],
                 output_generated_at=output_generated_at,
                 max_concurrent_chunks=max_concurrent_chunks,
+                token_expiry_retries=token_expiry_retries,
+                transient_chunk_retries=transient_chunk_retries,
             ): index
             for index, plan in enumerate(plans)
         }
@@ -556,11 +833,17 @@ def run_batch_ground_truth_export(
     template_layout: TemplateLayout,
     max_concurrent_chunks: int = 1,
     max_concurrent_file_types: int = 1,
+    token_expiry_retries: int = DEFAULT_TOKEN_EXPIRY_RETRIES,
+    transient_chunk_retries: int = DEFAULT_TRANSIENT_CHUNK_RETRIES,
 ) -> BatchGroundTruthRunResult:
     if max_concurrent_chunks < 1:
         raise ValueError("max_concurrent_chunks must be a positive integer")
     if max_concurrent_file_types < 1:
         raise ValueError("max_concurrent_file_types must be a positive integer")
+    if token_expiry_retries < 0:
+        raise ValueError("token_expiry_retries must be a non-negative integer")
+    if transient_chunk_retries < 0:
+        raise ValueError("transient_chunk_retries must be a non-negative integer")
 
     parsed, grouped, plans = plan_file_types(
         fixture_registry=fixture_registry,
@@ -576,6 +859,8 @@ def run_batch_ground_truth_export(
         output_generated_at=output_generated_at,
         max_concurrent_chunks=max_concurrent_chunks,
         max_concurrent_file_types=max_concurrent_file_types,
+        token_expiry_retries=token_expiry_retries,
+        transient_chunk_retries=transient_chunk_retries,
     )
 
     results: list[FileTypeExportResult] = []
@@ -617,6 +902,7 @@ def run_batch_ground_truth_export(
             "failed_rows": failed_rows,
             "skipped_rows": skipped_rows,
             "chunk_count": execution.chunk_count,
+            "retry_summary": _retry_summary(export_rows),
         }
 
     manifest_path = output_root / "manifest.json"
@@ -633,6 +919,8 @@ def run_batch_ground_truth_export(
         "effective_max_concurrent_batch_requests": (
             max_concurrent_file_types * max_concurrent_chunks
         ),
+        "token_expiry_retries": token_expiry_retries,
+        "transient_chunk_retries": transient_chunk_retries,
         "selected_file_types": [plan.file_type for plan in plans],
         "skipped_rows": [
             {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from copy import copy
 import json
 from pathlib import Path
@@ -278,9 +279,12 @@ def _configure_batch_artifact_dir(monkeypatch, tmp_path: Path) -> Path:
     return artifact_root / "batch-test-run"
 
 
-def _install_fake_make_client(monkeypatch, plans: dict[tuple[str, ...], dict[str, object]]) -> dict[str, object]:
+def _install_fake_make_client(monkeypatch, plans: dict[tuple[str, ...], object]) -> dict[str, object]:
     state: dict[str, object] = {
         "client_count": 0,
+        "force_refresh_count": 0,
+        "closed_count": 0,
+        "attempts": {},
         "active": 0,
         "max_active": 0,
         "completion_order": [],
@@ -294,14 +298,29 @@ def _install_fake_make_client(monkeypatch, plans: dict[tuple[str, ...], dict[str
         def __exit__(self, exc_type, exc, tb) -> bool:
             return False
 
+        def close(self) -> None:
+            state["closed_count"] = int(state["closed_count"]) + 1
+
         def post(self, url: str, *, json: dict[str, object] | None = None, timeout: float | None = None) -> httpx.Response:
             assert url == batch_ground_truth_workflow.BATCH_ENDPOINT
             assert timeout == batch_ground_truth_workflow.BATCH_TIMEOUT_SECS
             assert json is not None
 
             key = tuple(str(item["file"]) for item in json["items"])
-            plan = plans[key]
             request = httpx.Request("POST", f"https://example.test{url}", json=json)
+
+            with lock:
+                attempts = state["attempts"]
+                assert isinstance(attempts, dict)
+                attempt_index = int(attempts.get(key, 0))
+                attempts[key] = attempt_index + 1
+
+            raw_plan = plans[key]
+            if isinstance(raw_plan, list):
+                plan = raw_plan[min(attempt_index, len(raw_plan) - 1)]
+            else:
+                plan = raw_plan
+            assert isinstance(plan, dict)
 
             with lock:
                 state["active"] = int(state["active"]) + 1
@@ -325,6 +344,8 @@ def _install_fake_make_client(monkeypatch, plans: dict[tuple[str, ...], dict[str
                 kind = str(plan["kind"])
                 if kind == "timeout":
                     raise httpx.ReadTimeout("timed out", request=request)
+                if kind == "remote_protocol":
+                    raise httpx.RemoteProtocolError("server disconnected", request=request)
                 if kind == "request_error":
                     raise httpx.ConnectError("connection failed", request=request)
                 if kind == "invalid_json":
@@ -342,9 +363,14 @@ def _install_fake_make_client(monkeypatch, plans: dict[tuple[str, ...], dict[str
                 with lock:
                     state["active"] = int(state["active"]) - 1
 
-    def fake_make_client(timeout: float = 60.0) -> FakeBatchClient:
+    def fake_make_client(
+        timeout: float = 60.0,
+        force_refresh_iap_token: bool = False,
+    ) -> FakeBatchClient:
         assert timeout == batch_ground_truth_workflow.BATCH_TIMEOUT_SECS
         state["client_count"] = int(state["client_count"]) + 1
+        if force_refresh_iap_token:
+            state["force_refresh_count"] = int(state["force_refresh_count"]) + 1
         return FakeBatchClient()
 
     monkeypatch.setattr(batch_ground_truth_workflow, "make_client", fake_make_client)
@@ -542,6 +568,9 @@ def test_write_workbook_keeps_main_sheet_analyst_facing_and_writes_meta_sheet(tm
             "batch_http_status": 200,
             "batch_result_correlation_id": "corr-1",
             "batch_elapsed_ms": 12.5,
+            "batch_attempt_count": 1,
+            "batch_retry_reason": None,
+            "batch_final_attempt_error_type": None,
             "ok": True,
             "failure_tag": None,
             "error_type": None,
@@ -576,6 +605,9 @@ def test_write_workbook_keeps_main_sheet_analyst_facing_and_writes_meta_sheet(tm
             "batch_http_status": None,
             "batch_result_correlation_id": None,
             "batch_elapsed_ms": None,
+            "batch_attempt_count": None,
+            "batch_retry_reason": None,
+            "batch_final_attempt_error_type": None,
             "ok": False,
             "failure_tag": "unsupported_fixture",
             "error_type": None,
@@ -652,6 +684,9 @@ def test_write_workbook_serializes_list_valued_extra_fields(tmp_path):
             "batch_http_status": 200,
             "batch_result_correlation_id": "corr-1",
             "batch_elapsed_ms": 12.5,
+            "batch_attempt_count": 1,
+            "batch_retry_reason": None,
+            "batch_final_attempt_error_type": None,
             "ok": True,
             "failure_tag": None,
             "error_type": None,
@@ -892,6 +927,371 @@ def test_execute_file_type_keeps_classification_identical_in_sequential_and_conc
         "request_error",
         "unsupported_fixture",
     ]
+
+
+def test_token_expiry_refreshes_client_and_retries_chunk_once(monkeypatch):
+    fixtures = [_make_fixture(1)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: [
+            {
+                "kind": "json",
+                "status": 401,
+                "body": {"detail": "OpenID Connect token expired: JWT has expired"},
+                "name": "expired-token",
+            },
+            {
+                "kind": "json",
+                "body": {"results": [_success_result(1, 0)]},
+                "name": "success",
+            },
+        ]
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    attempts = state["attempts"]
+    assert isinstance(attempts, dict)
+    assert chunk_count == 1
+    assert attempts[key] == 2
+    assert state["client_count"] == 2
+    assert state["force_refresh_count"] == 0
+    assert rows[0].metadata["ok"] is True
+    assert rows[0].metadata["failure_tag"] is None
+    assert rows[0].metadata["batch_attempt_count"] == 2
+    assert rows[0].metadata["batch_retry_reason"] == "token_expired"
+    assert rows[0].metadata["batch_final_attempt_error_type"] is None
+
+
+def test_run_export_manifest_records_retry_policy_and_summary(monkeypatch, tmp_path):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    registry_path = _write_fixture_registry(
+        tmp_path / "fixture_registry.yaml",
+        file_type_counts={"ACR": 1},
+    )
+    _configure_batch_artifact_dir(monkeypatch, tmp_path)
+    layout = load_reference_template(reference_path)
+    key = _registry_chunk_key("ACR", range(1, 2))
+    plans = {
+        key: [
+            {
+                "kind": "json",
+                "status": 401,
+                "body": {"detail": "OpenID Connect token expired: JWT has expired"},
+                "name": "expired-token",
+            },
+            {
+                "kind": "json",
+                "body": _success_body_for_key(key),
+                "name": "success",
+            },
+        ]
+    }
+    _install_fake_make_client(monkeypatch, plans)
+
+    result = batch_ground_truth_workflow.run_batch_ground_truth_export(
+        fixture_registry=registry_path,
+        reference_workbook=reference_path,
+        output_dir=tmp_path / "output",
+        selected_file_types=None,
+        template_layout=layout,
+        max_concurrent_chunks=1,
+        max_concurrent_file_types=1,
+        token_expiry_retries=1,
+        transient_chunk_retries=1,
+    )
+
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    assert manifest["token_expiry_retries"] == 1
+    assert manifest["transient_chunk_retries"] == 1
+    assert manifest["file_types"]["ACR"]["retry_summary"] == {
+        "rows_with_retries": 1,
+        "max_batch_attempt_count": 2,
+        "batch_retry_reasons": {"token_expired": 1},
+        "batch_final_attempt_error_types": {},
+    }
+
+
+def test_persistent_token_expiry_after_refresh_is_recorded_clearly(monkeypatch):
+    fixtures = [_make_fixture(record_id) for record_id in range(1, 3)]
+    key = _chunk_key(fixtures)
+    token_body = {"detail": "OpenID Connect token expired: JWT has expired"}
+    plans = {
+        key: [
+            {"kind": "json", "status": 401, "body": token_body, "name": "expired-1"},
+            {"kind": "json", "status": 401, "body": token_body, "name": "expired-2"},
+        ]
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    attempts = state["attempts"]
+    assert isinstance(attempts, dict)
+    assert attempts[key] == 2
+    assert state["force_refresh_count"] == 0
+    assert [row.metadata["ok"] for row in rows] == [False, False]
+    assert {row.metadata["failure_tag"] for row in rows} == {"persistent_token_expired"}
+    assert {row.metadata["error_type"] for row in rows} == {"TokenExpired"}
+    assert {row.metadata["batch_http_status"] for row in rows} == {401}
+    assert {row.metadata["batch_attempt_count"] for row in rows} == {2}
+    assert {row.metadata["batch_retry_reason"] for row in rows} == {"token_expired"}
+    assert {row.metadata["batch_final_attempt_error_type"] for row in rows} == {"TokenExpired"}
+    assert all("JWT has expired" in str(row.metadata["error"]) for row in rows)
+
+
+def test_read_timeout_retries_once_and_succeeds_without_refreshing_client(monkeypatch):
+    fixtures = [_make_fixture(1)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: [
+            {"kind": "timeout", "name": "timeout"},
+            {"kind": "json", "body": {"results": [_success_result(1, 0)]}, "name": "success"},
+        ]
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    attempts = state["attempts"]
+    assert isinstance(attempts, dict)
+    assert attempts[key] == 2
+    assert state["client_count"] == 1
+    assert state["force_refresh_count"] == 0
+    assert rows[0].metadata["ok"] is True
+    assert rows[0].metadata["batch_attempt_count"] == 2
+    assert rows[0].metadata["batch_retry_reason"] == "read_timeout"
+
+
+def test_remote_protocol_error_retries_once_and_succeeds_without_refreshing_client(monkeypatch):
+    fixtures = [_make_fixture(1)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: [
+            {"kind": "remote_protocol", "name": "disconnect"},
+            {"kind": "json", "body": {"results": [_success_result(1, 0)]}, "name": "success"},
+        ]
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    attempts = state["attempts"]
+    assert isinstance(attempts, dict)
+    assert attempts[key] == 2
+    assert state["client_count"] == 1
+    assert state["force_refresh_count"] == 0
+    assert rows[0].metadata["ok"] is True
+    assert rows[0].metadata["batch_attempt_count"] == 2
+    assert rows[0].metadata["batch_retry_reason"] == "remote_protocol_error"
+
+
+@pytest.mark.parametrize(
+    ("kind", "failure_tag", "error_type", "retry_reason"),
+    [
+        ("timeout", "request_timeout", "ReadTimeout", "read_timeout"),
+        ("remote_protocol", "request_error", "RemoteProtocolError", "remote_protocol_error"),
+    ],
+)
+def test_persistent_transient_chunk_failures_are_recorded_after_retry(
+    monkeypatch,
+    kind,
+    failure_tag,
+    error_type,
+    retry_reason,
+):
+    fixtures = [_make_fixture(record_id) for record_id in range(1, 3)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: [
+            {"kind": kind, "name": "first-failure"},
+            {"kind": kind, "name": "second-failure"},
+        ]
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    attempts = state["attempts"]
+    assert isinstance(attempts, dict)
+    assert attempts[key] == 2
+    assert {row.metadata["ok"] for row in rows} == {False}
+    assert {row.metadata["failure_tag"] for row in rows} == {failure_tag}
+    assert {row.metadata["error_type"] for row in rows} == {error_type}
+    assert {row.metadata["batch_attempt_count"] for row in rows} == {2}
+    assert {row.metadata["batch_retry_reason"] for row in rows} == {retry_reason}
+    assert {row.metadata["batch_final_attempt_error_type"] for row in rows} == {error_type}
+
+
+def test_expected_row_level_api_errors_are_not_retried(monkeypatch):
+    fixtures = [
+        _make_fixture(
+            1,
+            batch_expected_error_type="DocumentSizeGuardError",
+            batch_expected_warning="document exceeded size guard",
+        )
+    ]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: {
+            "kind": "json",
+            "body": {
+                "results": [
+                    _error_result(
+                        0,
+                        error_type="DocumentSizeGuardError",
+                        error="document exceeded size guard",
+                    )
+                ]
+            },
+        }
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    attempts = state["attempts"]
+    assert isinstance(attempts, dict)
+    assert attempts[key] == 1
+    assert rows[0].metadata["failure_tag"] == "expected_warning_result"
+    assert rows[0].metadata["error_type"] == "DocumentSizeGuardError"
+    assert rows[0].metadata["batch_attempt_count"] == 1
+    assert rows[0].metadata["batch_retry_reason"] is None
+
+
+def test_unusable_result_from_200_response_is_not_retried(monkeypatch):
+    fixtures = [_make_fixture(1)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: {
+            "kind": "json",
+            "body": {"results": [_unusable_success_result(0)]},
+        }
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    attempts = state["attempts"]
+    assert isinstance(attempts, dict)
+    assert attempts[key] == 1
+    assert rows[0].metadata["failure_tag"] == "unusable_result"
+    assert rows[0].metadata["error_type"] == "ValueError"
+    assert rows[0].metadata["batch_attempt_count"] == 1
+    assert rows[0].metadata["batch_retry_reason"] is None
+
+
+def test_concurrent_retry_keeps_final_rows_in_source_order(monkeypatch):
+    fixtures = [_make_fixture(record_id) for record_id in range(1, 9)]
+    chunk_one = fixtures[:4]
+    chunk_two = fixtures[4:]
+    plans = {
+        _chunk_key(chunk_one): [
+            {"kind": "timeout", "name": "chunk-1-timeout"},
+            {
+                "kind": "json",
+                "body": {
+                    "results": [
+                        _success_result(record_id, index)
+                        for index, record_id in enumerate(range(1, 5))
+                    ]
+                },
+                "delay": 0.03,
+                "name": "chunk-1-success",
+            },
+        ],
+        _chunk_key(chunk_two): {
+            "kind": "json",
+            "body": {
+                "results": [
+                    _success_result(record_id, index)
+                    for index, record_id in enumerate(range(5, 9))
+                ]
+            },
+            "name": "chunk-2",
+        },
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=2,
+    )
+
+    assert chunk_count == 2
+    assert state["max_active"] == 2
+    assert [row.metadata["source_row"] for row in rows] == [fixture.source_row for fixture in fixtures]
+    assert [row.metadata["batch_chunk_number"] for row in rows] == [1, 1, 1, 1, 2, 2, 2, 2]
+    assert [row.metadata["batch_attempt_count"] for row in rows] == [2, 2, 2, 2, 1, 1, 1, 1]
+
+
+def test_iap_token_cache_uses_lock_for_concurrent_mint_and_forced_refresh(monkeypatch):
+    from tests import client as client_module
+
+    client_module.clear_iap_token_cache()
+    mint_count = 0
+    mint_lock = threading.Lock()
+
+    def fake_fetch_iap_id_token() -> str:
+        nonlocal mint_count
+        time.sleep(0.02)
+        with mint_lock:
+            mint_count += 1
+            return f"token-{mint_count}"
+
+    monkeypatch.setattr(client_module, "_fetch_iap_id_token", fake_fetch_iap_id_token)
+    worker_count = 8
+    barrier = threading.Barrier(worker_count)
+
+    def get_token_after_barrier() -> str:
+        barrier.wait(timeout=5.0)
+        return client_module.get_iap_bearer()
+
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        tokens = list(executor.map(lambda _index: get_token_after_barrier(), range(worker_count)))
+
+    assert tokens == ["token-1"] * worker_count
+    assert mint_count == 1
+    assert client_module.clear_iap_token_cache(expired_token="not-token-1") is False
+    assert client_module.get_iap_bearer() == "token-1"
+    assert mint_count == 1
+    assert client_module.clear_iap_token_cache(expired_token="token-1") is True
+    assert client_module.get_iap_bearer() == "token-2"
+    assert mint_count == 2
+    assert client_module.get_iap_bearer(force_refresh=True) == "token-3"
+    assert client_module.get_iap_bearer() == "token-3"
+    assert mint_count == 3
+    client_module.clear_iap_token_cache()
 
 
 def test_run_export_preserves_file_type_sequential_default(monkeypatch, tmp_path):
@@ -1148,6 +1548,27 @@ def test_build_parser_rejects_invalid_max_concurrent_file_types(value):
     assert exc.value.code == 2
 
 
+@pytest.mark.parametrize(
+    "flag",
+    ["--token-expiry-retries", "--transient-chunk-retries"],
+)
+@pytest.mark.parametrize("value", ["-1", "not-an-int"])
+def test_build_parser_rejects_invalid_retry_counts(flag, value):
+    parser = export_batch_ground_truth.build_parser()
+
+    with pytest.raises(SystemExit) as exc:
+        parser.parse_args(
+            [
+                "--reference-workbook",
+                "reference.xlsx",
+                flag,
+                value,
+            ]
+        )
+
+    assert exc.value.code == 2
+
+
 def test_main_passes_concurrency_values_to_workflow(monkeypatch, tmp_path):
     reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
     source_path = _write_source_workbook(tmp_path / "source.xlsx")
@@ -1205,10 +1626,16 @@ def test_main_passes_concurrency_values_to_workflow(monkeypatch, tmp_path):
             "4",
             "--max-concurrent-file-types",
             "3",
+            "--token-expiry-retries",
+            "2",
+            "--transient-chunk-retries",
+            "0",
         ]
     )
 
     assert exit_code == 0
     assert captured["max_concurrent_chunks"] == 4
     assert captured["max_concurrent_file_types"] == 3
+    assert captured["token_expiry_retries"] == 2
+    assert captured["transient_chunk_retries"] == 0
     assert captured["fixture_registry"] == str(registry_path)

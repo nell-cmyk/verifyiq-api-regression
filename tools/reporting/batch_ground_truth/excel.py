@@ -44,9 +44,22 @@ def _column_width(header: str, layout: TemplateLayout) -> float:
         return 60.0
     if header in {"source_file_type", "normalized_file_type", "request_file_type", "source_folder", "source_assignee"}:
         return 24.0
-    if header in {"fixture_status_from_source", "failure_tag", "error_type", "output_generated_at"}:
+    if header in {
+        "fixture_status_from_source",
+        "failure_tag",
+        "error_type",
+        "output_generated_at",
+        "batch_retry_reason",
+        "batch_final_attempt_error_type",
+    }:
         return 22.0
-    if header in {"source_row", "batch_chunk_number", "batch_result_index", "batch_http_status"}:
+    if header in {
+        "source_row",
+        "batch_chunk_number",
+        "batch_result_index",
+        "batch_http_status",
+        "batch_attempt_count",
+    }:
         return 14.0
     if header in {"ok"}:
         return 10.0

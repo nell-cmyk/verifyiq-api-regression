@@ -14,6 +14,8 @@ from tests.fixtures.registry import REGISTRY_PATH as SHARED_REGISTRY_PATH
 from tools.reporting.batch_ground_truth.schema import load_reference_template
 from tools.reporting.batch_ground_truth.workflow import (
     DEFAULT_OUTPUT_ROOT,
+    DEFAULT_TOKEN_EXPIRY_RETRIES,
+    DEFAULT_TRANSIENT_CHUNK_RETRIES,
     plan_file_types,
     run_batch_ground_truth_export,
 )
@@ -36,6 +38,16 @@ def _positive_int(value: str) -> int:
         raise argparse.ArgumentTypeError("must be a positive integer") from exc
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
+def _non_negative_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a non-negative integer") from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be a non-negative integer")
     return parsed
 
 
@@ -99,6 +111,25 @@ def build_parser() -> argparse.ArgumentParser:
             "to preserve fileType-sequential execution."
         ),
     )
+    parser.add_argument(
+        "--token-expiry-retries",
+        type=_non_negative_int,
+        default=DEFAULT_TOKEN_EXPIRY_RETRIES,
+        help=(
+            "Number of same-chunk retries after a confirmed IAP/OIDC/JWT token expiry. "
+            f"Defaults to {DEFAULT_TOKEN_EXPIRY_RETRIES}."
+        ),
+    )
+    parser.add_argument(
+        "--transient-chunk-retries",
+        type=_non_negative_int,
+        default=DEFAULT_TRANSIENT_CHUNK_RETRIES,
+        help=(
+            "Number of same-chunk retries for transient ReadTimeout or "
+            "RemoteProtocolError failures. "
+            f"Defaults to {DEFAULT_TRANSIENT_CHUNK_RETRIES}."
+        ),
+    )
     return parser
 
 
@@ -136,6 +167,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Selected fileTypes: {len(plans)}")
     print(f"Max concurrent fileTypes: {args.max_concurrent_file_types}")
     print(f"Max concurrent chunks per fileType: {args.max_concurrent_chunks}")
+    print(f"Token-expiry retries per chunk: {args.token_expiry_retries}")
+    print(f"Transient transport retries per chunk: {args.transient_chunk_retries}")
     print(
         "Approx max in-flight batch requests: "
         f"{args.max_concurrent_file_types * args.max_concurrent_chunks}"
@@ -159,6 +192,8 @@ def main(argv: list[str] | None = None) -> int:
             template_layout=layout,
             max_concurrent_chunks=args.max_concurrent_chunks,
             max_concurrent_file_types=args.max_concurrent_file_types,
+            token_expiry_retries=args.token_expiry_retries,
+            transient_chunk_retries=args.transient_chunk_retries,
         )
     except RuntimeError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

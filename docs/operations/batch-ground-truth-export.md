@@ -85,6 +85,15 @@ Optional registry and output overrides:
   --file-type Payslip
 ```
 
+Optional retry overrides:
+
+```bash
+./.venv/bin/python tools/reporting/export_batch_ground_truth.py \
+  --reference-workbook /absolute/path/to/reference.xlsx \
+  --token-expiry-retries 1 \
+  --transient-chunk-retries 1
+```
+
 ## Fixture Registry Source
 - The normal exporter path reads `tests/fixtures/fixture_registry.yaml`.
 - `tools/generate_fixture_registry.py` writes that shared registry plus `tests/endpoints/parse/fixture_registry.yaml` as a generated `/parse` compatibility copy.
@@ -98,6 +107,19 @@ Optional registry and output overrides:
 - The approximate configured maximum in-flight `/documents/batch` requests is `max_concurrent_file_types * max_concurrent_chunks`; the manifest records this as `effective_max_concurrent_batch_requests`.
 - Workbook and manifest writing stay single-threaded after fileType execution returns, and all raw batch response artifacts still land in one shared batch artifact run folder.
 - The safe request size limit is unchanged: each batch request still contains at most `4` items.
+
+## Chunk Retries
+- The exporter keeps the default fileType and chunk execution model unchanged unless a recoverable chunk-level failure occurs.
+- Confirmed IAP/OIDC/JWT token expiry, including `OpenID Connect token expired` and `JWT has expired`, clears the cached IAP token, recreates the HTTP client with a refreshed token, and retries the same chunk once by default.
+- `httpx.ReadTimeout` and `httpx.RemoteProtocolError` retry the same chunk once by default. Other request errors are recorded without retry.
+- Retry counts are configurable with `--token-expiry-retries` and `--transient-chunk-retries`; both default to `1`, and `0` disables that retry class.
+- Application-level row failures from a completed `200` batch response are not retried. Expected fixture/API failures such as `DocumentSizeGuardError` or `MultiAccountDocumentError` and row-level `unusable_result` findings remain row failures for review.
+- When token expiry retries are exhausted, rows are recorded with `failure_tag=persistent_token_expired` rather than a generic HTTP/request failure.
+
+## Retry Observability
+- The analyst-facing main sheet remains focused on `filename`, `parse_success`, `error`, and mapped fields.
+- The `_meta` sheet includes `batch_attempt_count`, `batch_retry_reason`, and `batch_final_attempt_error_type` for retry tracing.
+- `manifest.json` records the configured retry counts and a per-fileType `retry_summary` with rows retried, max attempt count, retry reasons, and final retry error types.
 
 ## Inclusion And Skipping Rules
 - `⚠ Verify` and other non-final status rows are included. Status is preserved in the generated registry and output workbook, and is not used as a batch gate.
