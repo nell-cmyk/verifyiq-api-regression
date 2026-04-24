@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
 from collections.abc import Iterable
@@ -279,12 +280,133 @@ def _result_export_row(
     )
 
 
-def _execute_file_type(
+def _execute_chunk(
     *,
-    client: httpx.Client,
+    chunk_number: int,
     fixtures: list[SourceFixtureRecord],
     output_generated_at: str,
+    client: httpx.Client | None = None,
+) -> dict[int, ExportRow]:
+    if client is None:
+        with make_client(timeout=BATCH_TIMEOUT_SECS) as owned_client:
+            return _execute_chunk(
+                chunk_number=chunk_number,
+                fixtures=fixtures,
+                output_generated_at=output_generated_at,
+                client=owned_client,
+            )
+
+    row_map: dict[int, ExportRow] = {}
+    payload = build_batch_request([fixture.as_batch_fixture() for fixture in fixtures])
+    try:
+        response = client.post(BATCH_ENDPOINT, json=payload, timeout=BATCH_TIMEOUT_SECS)
+    except httpx.TimeoutException as exc:
+        return _request_failure_rows(
+            fixtures,
+            output_generated_at=output_generated_at,
+            batch_chunk_number=chunk_number,
+            failure_tag="request_timeout",
+            error_type=type(exc).__name__,
+            error=timeout_diagnostics(
+                exc,
+                context=f"Batch ground-truth chunk {chunk_number}",
+                timeout_secs=BATCH_TIMEOUT_SECS,
+            ),
+        )
+    except httpx.RequestError as exc:
+        return _request_failure_rows(
+            fixtures,
+            output_generated_at=output_generated_at,
+            batch_chunk_number=chunk_number,
+            failure_tag="request_error",
+            error_type=type(exc).__name__,
+            error=request_error_diagnostics(
+                exc,
+                context=f"Batch ground-truth chunk {chunk_number}",
+            ),
+        )
+
+    batch_http_status = response.status_code
+    try:
+        body = response.json()
+    except ValueError:
+        error_text = diagnose(response)
+        return _request_failure_rows(
+            fixtures,
+            output_generated_at=output_generated_at,
+            batch_chunk_number=chunk_number,
+            failure_tag="invalid_json_response",
+            error_type=None,
+            error=error_text,
+        )
+
+    if batch_http_status != 200:
+        error_text = body if isinstance(body, str) else _json_dumps(body) or diagnose(response)
+        return _request_failure_rows(
+            fixtures,
+            output_generated_at=output_generated_at,
+            batch_chunk_number=chunk_number,
+            failure_tag=f"http_{batch_http_status}",
+            error_type=None,
+            error=error_text,
+        )
+
+    results = body.get("results")
+    if not isinstance(results, list):
+        return _request_failure_rows(
+            fixtures,
+            output_generated_at=output_generated_at,
+            batch_chunk_number=chunk_number,
+            failure_tag="missing_results_array",
+            error_type=None,
+            error="batch response did not include a list `results` field",
+        )
+
+    for index, fixture in enumerate(fixtures):
+        if index >= len(results):
+            row_map[fixture.record_id] = ExportRow(
+                metadata=_metadata_for_fixture(
+                    fixture,
+                    output_generated_at=output_generated_at,
+                    batch_chunk_number=chunk_number,
+                    batch_result_index=index,
+                    batch_http_status=batch_http_status,
+                    batch_result_correlation_id=None,
+                    batch_elapsed_ms=None,
+                    ok=False,
+                    failure_tag="missing_result",
+                    error_type=None,
+                    error="batch response returned fewer results than requested items",
+                    warning=fixture.batch_expected_warning,
+                    raw_result_json=None,
+                ),
+                template_values=build_failure_template_values(
+                    source_basename=fixture.source_basename,
+                    error="batch response returned fewer results than requested items",
+                ),
+            )
+            continue
+
+        row_map[fixture.record_id] = _result_export_row(
+            fixture,
+            result=results[index],
+            batch_chunk_number=chunk_number,
+            batch_http_status=batch_http_status,
+            output_generated_at=output_generated_at,
+        )
+
+    return row_map
+
+
+def _execute_file_type(
+    *,
+    fixtures: list[SourceFixtureRecord],
+    output_generated_at: str,
+    max_concurrent_chunks: int = 1,
 ) -> tuple[list[ExportRow], int]:
+    if max_concurrent_chunks < 1:
+        raise ValueError("max_concurrent_chunks must be a positive integer")
+
     row_map: dict[int, ExportRow] = {}
 
     executable = [fixture for fixture in fixtures if fixture.include_in_batch]
@@ -292,123 +414,36 @@ def _execute_file_type(
     for fixture in skipped:
         row_map[fixture.record_id] = _skipped_export_row(fixture, output_generated_at=output_generated_at)
 
-    chunks = _chunked(executable, BATCH_SAFE_ITEM_LIMIT)
-    for chunk_number, chunk in enumerate(chunks, start=1):
-        payload = build_batch_request([fixture.as_batch_fixture() for fixture in chunk])
-        try:
-            response = client.post(BATCH_ENDPOINT, json=payload, timeout=BATCH_TIMEOUT_SECS)
-        except httpx.TimeoutException as exc:
-            row_map.update(
-                _request_failure_rows(
-                    chunk,
+    chunk_specs = list(enumerate(_chunked(executable, BATCH_SAFE_ITEM_LIMIT), start=1))
+    if max_concurrent_chunks == 1 or len(chunk_specs) <= 1:
+        if chunk_specs:
+            with make_client(timeout=BATCH_TIMEOUT_SECS) as client:
+                for chunk_number, chunk in chunk_specs:
+                    row_map.update(
+                        _execute_chunk(
+                            chunk_number=chunk_number,
+                            fixtures=chunk,
+                            output_generated_at=output_generated_at,
+                            client=client,
+                        )
+                    )
+    else:
+        max_workers = min(max_concurrent_chunks, len(chunk_specs))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(
+                    _execute_chunk,
+                    chunk_number=chunk_number,
+                    fixtures=chunk,
                     output_generated_at=output_generated_at,
-                    batch_chunk_number=chunk_number,
-                    failure_tag="request_timeout",
-                    error_type=type(exc).__name__,
-                    error=timeout_diagnostics(
-                        exc,
-                        context=f"Batch ground-truth chunk {chunk_number}",
-                        timeout_secs=BATCH_TIMEOUT_SECS,
-                    ),
                 )
-            )
-            continue
-        except httpx.RequestError as exc:
-            row_map.update(
-                _request_failure_rows(
-                    chunk,
-                    output_generated_at=output_generated_at,
-                    batch_chunk_number=chunk_number,
-                    failure_tag="request_error",
-                    error_type=type(exc).__name__,
-                    error=request_error_diagnostics(
-                        exc,
-                        context=f"Batch ground-truth chunk {chunk_number}",
-                    ),
-                )
-            )
-            continue
-
-        batch_http_status = response.status_code
-        try:
-            body = response.json()
-        except ValueError:
-            error_text = diagnose(response)
-            row_map.update(
-                _request_failure_rows(
-                    chunk,
-                    output_generated_at=output_generated_at,
-                    batch_chunk_number=chunk_number,
-                    failure_tag="invalid_json_response",
-                    error_type=None,
-                    error=error_text,
-                )
-            )
-            continue
-
-        if batch_http_status != 200:
-            error_text = body if isinstance(body, str) else _json_dumps(body) or diagnose(response)
-            row_map.update(
-                _request_failure_rows(
-                    chunk,
-                    output_generated_at=output_generated_at,
-                    batch_chunk_number=chunk_number,
-                    failure_tag=f"http_{batch_http_status}",
-                    error_type=None,
-                    error=error_text,
-                )
-            )
-            continue
-
-        results = body.get("results")
-        if not isinstance(results, list):
-            row_map.update(
-                _request_failure_rows(
-                    chunk,
-                    output_generated_at=output_generated_at,
-                    batch_chunk_number=chunk_number,
-                    failure_tag="missing_results_array",
-                    error_type=None,
-                    error="batch response did not include a list `results` field",
-                )
-            )
-            continue
-
-        for index, fixture in enumerate(chunk):
-            if index >= len(results):
-                row_map[fixture.record_id] = ExportRow(
-                    metadata=_metadata_for_fixture(
-                        fixture,
-                        output_generated_at=output_generated_at,
-                        batch_chunk_number=chunk_number,
-                        batch_result_index=index,
-                        batch_http_status=batch_http_status,
-                        batch_result_correlation_id=None,
-                        batch_elapsed_ms=None,
-                        ok=False,
-                        failure_tag="missing_result",
-                        error_type=None,
-                        error="batch response returned fewer results than requested items",
-                        warning=fixture.batch_expected_warning,
-                        raw_result_json=None,
-                    ),
-                    template_values=build_failure_template_values(
-                        source_basename=fixture.source_basename,
-                        error="batch response returned fewer results than requested items",
-                    ),
-                )
-                continue
-
-            row_map[fixture.record_id] = _result_export_row(
-                fixture,
-                result=results[index],
-                batch_chunk_number=chunk_number,
-                batch_http_status=batch_http_status,
-                output_generated_at=output_generated_at,
-            )
+                for chunk_number, chunk in chunk_specs
+            ]
+            for future in as_completed(futures):
+                row_map.update(future.result())
 
     ordered_rows = [row_map[fixture.record_id] for fixture in fixtures]
-    return ordered_rows, len(chunks)
+    return ordered_rows, len(chunk_specs)
 
 
 def plan_file_types(
@@ -441,7 +476,11 @@ def run_batch_ground_truth_export(
     output_dir: Path | str | None,
     selected_file_types: set[str] | None,
     template_layout: TemplateLayout,
+    max_concurrent_chunks: int = 1,
 ) -> BatchGroundTruthRunResult:
+    if max_concurrent_chunks < 1:
+        raise ValueError("max_concurrent_chunks must be a positive integer")
+
     parsed, grouped, plans = plan_file_types(
         source_workbook=source_workbook,
         selected_file_types=selected_file_types,
@@ -454,47 +493,46 @@ def run_batch_ground_truth_export(
     results: list[FileTypeExportResult] = []
     manifest_file_types: dict[str, Any] = {}
 
-    with make_client(timeout=BATCH_TIMEOUT_SECS) as client:
-        for plan in plans:
-            fixtures = grouped[plan.file_type]
-            export_rows, chunk_count = _execute_file_type(
-                client=client,
-                fixtures=fixtures,
-                output_generated_at=output_generated_at,
-            )
-            workbook_path = workbooks_dir / workbook_filename_for(plan.file_type)
-            headers = write_workbook(
-                file_type=plan.file_type,
-                rows=export_rows,
-                layout=template_layout,
-                output_path=workbook_path,
-            )
+    for plan in plans:
+        fixtures = grouped[plan.file_type]
+        export_rows, chunk_count = _execute_file_type(
+            fixtures=fixtures,
+            output_generated_at=output_generated_at,
+            max_concurrent_chunks=max_concurrent_chunks,
+        )
+        workbook_path = workbooks_dir / workbook_filename_for(plan.file_type)
+        headers = write_workbook(
+            file_type=plan.file_type,
+            rows=export_rows,
+            layout=template_layout,
+            output_path=workbook_path,
+        )
 
-            success_rows = sum(1 for row in export_rows if row.metadata["ok"] is True)
-            failed_rows = sum(1 for row in export_rows if row.metadata["ok"] is False)
-            skipped_rows = sum(1 for fixture in fixtures if not fixture.include_in_batch)
-            executable_rows = len(fixtures) - skipped_rows
-            result = FileTypeExportResult(
-                file_type=plan.file_type,
-                workbook_path=workbook_path,
-                total_rows=len(fixtures),
-                executable_rows=executable_rows,
-                success_rows=success_rows,
-                failed_rows=failed_rows,
-                skipped_rows=skipped_rows,
-                chunk_count=chunk_count,
-            )
-            results.append(result)
-            manifest_file_types[plan.file_type] = {
-                "workbook_path": str(workbook_path),
-                "headers": headers,
-                "total_rows": len(fixtures),
-                "executable_rows": executable_rows,
-                "success_rows": success_rows,
-                "failed_rows": failed_rows,
-                "skipped_rows": skipped_rows,
-                "chunk_count": chunk_count,
-            }
+        success_rows = sum(1 for row in export_rows if row.metadata["ok"] is True)
+        failed_rows = sum(1 for row in export_rows if row.metadata["ok"] is False)
+        skipped_rows = sum(1 for fixture in fixtures if not fixture.include_in_batch)
+        executable_rows = len(fixtures) - skipped_rows
+        result = FileTypeExportResult(
+            file_type=plan.file_type,
+            workbook_path=workbook_path,
+            total_rows=len(fixtures),
+            executable_rows=executable_rows,
+            success_rows=success_rows,
+            failed_rows=failed_rows,
+            skipped_rows=skipped_rows,
+            chunk_count=chunk_count,
+        )
+        results.append(result)
+        manifest_file_types[plan.file_type] = {
+            "workbook_path": str(workbook_path),
+            "headers": headers,
+            "total_rows": len(fixtures),
+            "executable_rows": executable_rows,
+            "success_rows": success_rows,
+            "failed_rows": failed_rows,
+            "skipped_rows": skipped_rows,
+            "chunk_count": chunk_count,
+        }
 
     manifest_path = output_root / "manifest.json"
     manifest_payload = {
@@ -504,6 +542,7 @@ def run_batch_ground_truth_export(
         "output_dir": str(output_root),
         "batch_artifact_run_dir": str(batch_artifact_run_dir),
         "safe_batch_item_limit": BATCH_SAFE_ITEM_LIMIT,
+        "max_concurrent_chunks": max_concurrent_chunks,
         "selected_file_types": [plan.file_type for plan in plans],
         "skipped_rows": [
             {

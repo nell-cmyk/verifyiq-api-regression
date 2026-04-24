@@ -3,11 +3,19 @@ from __future__ import annotations
 from collections import Counter
 from copy import copy
 from pathlib import Path
+from types import SimpleNamespace
+import threading
+import time
+
+import httpx
+import pytest
 
 from openpyxl import Workbook, load_workbook
 
+import tools.reporting.batch_ground_truth.workflow as batch_ground_truth_workflow
+import tools.reporting.export_batch_ground_truth as export_batch_ground_truth
 from tools.reporting.batch_ground_truth.excel import write_workbook
-from tools.reporting.batch_ground_truth.models import ExportRow
+from tools.reporting.batch_ground_truth.models import ExportRow, FileTypePlan, SourceFixtureRecord
 from tools.reporting.batch_ground_truth.schema import (
     FIXED_METADATA_HEADERS,
     build_success_template_values,
@@ -87,6 +95,177 @@ def _write_reference_workbook(path: Path) -> Path:
     sheet.freeze_panes = "A2"
     workbook.save(path)
     return path
+
+
+def _make_fixture(
+    record_id: int,
+    *,
+    include_in_batch: bool = True,
+    skip_reason: str | None = None,
+    batch_expected_error_type: str | None = None,
+    batch_expected_warning: str | None = None,
+) -> SourceFixtureRecord:
+    return SourceFixtureRecord(
+        record_id=record_id,
+        source_row=100 + record_id,
+        source_folder="Payslip",
+        source_file_type="Payslip",
+        file_type="Payslip",
+        request_file_type="Payslip",
+        gcs_uri=f"gs://bucket/fixture-{record_id}.pdf",
+        source_basename=f"fixture-{record_id}.pdf",
+        file_type_status="✓",
+        workflow_status="Pending",
+        assignee="Thor",
+        verification_status="verified",
+        include_in_batch=include_in_batch,
+        skip_reason=skip_reason,
+        batch_expected_warning=batch_expected_warning,
+        batch_expected_error_type=batch_expected_error_type,
+        batch_expected_error="expected warning result" if batch_expected_error_type else None,
+    )
+
+
+def _success_result(record_id: int, index: int) -> dict[str, object]:
+    return {
+        "index": index,
+        "ok": True,
+        "correlation_id": f"corr-{record_id}",
+        "elapsed_ms": 10.0 + index,
+        "data": {
+            "fileType": "Payslip",
+            "summaryResult": [
+                {
+                    "document_type": "Payslip",
+                    "employee_name": f"Employee {record_id}",
+                }
+            ],
+            "calculatedFields": [
+                {
+                    "pageNumber": 1,
+                    "calculated.match_score": 90 + index,
+                }
+            ],
+        },
+    }
+
+
+def _error_result(
+    index: int,
+    *,
+    error_type: str,
+    error: str,
+    warning: str | None = None,
+) -> dict[str, object]:
+    result: dict[str, object] = {
+        "index": index,
+        "ok": False,
+        "error_type": error_type,
+        "error": error,
+    }
+    if warning is not None:
+        result["warning"] = warning
+    return result
+
+
+def _unusable_success_result(index: int) -> dict[str, object]:
+    return {
+        "index": index,
+        "ok": True,
+        "correlation_id": f"corr-unusable-{index}",
+        "elapsed_ms": 33.3,
+        "data": {
+            "fileType": "Payslip",
+        },
+    }
+
+
+def _chunk_key(fixtures: list[SourceFixtureRecord]) -> tuple[str, ...]:
+    return tuple(fixture.gcs_uri for fixture in fixtures)
+
+
+def _install_fake_make_client(monkeypatch, plans: dict[tuple[str, ...], dict[str, object]]) -> dict[str, object]:
+    state: dict[str, object] = {
+        "client_count": 0,
+        "active": 0,
+        "max_active": 0,
+        "completion_order": [],
+    }
+    lock = threading.Lock()
+
+    class FakeBatchClient:
+        def __enter__(self) -> FakeBatchClient:
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def post(self, url: str, *, json: dict[str, object] | None = None, timeout: float | None = None) -> httpx.Response:
+            assert url == batch_ground_truth_workflow.BATCH_ENDPOINT
+            assert timeout == batch_ground_truth_workflow.BATCH_TIMEOUT_SECS
+            assert json is not None
+
+            key = tuple(str(item["file"]) for item in json["items"])
+            plan = plans[key]
+            request = httpx.Request("POST", f"https://example.test{url}", json=json)
+
+            with lock:
+                state["active"] = int(state["active"]) + 1
+                state["max_active"] = max(int(state["max_active"]), int(state["active"]))
+
+            try:
+                barrier = plan.get("barrier")
+                if barrier is not None:
+                    assert isinstance(barrier, threading.Barrier)
+                    barrier.wait(timeout=1.0)
+
+                delay = float(plan.get("delay", 0.0))
+                if delay:
+                    time.sleep(delay)
+
+                name = str(plan.get("name", key[0]))
+                cast_completion_order = state["completion_order"]
+                assert isinstance(cast_completion_order, list)
+                cast_completion_order.append(name)
+
+                kind = str(plan["kind"])
+                if kind == "timeout":
+                    raise httpx.ReadTimeout("timed out", request=request)
+                if kind == "request_error":
+                    raise httpx.ConnectError("connection failed", request=request)
+                if kind == "invalid_json":
+                    return httpx.Response(
+                        int(plan.get("status", 200)),
+                        text=str(plan.get("text", "not-json")),
+                        request=request,
+                    )
+                return httpx.Response(
+                    int(plan.get("status", 200)),
+                    json=plan["body"],
+                    request=request,
+                )
+            finally:
+                with lock:
+                    state["active"] = int(state["active"]) - 1
+
+    def fake_make_client(timeout: float = 60.0) -> FakeBatchClient:
+        assert timeout == batch_ground_truth_workflow.BATCH_TIMEOUT_SECS
+        state["client_count"] = int(state["client_count"]) + 1
+        return FakeBatchClient()
+
+    monkeypatch.setattr(batch_ground_truth_workflow, "make_client", fake_make_client)
+    return state
+
+
+def _row_signatures(rows: list[ExportRow]) -> list[tuple[dict[str, object], dict[str, object], dict[str, object]]]:
+    return [
+        (
+            dict(row.metadata),
+            dict(row.template_values),
+            dict(row.extra_values),
+        )
+        for row in rows
+    ]
 
 
 def test_parse_source_workbook_splits_and_keeps_verify_rows(tmp_path):
@@ -296,3 +475,340 @@ def test_write_workbook_keeps_main_sheet_analyst_facing_and_writes_meta_sheet(tm
     assert meta_sheet.cell(3, source_uri_column).value == "gs://bucket/failure.pdf"
     assert meta_sheet.cell(2, raw_result_column).value == '{"ok":true}'
     assert meta_sheet.cell(3, raw_result_column).value is None
+
+
+def test_write_workbook_serializes_list_valued_extra_fields(tmp_path):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    layout = load_reference_template(reference_path)
+
+    row = ExportRow(
+        metadata={
+            "source_row": 10,
+            "source_gcs_uri": "gs://bucket/list-value.pdf",
+            "source_file_type": "Payslip",
+            "normalized_file_type": "Payslip",
+            "request_file_type": "Payslip",
+            "source_folder": "Payslip",
+            "source_assignee": "Thor",
+            "source_workflow_status": "Pending",
+            "fixture_status_from_source": "✓",
+            "batch_chunk_number": 1,
+            "batch_result_index": 0,
+            "batch_http_status": 200,
+            "batch_result_correlation_id": "corr-1",
+            "batch_elapsed_ms": 12.5,
+            "ok": True,
+            "failure_tag": None,
+            "error_type": None,
+            "error": None,
+            "warning": None,
+            "raw_result_json": '{"ok":true}',
+            "output_generated_at": "2026-04-23T00:00:00+00:00",
+        },
+        template_values={
+            "filename": "list-value.pdf",
+            "identified_type": "Payslip",
+            "parse_success": True,
+            "error": None,
+        },
+        extra_values={"income_types": ["REMITTANCE"]},
+    )
+
+    output_path = tmp_path / "Payslip__batch_ground_truth.xlsx"
+    headers = write_workbook(
+        file_type="Payslip",
+        rows=[row],
+        layout=layout,
+        output_path=output_path,
+    )
+
+    workbook = load_workbook(output_path, data_only=False)
+    sheet = workbook["Payslip"]
+    income_types_column = headers.index("income_types") + 1
+
+    assert sheet.cell(2, income_types_column).value == '["REMITTANCE"]'
+
+
+def test_execute_file_type_preserves_default_sequential_behavior(monkeypatch):
+    fixtures = [_make_fixture(record_id) for record_id in range(1, 9)]
+    chunk_one = fixtures[:4]
+    chunk_two = fixtures[4:]
+    plans = {
+        _chunk_key(chunk_one): {
+            "kind": "json",
+            "body": {"results": [_success_result(record_id, index) for index, record_id in enumerate(range(1, 5))]},
+            "delay": 0.02,
+            "name": "chunk-1",
+        },
+        _chunk_key(chunk_two): {
+            "kind": "json",
+            "body": {"results": [_success_result(record_id, index) for index, record_id in enumerate(range(5, 9))]},
+            "name": "chunk-2",
+        },
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    assert chunk_count == 2
+    assert state["client_count"] == 1
+    assert state["max_active"] == 1
+    assert state["completion_order"] == ["chunk-1", "chunk-2"]
+    assert [row.metadata["source_row"] for row in rows] == [fixture.source_row for fixture in fixtures]
+    assert [row.metadata["batch_chunk_number"] for row in rows] == [1, 1, 1, 1, 2, 2, 2, 2]
+
+
+def test_execute_file_type_runs_chunks_concurrently_and_keeps_source_order(monkeypatch):
+    fixtures = [
+        _make_fixture(record_id) for record_id in range(1, 5)
+    ] + [
+        _make_fixture(
+            5,
+            include_in_batch=False,
+            skip_reason=(
+                "unsupported file extension '.xlsx' "
+                "(supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)"
+            ),
+        )
+    ] + [
+        _make_fixture(record_id) for record_id in range(6, 10)
+    ]
+    chunk_one = fixtures[:4]
+    chunk_two = fixtures[5:]
+    barrier = threading.Barrier(2)
+    plans = {
+        _chunk_key(chunk_one): {
+            "kind": "json",
+            "body": {"results": [_success_result(record_id, index) for index, record_id in enumerate(range(1, 5))]},
+            "delay": 0.03,
+            "barrier": barrier,
+            "name": "chunk-1",
+        },
+        _chunk_key(chunk_two): {
+            "kind": "json",
+            "body": {"results": [_success_result(record_id, index) for index, record_id in enumerate(range(6, 10))]},
+            "barrier": barrier,
+            "name": "chunk-2",
+        },
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=2,
+    )
+
+    assert chunk_count == 2
+    assert state["client_count"] == 2
+    assert state["max_active"] == 2
+    assert state["completion_order"] == ["chunk-2", "chunk-1"]
+    assert [row.metadata["source_row"] for row in rows] == [fixture.source_row for fixture in fixtures]
+    assert [row.metadata["batch_chunk_number"] for row in rows] == [1, 1, 1, 1, None, 2, 2, 2, 2]
+    assert rows[4].metadata["failure_tag"] == "unsupported_fixture"
+    assert rows[4].metadata["ok"] is False
+
+
+def test_execute_file_type_keeps_classification_identical_in_sequential_and_concurrent_modes(monkeypatch):
+    fixtures = [_make_fixture(record_id) for record_id in range(1, 26)]
+    fixtures[3] = _make_fixture(
+        4,
+        batch_expected_error_type="DocumentSizeGuardError",
+        batch_expected_warning="document exceeded size guard",
+    )
+    fixtures.append(
+        _make_fixture(
+            26,
+            include_in_batch=False,
+            skip_reason=(
+                "unsupported file extension '.xlsx' "
+                "(supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)"
+            ),
+        )
+    )
+    chunks = [
+        fixtures[0:4],
+        fixtures[4:8],
+        fixtures[8:12],
+        fixtures[12:16],
+        fixtures[16:20],
+        fixtures[20:24],
+        fixtures[24:25],
+    ]
+    plans = {
+        _chunk_key(chunks[0]): {
+            "kind": "json",
+            "body": {
+                "results": [
+                    _success_result(1, 0),
+                    _error_result(1, error_type="BatchProcessingError", error="could not parse"),
+                    _unusable_success_result(2),
+                    _error_result(
+                        3,
+                        error_type="DocumentSizeGuardError",
+                        error="document exceeded size guard",
+                    ),
+                ]
+            },
+            "delay": 0.05,
+            "name": "chunk-1",
+        },
+        _chunk_key(chunks[1]): {
+            "kind": "json",
+            "status": 503,
+            "body": {"detail": "upstream unavailable"},
+            "delay": 0.04,
+            "name": "chunk-2",
+        },
+        _chunk_key(chunks[2]): {
+            "kind": "json",
+            "body": {"detail": "missing results"},
+            "delay": 0.03,
+            "name": "chunk-3",
+        },
+        _chunk_key(chunks[3]): {
+            "kind": "json",
+            "body": {"results": []},
+            "delay": 0.02,
+            "name": "chunk-4",
+        },
+        _chunk_key(chunks[4]): {
+            "kind": "invalid_json",
+            "text": "not-json",
+            "delay": 0.01,
+            "name": "chunk-5",
+        },
+        _chunk_key(chunks[5]): {
+            "kind": "timeout",
+            "name": "chunk-6",
+        },
+        _chunk_key(chunks[6]): {
+            "kind": "request_error",
+            "name": "chunk-7",
+        },
+    }
+
+    _install_fake_make_client(monkeypatch, plans)
+    sequential_rows, sequential_chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    _install_fake_make_client(monkeypatch, plans)
+    concurrent_rows, concurrent_chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=3,
+    )
+
+    assert sequential_chunk_count == 7
+    assert concurrent_chunk_count == 7
+    assert _row_signatures(sequential_rows) == _row_signatures(concurrent_rows)
+    assert [row.metadata["failure_tag"] for row in concurrent_rows] == [
+        None,
+        "result_error",
+        "unusable_result",
+        "expected_warning_result",
+        "http_503",
+        "http_503",
+        "http_503",
+        "http_503",
+        "missing_results_array",
+        "missing_results_array",
+        "missing_results_array",
+        "missing_results_array",
+        "missing_result",
+        "missing_result",
+        "missing_result",
+        "missing_result",
+        "invalid_json_response",
+        "invalid_json_response",
+        "invalid_json_response",
+        "invalid_json_response",
+        "request_timeout",
+        "request_timeout",
+        "request_timeout",
+        "request_timeout",
+        "request_error",
+        "unsupported_fixture",
+    ]
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "not-an-int"])
+def test_build_parser_rejects_invalid_max_concurrent_chunks(value):
+    parser = export_batch_ground_truth.build_parser()
+
+    with pytest.raises(SystemExit) as exc:
+        parser.parse_args(
+            [
+                "--reference-workbook",
+                "reference.xlsx",
+                "--max-concurrent-chunks",
+                value,
+            ]
+        )
+
+    assert exc.value.code == 2
+
+
+def test_main_passes_max_concurrent_chunks_to_workflow(monkeypatch, tmp_path):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    source_path = _write_source_workbook(tmp_path / "source.xlsx")
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        export_batch_ground_truth,
+        "plan_file_types",
+        lambda **kwargs: (
+            None,
+            {},
+            [
+                FileTypePlan(
+                    file_type="Payslip",
+                    total_rows=1,
+                    executable_rows=1,
+                    skipped_rows=0,
+                    chunk_count=1,
+                )
+            ],
+        ),
+    )
+    monkeypatch.setattr(
+        export_batch_ground_truth,
+        "load_reference_template",
+        lambda reference_workbook: {"reference_workbook": reference_workbook},
+    )
+
+    def fake_run_batch_ground_truth_export(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            output_dir=tmp_path / "output",
+            manifest_path=tmp_path / "output" / "manifest.json",
+            batch_artifact_run_dir=tmp_path / "batch_artifacts",
+            file_type_results=[],
+        )
+
+    monkeypatch.setattr(
+        export_batch_ground_truth,
+        "run_batch_ground_truth_export",
+        fake_run_batch_ground_truth_export,
+    )
+
+    exit_code = export_batch_ground_truth.main(
+        [
+            "--source-workbook",
+            str(source_path),
+            "--reference-workbook",
+            str(reference_path),
+            "--max-concurrent-chunks",
+            "4",
+        ]
+    )
+
+    assert exit_code == 0
+    assert captured["max_concurrent_chunks"] == 4

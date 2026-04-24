@@ -47,6 +47,15 @@ Run all discovered fileTypes from the source workbook:
   --reference-workbook /absolute/path/to/reference.xlsx
 ```
 
+Run one fileType with bounded in-fileType chunk concurrency:
+
+```bash
+./.venv/bin/python tools/reporting/export_batch_ground_truth.py \
+  --reference-workbook /absolute/path/to/reference.xlsx \
+  --file-type Payslip \
+  --max-concurrent-chunks 2
+```
+
 Plan only, with no live API calls:
 
 ```bash
@@ -64,6 +73,12 @@ Optional source and output overrides:
   --output-dir /absolute/path/to/output-dir \
   --file-type Payslip
 ```
+
+## Chunk Concurrency
+- `--max-concurrent-chunks` controls how many `/documents/batch` chunks can be in flight at once within a single fileType.
+- The default is `1`, which preserves the original sequential chunk behavior.
+- Chunk concurrency is bounded per fileType only. FileTypes still run one at a time, and workbook plus manifest writing stay single-threaded.
+- The safe request size limit is unchanged: each batch request still contains at most `4` items.
 
 ## Inclusion And Skipping Rules
 - `⚠ Verify` and other non-final status rows are included. Status is preserved in the output workbook and is not used as a batch gate.

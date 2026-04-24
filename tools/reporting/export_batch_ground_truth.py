@@ -29,6 +29,16 @@ def _parse_file_types(values: list[str]) -> set[str]:
     return file_types
 
 
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -62,6 +72,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--plan",
         action="store_true",
         help="Inspect workbook coverage and planned chunking without calling the live endpoint.",
+    )
+    parser.add_argument(
+        "--max-concurrent-chunks",
+        type=_positive_int,
+        default=1,
+        help=(
+            "Maximum number of in-flight batch chunks within one fileType. "
+            "Defaults to 1 for the current sequential behavior."
+        ),
     )
     return parser
 
@@ -105,6 +124,7 @@ def main(argv: list[str] | None = None) -> int:
             output_dir=args.output_dir or None,
             selected_file_types=selected,
             template_layout=layout,
+            max_concurrent_chunks=args.max_concurrent_chunks,
         )
     except RuntimeError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

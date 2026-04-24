@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import copy
 from pathlib import Path
 from typing import Any
@@ -53,8 +54,10 @@ def _column_width(header: str, layout: TemplateLayout) -> float:
 
 
 def _excel_cell_value(value: Any) -> Any:
-    if value in ({}, []):
+    if value in ({}, [], ()):
         return None
+    if isinstance(value, (dict, list, tuple)):
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     return value
 
 
