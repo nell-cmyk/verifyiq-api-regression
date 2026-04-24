@@ -201,6 +201,15 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Output dir: {result.output_dir}")
     print(f"Manifest: {result.manifest_path}")
+    clean_manifest_path = getattr(result, "clean_manifest_path", None)
+    recovery_triage_json_path = getattr(result, "recovery_triage_json_path", None)
+    recovery_triage_csv_path = getattr(result, "recovery_triage_csv_path", None)
+    if clean_manifest_path is not None:
+        print(f"Clean manifest: {clean_manifest_path}")
+    if recovery_triage_json_path is not None:
+        print(f"Recovery triage JSON: {recovery_triage_json_path}")
+    if recovery_triage_csv_path is not None:
+        print(f"Recovery triage CSV: {recovery_triage_csv_path}")
     print(f"Batch artifact dir: {result.batch_artifact_run_dir}")
     for file_type_result in result.file_type_results:
         print(
@@ -208,8 +217,13 @@ def main(argv: list[str] | None = None) -> int:
             f"success_rows={file_type_result.success_rows}, "
             f"failed_rows={file_type_result.failed_rows}, "
             f"skipped_rows={file_type_result.skipped_rows}, "
+            f"clean_rows={getattr(file_type_result, 'clean_rows', 0)}, "
+            f"triaged_rows={getattr(file_type_result, 'triaged_rows', 0)}, "
             f"workbook={file_type_result.workbook_path}"
         )
+        clean_workbook_path = getattr(file_type_result, "clean_workbook_path", None)
+        if clean_workbook_path is not None:
+            print(f"  clean_workbook={clean_workbook_path}")
     return 0
 
 

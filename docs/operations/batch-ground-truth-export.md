@@ -13,8 +13,12 @@ reports/batch_ground_truth/batch_ground_truth_<timestamp>/
 ```
 
 Each run writes:
-- `workbooks/<fileType>__batch_ground_truth.xlsx` with an analyst-facing main sheet and a separate `_meta` traceability sheet
+- `workbooks/<fileType>__batch_ground_truth.xlsx` with the full/audit workbook for every exported source row, including clean successes, row-level API failures, unsupported fixtures, and other non-clean rows
+- `clean_workbooks/<fileType>__clean_ground_truth.xlsx` with only clean ground-truth candidate rows
 - `manifest.json`
+- `clean_manifest.json`
+- `recovery_triage.json`
+- `recovery_triage.csv`
 
 Raw `/documents/batch` response artifacts still land in the normal batch artifact area:
 
@@ -129,11 +133,46 @@ Optional retry overrides:
 
 ## Failed Rows
 - Workbook generation continues even when some fixtures fail.
-- Failed rows still appear in the main sheet.
-- Main-sheet extracted value columns stay empty for failed rows.
+- Failed rows still appear in the full/audit workbook main sheet.
+- Main-sheet extracted value columns stay empty for failed rows in the full/audit workbook.
 - Main-sheet failure visibility is kept concise through `filename`, `parse_success`, and `error`.
-- Full traceability and debug context remain available in the workbook `_meta` sheet, `manifest.json`, and the raw batch response artifacts.
+- Full traceability and debug context remain available in the workbook `_meta` sheet, `manifest.json`, `recovery_triage.*`, and the raw batch response artifacts.
 - If an entire fileType fails, that fileType workbook is still generated.
+
+## Clean Ground-Truth Candidate Workbooks
+- Clean workbooks are generated under `clean_workbooks/` and include only rows that already mapped a reliable successful parsed payload.
+- A row is included in a clean workbook only when the exporter has `ok=true`, no `failure_tag`, no `error_type`, no `error`, `parse_success=true`, and a usable `summaryResult[0]` payload.
+- Null or blank extracted fields do not remove a row from the clean workbook when the row otherwise has a usable successful parse. Blank values can be genuine extracted empty values.
+- Clean workbooks exclude unsupported fixtures, row-level API errors, retry-exhausted chunk failures, expected warning results, quality-gated no-payload results, and malformed or unexpected successful response shapes.
+- Excluding a row from the clean workbook only means it is not a clean ground-truth candidate right now. It does not mean the fixture should be deleted from the registry or removed from other automation.
+- `clean_manifest.json` records total selected source rows, clean included rows, triaged rows, counts by fileType, counts by recovery class, counts by ground-truth candidate status, and the paired full/audit and clean workbook paths.
+
+## Recovery Triage Artifacts
+- `recovery_triage.json` and `recovery_triage.csv` contain every non-clean exported row.
+- Triage rows include source identity, request and response fileType, HTTP and row status, parse success, failure details, retry metadata, parsed-container counts, quality-gate details when available, `recovery_class`, `recovery_action`, and `gt_candidate_status`.
+- Use recovery triage to decide whether a row should be targeted for rerun, reviewed for fixture quality, reviewed for fileType/source metadata, replaced, excluded from clean GT as-is, or retained as negative API guard coverage.
+- The exporter does not mutate the source registry, does not bulk-tag fixtures invalid, and does not convert non-clean rows into successful GT rows.
+
+Common recovery classes:
+- `transient_or_auth_failure`: token expiry, timeout, request transport failure, selected auth failures, or likely transient 5xx chunk failure. Action: targeted rerun after retry/token/service recovery.
+- `document_size_guard`: `DocumentSizeGuardError`. Action: exclude from clean GT as-is, or replace/reduce the fixture if clean GT coverage is still needed.
+- `unsupported_fixture`: unsupported extension, missing GCS URI, or malformed GCS URI. Action: replace or correct the source artifact.
+- `multi_account_document`: `MultiAccountDocumentError`. Action: split or replace if single-account clean GT is needed, otherwise keep outside clean GT as negative coverage.
+- `http_200_no_payload_quality_gate`: HTTP `200` and row `ok=true`, but parsed containers are empty and extraction was not attempted because a quality gate failed. Action: inspect fixture quality and replace if needed.
+- `http_200_no_payload_unknown`: HTTP `200` and row `ok=true`, but no usable payload and no clear quality-gate reason. Action: API behavior review before GT use.
+- `malformed_or_unexpected_response_shape`: response cannot be mapped and does not match a known no-payload quality-gate pattern. Action: API/exporter schema review.
+
+## HTTP 200 No-Payload Rows
+- HTTP `200` and row `ok=true` are not enough for clean GT.
+- Rows with empty `summaryOCR`, `summaryResult`, `calculatedFields`, and `transactionsOCR`, plus `extractionStatus=not_attempted`, are not clean GT candidates.
+- When `documentQuality` or `qualityCheck.issueDescription` shows a quality-gate failure, the row is classified as `http_200_no_payload_quality_gate`.
+- These rows are completed row-level API results, so the exporter does not retry them automatically. They may still become clean GT candidates later if fixture quality is corrected, the fixture is replaced, or API behavior changes and a targeted rerun produces a usable parsed payload.
+
+## Document Size Guard Rows
+- `DocumentSizeGuardError` rows are classified as `document_size_guard`.
+- They are not rerun candidates as-is because the API explicitly refused extraction due to a size or page guard.
+- Their `gt_candidate_status` is `not_gt_candidate_currently`, and the recovery action is `exclude_from_clean_gt_or_replace_fixture`.
+- This is not a generic invalid-fixture tag and does not imply deletion from all automation. These rows may still be useful as negative API guard coverage outside clean GT.
 
 ## Heterogeneous Response Shapes
 - The workflow keeps the main sheet close to the reference workbook's flat analyst-facing layout.

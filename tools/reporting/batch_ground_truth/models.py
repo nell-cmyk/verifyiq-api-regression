@@ -102,6 +102,9 @@ class FileTypeExportResult:
     failed_rows: int
     skipped_rows: int
     chunk_count: int
+    clean_workbook_path: Path | None = None
+    clean_rows: int = 0
+    triaged_rows: int = 0
 
 
 @dataclass(frozen=True)
@@ -111,3 +114,6 @@ class BatchGroundTruthRunResult:
     batch_artifact_run_dir: Path
     selected_file_types: tuple[str, ...]
     file_type_results: tuple[FileTypeExportResult, ...]
+    clean_manifest_path: Path | None = None
+    recovery_triage_json_path: Path | None = None
+    recovery_triage_csv_path: Path | None = None

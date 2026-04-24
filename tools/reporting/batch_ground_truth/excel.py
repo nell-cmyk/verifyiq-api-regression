@@ -147,3 +147,7 @@ def write_workbook(
 
 def workbook_filename_for(file_type: str) -> str:
     return f"{_safe_filename(file_type)}__batch_ground_truth.xlsx"
+
+
+def clean_workbook_filename_for(file_type: str) -> str:
+    return f"{_safe_filename(file_type)}__clean_ground_truth.xlsx"

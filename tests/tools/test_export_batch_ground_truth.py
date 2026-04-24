@@ -21,7 +21,7 @@ from tests.endpoints.batch.artifacts import (
     BATCH_RESPONSE_ARTIFACT_RUN_DIR_ENV_VAR,
 )
 from tools.generate_fixture_registry import build_registry_document, write_registry_document
-from tools.reporting.batch_ground_truth.excel import write_workbook
+from tools.reporting.batch_ground_truth.excel import clean_workbook_filename_for, write_workbook
 from tools.reporting.batch_ground_truth.models import ExportRow, FileTypePlan, SourceFixtureRecord
 from tools.reporting.batch_ground_truth.schema import (
     FIXED_METADATA_HEADERS,
@@ -33,6 +33,11 @@ from tools.reporting.batch_ground_truth.source import (
     parse_source_workbook_for_comparison,
 )
 from tools.reporting.batch_ground_truth.workflow import plan_file_types
+from tools.reporting.batch_ground_truth.triage import (
+    build_recovery_triage_row,
+    classify_export_row,
+    is_clean_candidate,
+)
 
 
 def _write_source_workbook(path: Path) -> Path:
@@ -133,6 +138,76 @@ def _write_fixture_registry(
             )
             source_row += 1
 
+    write_registry_document(
+        {
+            "schema_version": 2,
+            "total": len(fixtures),
+            "composite_rows_split": 0,
+            "counts": {"confirmed": len(fixtures)},
+            "fixtures": fixtures,
+        },
+        output_paths=(registry_path,),
+    )
+    return registry_path
+
+
+def _write_mixed_fixture_registry(registry_path: Path) -> Path:
+    fixtures = [
+        {
+            "name": "clean",
+            "file_type": "Payslip",
+            "gcs_uri": "gs://bucket/clean.pdf",
+            "source_folder": "Payslip",
+            "source_file_type": "Payslip",
+            "source_file_type_status": "✓",
+            "source_assignee": "Thor",
+            "source_workflow_status": "Pending",
+            "source_row": 10,
+            "verification_status": "confirmed",
+            "enabled": True,
+        },
+        {
+            "name": "quality-gated",
+            "file_type": "Payslip",
+            "gcs_uri": "gs://bucket/quality-gated.pdf",
+            "source_folder": "Payslip",
+            "source_file_type": "Payslip",
+            "source_file_type_status": "✓",
+            "source_assignee": "Thor",
+            "source_workflow_status": "Pending",
+            "source_row": 11,
+            "verification_status": "confirmed",
+            "enabled": True,
+        },
+        {
+            "name": "size-guard",
+            "file_type": "Payslip",
+            "gcs_uri": "gs://bucket/size-guard.pdf",
+            "source_folder": "Payslip",
+            "source_file_type": "Payslip",
+            "source_file_type_status": "✓",
+            "source_assignee": "Thor",
+            "source_workflow_status": "Pending",
+            "source_row": 12,
+            "verification_status": "confirmed",
+            "enabled": True,
+            "batch_expected_error_type": "DocumentSizeGuardError",
+            "batch_expected_error": "document exceeded size guard",
+        },
+        {
+            "name": "unsupported",
+            "file_type": "Payslip",
+            "gcs_uri": "gs://bucket/unsupported.xlsx",
+            "source_folder": "Payslip",
+            "source_file_type": "Payslip",
+            "source_file_type_status": "✓",
+            "source_assignee": "Thor",
+            "source_workflow_status": "Pending",
+            "source_row": 13,
+            "verification_status": "confirmed",
+            "enabled": True,
+        },
+    ]
     write_registry_document(
         {
             "schema_version": 2,
@@ -253,6 +328,66 @@ def _unusable_success_result(index: int) -> dict[str, object]:
             "fileType": "Payslip",
         },
     }
+
+
+def _quality_gated_no_payload_result(index: int) -> dict[str, object]:
+    return {
+        "index": index,
+        "ok": True,
+        "correlation_id": f"corr-quality-gated-{index}",
+        "elapsed_ms": 44.4,
+        "data": {
+            "fileType": "Payslip",
+            "summaryOCR": [],
+            "summaryResult": [],
+            "calculatedFields": [],
+            "transactionsOCR": [],
+            "documentQuality": "Failed: failed document_classification",
+            "qualityScore": 0.0,
+            "qualityCheck": {
+                "issueDescription": "Failed: failed document_classification",
+                "qualityCheckFindings": [
+                    {
+                        "type": "document_classification",
+                        "status": "failed",
+                        "description": "Image does not appear to contain a valid document.",
+                    }
+                ],
+            },
+            "extractionStatus": "not_attempted",
+        },
+    }
+
+
+def _unknown_no_payload_result(index: int) -> dict[str, object]:
+    return {
+        "index": index,
+        "ok": True,
+        "correlation_id": f"corr-empty-{index}",
+        "elapsed_ms": 45.5,
+        "data": {
+            "fileType": "Payslip",
+            "summaryOCR": [],
+            "summaryResult": [],
+            "calculatedFields": [],
+            "transactionsOCR": [],
+            "extractionStatus": "not_attempted",
+        },
+    }
+
+
+def _null_field_success_result(record_id: int, index: int) -> dict[str, object]:
+    result = _success_result(record_id, index)
+    data = result["data"]
+    assert isinstance(data, dict)
+    data["summaryResult"] = [
+        {
+            "document_type": "Payslip",
+            "employee_name": None,
+            "net_pay": None,
+        }
+    ]
+    return result
 
 
 def _chunk_key(fixtures: list[SourceFixtureRecord]) -> tuple[str, ...]:
@@ -1210,6 +1345,234 @@ def test_unusable_result_from_200_response_is_not_retried(monkeypatch):
     assert rows[0].metadata["batch_retry_reason"] is None
 
 
+def test_clean_candidate_classification_accepts_usable_success_with_null_fields(monkeypatch):
+    fixtures = [_make_fixture(1)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: {
+            "kind": "json",
+            "body": {"results": [_null_field_success_result(1, 0)]},
+        }
+    }
+    _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    assert is_clean_candidate(rows[0]) is True
+    assert classify_export_row(rows[0]) == {
+        "recovery_class": "clean_success",
+        "recovery_action": "include_in_clean_gt",
+        "gt_candidate_status": "clean_candidate",
+    }
+
+
+@pytest.mark.parametrize(
+    ("plans_for_key", "retry_kwargs"),
+    [
+        (
+            [
+                {
+                    "kind": "json",
+                    "status": 401,
+                    "body": {"detail": "OpenID Connect token expired: JWT has expired"},
+                    "name": "expired-token",
+                }
+            ],
+            {"token_expiry_retries": 0},
+        ),
+        ([{"kind": "timeout", "name": "timeout"}], {"transient_chunk_retries": 0}),
+        ([{"kind": "remote_protocol", "name": "disconnect"}], {"transient_chunk_retries": 0}),
+    ],
+)
+def test_recovery_triage_classifies_transient_or_auth_failures(
+    monkeypatch,
+    plans_for_key,
+    retry_kwargs,
+):
+    fixtures = [_make_fixture(1)]
+    key = _chunk_key(fixtures)
+    plans = {key: plans_for_key}
+    _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+        **retry_kwargs,
+    )
+
+    triage_row = build_recovery_triage_row(rows[0])
+    assert triage_row["recovery_class"] == "transient_or_auth_failure"
+    assert triage_row["gt_candidate_status"] == "rerun_candidate"
+    assert triage_row["recovery_action"] == "targeted_rerun_after_retry_or_token_fix"
+
+
+def test_recovery_triage_classifies_document_size_guard_as_not_current_gt(monkeypatch):
+    fixtures = [
+        _make_fixture(
+            1,
+            batch_expected_error_type="DocumentSizeGuardError",
+            batch_expected_warning="document exceeded size guard",
+        )
+    ]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: {
+            "kind": "json",
+            "body": {
+                "results": [
+                    _error_result(
+                        0,
+                        error_type="DocumentSizeGuardError",
+                        error="document exceeded size guard",
+                    )
+                ]
+            },
+        }
+    }
+    _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    triage_row = build_recovery_triage_row(rows[0])
+    assert triage_row["recovery_class"] == "document_size_guard"
+    assert triage_row["gt_candidate_status"] == "not_gt_candidate_currently"
+    assert triage_row["recovery_action"] == "exclude_from_clean_gt_or_replace_fixture"
+
+
+def test_recovery_triage_classifies_unsupported_fixture():
+    row = batch_ground_truth_workflow._skipped_export_row(
+        _make_fixture(
+            1,
+            include_in_batch=False,
+            skip_reason=(
+                "unsupported file extension '.xlsx' "
+                "(supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)"
+            ),
+        ),
+        output_generated_at="2026-04-24T00:00:00+00:00",
+    )
+
+    triage_row = build_recovery_triage_row(row)
+    assert triage_row["recovery_class"] == "unsupported_fixture"
+    assert triage_row["gt_candidate_status"] == "fixture_review_required"
+
+
+def test_recovery_triage_classifies_multi_account_document(monkeypatch):
+    fixtures = [_make_fixture(1)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: {
+            "kind": "json",
+            "body": {
+                "results": [
+                    _error_result(
+                        0,
+                        error_type="MultiAccountDocumentError",
+                        error="multiple accounts detected",
+                    )
+                ]
+            },
+        }
+    }
+    _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    triage_row = build_recovery_triage_row(rows[0])
+    assert triage_row["recovery_class"] == "multi_account_document"
+    assert triage_row["gt_candidate_status"] == "fixture_review_required"
+
+
+def test_recovery_triage_classifies_http_200_no_payload_quality_gate(monkeypatch):
+    fixtures = [_make_fixture(1)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: {
+            "kind": "json",
+            "body": {"results": [_quality_gated_no_payload_result(0)]},
+        }
+    }
+    _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    triage_row = build_recovery_triage_row(rows[0])
+    assert rows[0].metadata["failure_tag"] == "unusable_result"
+    assert triage_row["recovery_class"] == "http_200_no_payload_quality_gate"
+    assert triage_row["gt_candidate_status"] == "not_gt_candidate_currently"
+    assert triage_row["extractionStatus"] == "not_attempted"
+    assert triage_row["documentQuality"] == "Failed: failed document_classification"
+    assert triage_row["qualityCheck.issueDescription"] == "Failed: failed document_classification"
+    assert triage_row["qualityScore"] == 0.0
+    assert triage_row["summaryResult_count"] == 0
+    assert triage_row["summaryOCR_count"] == 0
+    assert triage_row["calculatedFields_count"] == 0
+    assert triage_row["transactionsOCR_count"] == 0
+
+
+def test_recovery_triage_classifies_http_200_no_payload_unknown(monkeypatch):
+    fixtures = [_make_fixture(1)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: {
+            "kind": "json",
+            "body": {"results": [_unknown_no_payload_result(0)]},
+        }
+    }
+    _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    triage_row = build_recovery_triage_row(rows[0])
+    assert rows[0].metadata["failure_tag"] == "unusable_result"
+    assert triage_row["recovery_class"] == "http_200_no_payload_unknown"
+    assert triage_row["gt_candidate_status"] == "api_behavior_review_required"
+
+
+def test_recovery_triage_keeps_generic_unusable_shape_separate(monkeypatch):
+    fixtures = [_make_fixture(1)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: {
+            "kind": "json",
+            "body": {"results": [_unusable_success_result(0)]},
+        }
+    }
+    _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    triage_row = build_recovery_triage_row(rows[0])
+    assert rows[0].metadata["failure_tag"] == "unusable_result"
+    assert triage_row["recovery_class"] == "malformed_or_unexpected_response_shape"
+    assert triage_row["gt_candidate_status"] == "api_behavior_review_required"
+
+
 def test_concurrent_retry_keeps_final_rows_in_source_order(monkeypatch):
     fixtures = [_make_fixture(record_id) for record_id in range(1, 9)]
     chunk_one = fixtures[:4]
@@ -1442,6 +1805,101 @@ def test_run_export_keeps_workbook_paths_associated_with_file_types(monkeypatch,
         headers = [meta_sheet.cell(1, column).value for column in range(1, meta_sheet.max_column + 1)]
         normalized_file_type_column = headers.index("normalized_file_type") + 1
         assert meta_sheet.cell(2, normalized_file_type_column).value == file_type
+
+
+def test_run_export_writes_clean_workbook_manifest_and_recovery_triage(monkeypatch, tmp_path):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    registry_path = _write_mixed_fixture_registry(tmp_path / "fixture_registry.yaml")
+    output_dir = tmp_path / "output"
+    _configure_batch_artifact_dir(monkeypatch, tmp_path)
+    layout = load_reference_template(reference_path)
+    key = (
+        "gs://bucket/clean.pdf",
+        "gs://bucket/quality-gated.pdf",
+        "gs://bucket/size-guard.pdf",
+    )
+    plans = {
+        key: {
+            "kind": "json",
+            "body": {
+                "results": [
+                    _success_result(1, 0),
+                    _quality_gated_no_payload_result(1),
+                    _error_result(
+                        2,
+                        error_type="DocumentSizeGuardError",
+                        error="document exceeded size guard",
+                    ),
+                ]
+            },
+        }
+    }
+    _install_fake_make_client(monkeypatch, plans)
+
+    result = batch_ground_truth_workflow.run_batch_ground_truth_export(
+        fixture_registry=registry_path,
+        reference_workbook=reference_path,
+        output_dir=output_dir,
+        selected_file_types=None,
+        template_layout=layout,
+        max_concurrent_chunks=1,
+        max_concurrent_file_types=1,
+    )
+
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    clean_manifest = json.loads(result.clean_manifest_path.read_text(encoding="utf-8"))
+    recovery_rows = json.loads(result.recovery_triage_json_path.read_text(encoding="utf-8"))
+    csv_lines = result.recovery_triage_csv_path.read_text(encoding="utf-8").splitlines()
+    assert len(recovery_rows) == 3
+    assert len(csv_lines) == 4
+    assert {row["recovery_class"] for row in recovery_rows} == {
+        "http_200_no_payload_quality_gate",
+        "document_size_guard",
+        "unsupported_fixture",
+    }
+    assert clean_manifest["total_source_rows"] == 4
+    assert clean_manifest["clean_included_rows"] == 1
+    assert clean_manifest["triaged_rejected_rows"] == 3
+    assert clean_manifest["clean_rows_by_fileType"] == {"Payslip": 1}
+    assert clean_manifest["triaged_rows_by_fileType"] == {"Payslip": 3}
+    assert clean_manifest["triaged_rows_by_recovery_class"] == {
+        "http_200_no_payload_quality_gate": 1,
+        "document_size_guard": 1,
+        "unsupported_fixture": 1,
+    }
+    assert clean_manifest["triaged_rows_by_gt_candidate_status"] == {
+        "not_gt_candidate_currently": 2,
+        "fixture_review_required": 1,
+    }
+
+    file_type_result = result.file_type_results[0]
+    assert file_type_result.clean_rows == 1
+    assert file_type_result.triaged_rows == 3
+    assert file_type_result.clean_workbook_path == (
+        output_dir / "clean_workbooks" / clean_workbook_filename_for("Payslip")
+    )
+    assert manifest["file_types"]["Payslip"]["workbook_path"] == str(file_type_result.workbook_path)
+    assert manifest["file_types"]["Payslip"]["clean_workbook_path"] == str(file_type_result.clean_workbook_path)
+
+    audit_workbook = load_workbook(file_type_result.workbook_path, data_only=True)
+    audit_meta_sheet = audit_workbook["_meta"]
+    assert audit_meta_sheet.max_row == 5
+
+    clean_workbook = load_workbook(file_type_result.clean_workbook_path, data_only=True)
+    clean_sheet = clean_workbook["Payslip"]
+    clean_headers = [
+        clean_sheet.cell(1, column).value
+        for column in range(1, clean_sheet.max_column + 1)
+    ]
+    parse_success_column = clean_headers.index("parse_success") + 1
+    error_column = clean_headers.index("error") + 1
+    assert clean_sheet.max_row == 2
+    assert clean_sheet.cell(2, parse_success_column).value is True
+    assert clean_sheet.cell(2, error_column).value is None
+    assert all(
+        clean_sheet.cell(row, parse_success_column).value is not False
+        for row in range(2, clean_sheet.max_row + 1)
+    )
 
 
 def test_run_export_keeps_chunk_numbers_stable_under_file_type_concurrency(monkeypatch, tmp_path):

@@ -22,7 +22,7 @@ from tests.endpoints.batch.artifacts import (
 )
 from tests.endpoints.batch.fixtures import BATCH_SAFE_ITEM_LIMIT, build_batch_request
 
-from .excel import workbook_filename_for, write_workbook
+from .excel import clean_workbook_filename_for, workbook_filename_for, write_workbook
 from .models import (
     BatchGroundTruthRunResult,
     ExportRow,
@@ -34,6 +34,12 @@ from .models import (
 )
 from .schema import build_failure_template_values, build_success_template_values
 from .source import grouped_fixtures_by_file_type, parse_source_registry
+from .triage import (
+    build_recovery_triage_row,
+    count_by,
+    is_clean_candidate,
+    write_recovery_triage_artifacts,
+)
 
 BATCH_ENDPOINT = "/v1/documents/batch"
 DEFAULT_OUTPUT_ROOT = Path("reports") / "batch_ground_truth"
@@ -851,6 +857,7 @@ def run_batch_ground_truth_export(
     )
     output_root = _ensure_output_dir(output_dir)
     workbooks_dir = output_root / "workbooks"
+    clean_workbooks_dir = output_root / "clean_workbooks"
     batch_artifact_run_dir = _artifact_run_dir()
     output_generated_at = _utc_iso_now()
     execution_results = _execute_file_type_plans(
@@ -865,6 +872,8 @@ def run_batch_ground_truth_export(
 
     results: list[FileTypeExportResult] = []
     manifest_file_types: dict[str, Any] = {}
+    clean_manifest_file_types: dict[str, Any] = {}
+    all_triage_rows: list[dict[str, Any]] = []
 
     for execution in execution_results:
         plan = execution.plan
@@ -877,6 +886,21 @@ def run_batch_ground_truth_export(
             layout=template_layout,
             output_path=workbook_path,
         )
+
+        clean_rows = [row for row in export_rows if is_clean_candidate(row)]
+        triage_rows = [
+            build_recovery_triage_row(row)
+            for row in export_rows
+            if not is_clean_candidate(row)
+        ]
+        clean_workbook_path = clean_workbooks_dir / clean_workbook_filename_for(plan.file_type)
+        clean_headers = write_workbook(
+            file_type=plan.file_type,
+            rows=clean_rows,
+            layout=template_layout,
+            output_path=clean_workbook_path,
+        )
+        all_triage_rows.extend(triage_rows)
 
         success_rows = sum(1 for row in export_rows if row.metadata["ok"] is True)
         failed_rows = sum(1 for row in export_rows if row.metadata["ok"] is False)
@@ -891,27 +915,82 @@ def run_batch_ground_truth_export(
             failed_rows=failed_rows,
             skipped_rows=skipped_rows,
             chunk_count=execution.chunk_count,
+            clean_workbook_path=clean_workbook_path,
+            clean_rows=len(clean_rows),
+            triaged_rows=len(triage_rows),
         )
         results.append(result)
         manifest_file_types[plan.file_type] = {
             "workbook_path": str(workbook_path),
+            "clean_workbook_path": str(clean_workbook_path),
             "headers": headers,
+            "clean_headers": clean_headers,
             "total_rows": len(fixtures),
             "executable_rows": executable_rows,
             "success_rows": success_rows,
             "failed_rows": failed_rows,
             "skipped_rows": skipped_rows,
+            "clean_rows": len(clean_rows),
+            "triaged_rows": len(triage_rows),
             "chunk_count": execution.chunk_count,
             "retry_summary": _retry_summary(export_rows),
         }
+        clean_manifest_file_types[plan.file_type] = {
+            "source_rows": len(fixtures),
+            "audit_workbook_path": str(workbook_path),
+            "clean_workbook_path": str(clean_workbook_path),
+            "clean_rows": len(clean_rows),
+            "triaged_rows": len(triage_rows),
+        }
 
     manifest_path = output_root / "manifest.json"
+    recovery_triage_json_path = output_root / "recovery_triage.json"
+    recovery_triage_csv_path = output_root / "recovery_triage.csv"
+    clean_manifest_path = output_root / "clean_manifest.json"
+    total_source_rows = sum(len(execution.fixtures) for execution in execution_results)
+    clean_rows_by_file_type = {
+        file_type: payload["clean_rows"]
+        for file_type, payload in clean_manifest_file_types.items()
+    }
+    triaged_rows_by_file_type = {
+        file_type: payload["triaged_rows"]
+        for file_type, payload in clean_manifest_file_types.items()
+    }
+    clean_manifest_payload = {
+        "generated_at": output_generated_at,
+        "fixture_registry": str(Path(fixture_registry).expanduser().resolve()),
+        "source_workbook": str(parsed.source_workbook) if parsed.source_workbook is not None else None,
+        "reference_workbook": str(Path(reference_workbook).expanduser().resolve()),
+        "output_dir": str(output_root),
+        "audit_workbooks_dir": str(workbooks_dir),
+        "clean_workbooks_dir": str(clean_workbooks_dir),
+        "recovery_triage_json": str(recovery_triage_json_path),
+        "recovery_triage_csv": str(recovery_triage_csv_path),
+        "total_source_rows": total_source_rows,
+        "clean_included_rows": sum(clean_rows_by_file_type.values()),
+        "triaged_rejected_rows": len(all_triage_rows),
+        "clean_rows_by_fileType": clean_rows_by_file_type,
+        "triaged_rows_by_fileType": triaged_rows_by_file_type,
+        "triaged_rows_by_recovery_class": count_by(all_triage_rows, "recovery_class"),
+        "triaged_rows_by_gt_candidate_status": count_by(all_triage_rows, "gt_candidate_status"),
+        "file_types": clean_manifest_file_types,
+    }
+    write_recovery_triage_artifacts(
+        rows=all_triage_rows,
+        json_path=recovery_triage_json_path,
+        csv_path=recovery_triage_csv_path,
+    )
+    clean_manifest_path.write_text(json.dumps(clean_manifest_payload, indent=2) + "\n", encoding="utf-8")
+
     manifest_payload = {
         "generated_at": output_generated_at,
         "fixture_registry": str(Path(fixture_registry).expanduser().resolve()),
         "source_workbook": str(parsed.source_workbook) if parsed.source_workbook is not None else None,
         "reference_workbook": str(Path(reference_workbook).expanduser().resolve()),
         "output_dir": str(output_root),
+        "clean_manifest": str(clean_manifest_path),
+        "recovery_triage_json": str(recovery_triage_json_path),
+        "recovery_triage_csv": str(recovery_triage_csv_path),
         "batch_artifact_run_dir": str(batch_artifact_run_dir),
         "safe_batch_item_limit": BATCH_SAFE_ITEM_LIMIT,
         "max_concurrent_chunks": max_concurrent_chunks,
@@ -952,4 +1031,7 @@ def run_batch_ground_truth_export(
         batch_artifact_run_dir=batch_artifact_run_dir,
         selected_file_types=tuple(plan.file_type for plan in plans),
         file_type_results=tuple(results),
+        clean_manifest_path=clean_manifest_path,
+        recovery_triage_json_path=recovery_triage_json_path,
+        recovery_triage_csv_path=recovery_triage_csv_path,
     )
