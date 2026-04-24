@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from copy import copy
@@ -487,11 +488,13 @@ def _install_fake_make_client(monkeypatch, plans: dict[tuple[str, ...], object])
                     return httpx.Response(
                         int(plan.get("status", 200)),
                         text=str(plan.get("text", "not-json")),
+                        headers=dict(plan.get("headers", {})),
                         request=request,
                     )
                 return httpx.Response(
                     int(plan.get("status", 200)),
                     json=plan["body"],
+                    headers=dict(plan.get("headers", {})),
                     request=request,
                 )
             finally:
@@ -1139,11 +1142,15 @@ def test_run_export_manifest_records_retry_policy_and_summary(monkeypatch, tmp_p
         max_concurrent_file_types=1,
         token_expiry_retries=1,
         transient_chunk_retries=1,
+        rate_limit_retries=1,
+        rate_limit_backoff_secs=2.0,
     )
 
     manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
     assert manifest["token_expiry_retries"] == 1
     assert manifest["transient_chunk_retries"] == 1
+    assert manifest["rate_limit_retries"] == 1
+    assert manifest["rate_limit_backoff_secs"] == 2.0
     assert manifest["file_types"]["ACR"]["retry_summary"] == {
         "rows_with_retries": 1,
         "max_batch_attempt_count": 2,
@@ -1236,6 +1243,92 @@ def test_remote_protocol_error_retries_once_and_succeeds_without_refreshing_clie
     assert rows[0].metadata["ok"] is True
     assert rows[0].metadata["batch_attempt_count"] == 2
     assert rows[0].metadata["batch_retry_reason"] == "remote_protocol_error"
+
+
+def test_rate_limit_retry_respects_retry_after_and_succeeds(monkeypatch):
+    fixtures = [_make_fixture(1)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: [
+            {
+                "kind": "json",
+                "status": 429,
+                "headers": {"Retry-After": "3"},
+                "body": {"error": "Rate limit exceeded"},
+                "name": "rate-limited",
+            },
+            {"kind": "json", "body": {"results": [_success_result(1, 0)]}, "name": "success"},
+        ]
+    }
+    slept: list[float] = []
+    monkeypatch.setattr(batch_ground_truth_workflow, "_sleep", slept.append)
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    attempts = state["attempts"]
+    assert isinstance(attempts, dict)
+    assert attempts[key] == 2
+    assert slept == [3.0]
+    assert rows[0].metadata["ok"] is True
+    assert rows[0].metadata["failure_tag"] is None
+    assert rows[0].metadata["batch_attempt_count"] == 2
+    assert rows[0].metadata["batch_retry_reason"] == "rate_limited"
+    assert rows[0].metadata["batch_final_attempt_error_type"] is None
+    assert is_clean_candidate(rows[0]) is True
+
+
+def test_rate_limit_retry_exhaustion_is_triaged_as_rate_limited(monkeypatch):
+    fixtures = [_make_fixture(record_id) for record_id in range(1, 3)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: [
+            {
+                "kind": "json",
+                "status": 429,
+                "body": {"error": "Rate limit exceeded"},
+                "name": "rate-limited-1",
+            },
+            {
+                "kind": "json",
+                "status": 429,
+                "body": {"error": "Rate limit exceeded"},
+                "name": "rate-limited-2",
+            },
+        ]
+    }
+    slept: list[float] = []
+    monkeypatch.setattr(batch_ground_truth_workflow, "_sleep", slept.append)
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+        rate_limit_retries=1,
+        rate_limit_backoff_secs=0.25,
+    )
+
+    attempts = state["attempts"]
+    assert isinstance(attempts, dict)
+    assert attempts[key] == 2
+    assert slept == [0.25]
+    assert {row.metadata["ok"] for row in rows} == {False}
+    assert {row.metadata["failure_tag"] for row in rows} == {"http_429"}
+    assert {row.metadata["batch_http_status"] for row in rows} == {429}
+    assert {row.metadata["batch_attempt_count"] for row in rows} == {2}
+    assert {row.metadata["batch_retry_reason"] for row in rows} == {"rate_limited"}
+    assert {row.metadata["batch_final_attempt_error_type"] for row in rows} == {"RateLimited"}
+    assert all(is_clean_candidate(row) is False for row in rows)
+
+    triage_row = build_recovery_triage_row(rows[0])
+    assert triage_row["recovery_class"] == "rate_limited"
+    assert triage_row["gt_candidate_status"] == "rerun_candidate"
+    assert triage_row["recovery_action"] == "targeted_rerun_with_lower_concurrency_or_backoff"
 
 
 @pytest.mark.parametrize(
@@ -1902,6 +1995,79 @@ def test_run_export_writes_clean_workbook_manifest_and_recovery_triage(monkeypat
     )
 
 
+def test_run_export_excludes_rate_limited_rows_from_clean_and_triages_them(monkeypatch, tmp_path):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    registry_path = _write_fixture_registry(
+        tmp_path / "fixture_registry.yaml",
+        file_type_counts={"ACR": 5},
+    )
+    output_dir = tmp_path / "output"
+    _configure_batch_artifact_dir(monkeypatch, tmp_path)
+    layout = load_reference_template(reference_path)
+    first_chunk = _registry_chunk_key("ACR", range(1, 5))
+    second_chunk = _registry_chunk_key("ACR", range(5, 6))
+    plans = {
+        first_chunk: {"kind": "json", "body": _success_body_for_key(first_chunk)},
+        second_chunk: {
+            "kind": "json",
+            "status": 429,
+            "body": {"error": "Rate limit exceeded"},
+        },
+    }
+    _install_fake_make_client(monkeypatch, plans)
+
+    result = batch_ground_truth_workflow.run_batch_ground_truth_export(
+        fixture_registry=registry_path,
+        reference_workbook=reference_path,
+        output_dir=output_dir,
+        selected_file_types=None,
+        template_layout=layout,
+        max_concurrent_chunks=1,
+        max_concurrent_file_types=1,
+        rate_limit_retries=0,
+    )
+
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    clean_manifest = json.loads(result.clean_manifest_path.read_text(encoding="utf-8"))
+    recovery_rows = json.loads(result.recovery_triage_json_path.read_text(encoding="utf-8"))
+    with result.recovery_triage_csv_path.open(newline="", encoding="utf-8") as handle:
+        csv_rows = list(csv.DictReader(handle))
+    assert len(recovery_rows) == 1
+    assert len(csv_rows) == 1
+    assert recovery_rows[0]["failure_tag"] == "http_429"
+    assert recovery_rows[0]["batch_http_status"] == 429
+    assert recovery_rows[0]["recovery_class"] == "rate_limited"
+    assert recovery_rows[0]["gt_candidate_status"] == "rerun_candidate"
+    assert recovery_rows[0]["recovery_action"] == "targeted_rerun_with_lower_concurrency_or_backoff"
+    assert clean_manifest["clean_included_rows"] == 4
+    assert clean_manifest["triaged_rejected_rows"] == 1
+    assert clean_manifest["triaged_rows_by_recovery_class"] == {"rate_limited": 1}
+    assert clean_manifest["triaged_rows_by_gt_candidate_status"] == {"rerun_candidate": 1}
+    assert manifest["rate_limit_retries"] == 0
+    assert manifest["file_types"]["ACR"]["retry_summary"] == {
+        "rows_with_retries": 0,
+        "max_batch_attempt_count": 1,
+        "batch_retry_reasons": {},
+        "batch_final_attempt_error_types": {"RateLimited": 1},
+    }
+
+    file_type_result = result.file_type_results[0]
+    assert file_type_result.clean_rows == 4
+    assert file_type_result.triaged_rows == 1
+    clean_workbook = load_workbook(file_type_result.clean_workbook_path, data_only=True)
+    clean_sheet = clean_workbook["ACR"]
+    clean_headers = [
+        clean_sheet.cell(1, column).value
+        for column in range(1, clean_sheet.max_column + 1)
+    ]
+    parse_success_column = clean_headers.index("parse_success") + 1
+    error_column = clean_headers.index("error") + 1
+    assert clean_sheet.max_row == 5
+    for row in range(2, clean_sheet.max_row + 1):
+        assert clean_sheet.cell(row, parse_success_column).value is True
+        assert clean_sheet.cell(row, error_column).value is None
+
+
 def test_run_export_keeps_chunk_numbers_stable_under_file_type_concurrency(monkeypatch, tmp_path):
     reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
     registry_path = _write_fixture_registry(
@@ -2008,7 +2174,7 @@ def test_build_parser_rejects_invalid_max_concurrent_file_types(value):
 
 @pytest.mark.parametrize(
     "flag",
-    ["--token-expiry-retries", "--transient-chunk-retries"],
+    ["--token-expiry-retries", "--transient-chunk-retries", "--rate-limit-retries"],
 )
 @pytest.mark.parametrize("value", ["-1", "not-an-int"])
 def test_build_parser_rejects_invalid_retry_counts(flag, value):
@@ -2020,6 +2186,23 @@ def test_build_parser_rejects_invalid_retry_counts(flag, value):
                 "--reference-workbook",
                 "reference.xlsx",
                 flag,
+                value,
+            ]
+        )
+
+    assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("value", ["-1", "not-a-number"])
+def test_build_parser_rejects_invalid_rate_limit_backoff(value):
+    parser = export_batch_ground_truth.build_parser()
+
+    with pytest.raises(SystemExit) as exc:
+        parser.parse_args(
+            [
+                "--reference-workbook",
+                "reference.xlsx",
+                "--rate-limit-backoff-secs",
                 value,
             ]
         )
@@ -2088,6 +2271,10 @@ def test_main_passes_concurrency_values_to_workflow(monkeypatch, tmp_path):
             "2",
             "--transient-chunk-retries",
             "0",
+            "--rate-limit-retries",
+            "3",
+            "--rate-limit-backoff-secs",
+            "0.5",
         ]
     )
 
@@ -2096,4 +2283,6 @@ def test_main_passes_concurrency_values_to_workflow(monkeypatch, tmp_path):
     assert captured["max_concurrent_file_types"] == 3
     assert captured["token_expiry_retries"] == 2
     assert captured["transient_chunk_retries"] == 0
+    assert captured["rate_limit_retries"] == 3
+    assert captured["rate_limit_backoff_secs"] == 0.5
     assert captured["fixture_registry"] == str(registry_path)

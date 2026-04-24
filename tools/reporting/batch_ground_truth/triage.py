@@ -194,6 +194,13 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
             "gt_candidate_status": "rerun_candidate",
         }
 
+    if failure_tag == "http_429" or batch_http_status == 429:
+        return {
+            "recovery_class": "rate_limited",
+            "recovery_action": "targeted_rerun_with_lower_concurrency_or_backoff",
+            "gt_candidate_status": "rerun_candidate",
+        }
+
     if failure_tag.startswith("http_"):
         try:
             status_code = int(failure_tag.rsplit("_", 1)[-1])

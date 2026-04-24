@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from email.utils import parsedate_to_datetime
 import json
 import os
 import threading
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -46,6 +48,8 @@ DEFAULT_OUTPUT_ROOT = Path("reports") / "batch_ground_truth"
 BATCH_TIMEOUT_SECS = 300.0
 DEFAULT_TOKEN_EXPIRY_RETRIES = 1
 DEFAULT_TRANSIENT_CHUNK_RETRIES = 1
+DEFAULT_RATE_LIMIT_RETRIES = 1
+DEFAULT_RATE_LIMIT_BACKOFF_SECS = 2.0
 _TOKEN_EXPIRY_EXACT_MARKERS = (
     "openid connect token expired",
     "jwt has expired",
@@ -336,6 +340,37 @@ def _retry_reason_text(retry_reasons: list[str]) -> str | None:
     return ",".join(dict.fromkeys(retry_reasons))
 
 
+def _sleep(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+def _rate_limit_retry_after_seconds(
+    response: httpx.Response,
+    *,
+    retry_index: int,
+    backoff_secs: float,
+) -> float:
+    retry_after = response.headers.get("Retry-After", "").strip()
+    if retry_after:
+        try:
+            seconds = float(retry_after)
+        except ValueError:
+            try:
+                retry_at = parsedate_to_datetime(retry_after)
+            except (TypeError, ValueError):
+                retry_at = None
+            if retry_at is not None:
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=timezone.utc)
+                seconds = (retry_at - datetime.now(tz=timezone.utc)).total_seconds()
+            else:
+                seconds = None
+        if seconds is not None:
+            return max(0.0, seconds)
+
+    return backoff_secs * (2 ** max(0, retry_index - 1))
+
+
 def _retry_summary(rows: list[ExportRow]) -> dict[str, Any]:
     attempt_counts = [
         row.metadata.get("batch_attempt_count")
@@ -447,11 +482,17 @@ def _execute_chunk(
     client_handle: _BatchClientHandle | None = None,
     token_expiry_retries: int = DEFAULT_TOKEN_EXPIRY_RETRIES,
     transient_chunk_retries: int = DEFAULT_TRANSIENT_CHUNK_RETRIES,
+    rate_limit_retries: int = DEFAULT_RATE_LIMIT_RETRIES,
+    rate_limit_backoff_secs: float = DEFAULT_RATE_LIMIT_BACKOFF_SECS,
 ) -> dict[int, ExportRow]:
     if token_expiry_retries < 0:
         raise ValueError("token_expiry_retries must be a non-negative integer")
     if transient_chunk_retries < 0:
         raise ValueError("transient_chunk_retries must be a non-negative integer")
+    if rate_limit_retries < 0:
+        raise ValueError("rate_limit_retries must be a non-negative integer")
+    if rate_limit_backoff_secs < 0:
+        raise ValueError("rate_limit_backoff_secs must be non-negative")
 
     if client_handle is None:
         with _BatchClientHandle() as owned_client_handle:
@@ -462,6 +503,8 @@ def _execute_chunk(
                 client_handle=owned_client_handle,
                 token_expiry_retries=token_expiry_retries,
                 transient_chunk_retries=transient_chunk_retries,
+                rate_limit_retries=rate_limit_retries,
+                rate_limit_backoff_secs=rate_limit_backoff_secs,
             )
 
     row_map: dict[int, ExportRow] = {}
@@ -469,6 +512,7 @@ def _execute_chunk(
     attempt_count = 0
     token_expiry_retry_count = 0
     transient_retry_count = 0
+    rate_limit_retry_count = 0
     retry_reasons: list[str] = []
 
     while True:
@@ -547,6 +591,31 @@ def _execute_chunk(
             )
 
         batch_http_status = response.status_code
+        if batch_http_status == 429:
+            if rate_limit_retry_count < rate_limit_retries:
+                rate_limit_retry_count += 1
+                retry_reasons.append("rate_limited")
+                _sleep(
+                    _rate_limit_retry_after_seconds(
+                        response,
+                        retry_index=rate_limit_retry_count,
+                        backoff_secs=rate_limit_backoff_secs,
+                    )
+                )
+                continue
+            return _request_failure_rows(
+                fixtures,
+                output_generated_at=output_generated_at,
+                batch_chunk_number=chunk_number,
+                failure_tag="http_429",
+                error_type=None,
+                error=diagnose(response),
+                batch_http_status=batch_http_status,
+                batch_attempt_count=attempt_count,
+                batch_retry_reason=_retry_reason_text(retry_reasons),
+                batch_final_attempt_error_type="RateLimited",
+            )
+
         try:
             body = response.json()
         except ValueError:
@@ -677,6 +746,8 @@ def _execute_file_type(
     max_concurrent_chunks: int = 1,
     token_expiry_retries: int = DEFAULT_TOKEN_EXPIRY_RETRIES,
     transient_chunk_retries: int = DEFAULT_TRANSIENT_CHUNK_RETRIES,
+    rate_limit_retries: int = DEFAULT_RATE_LIMIT_RETRIES,
+    rate_limit_backoff_secs: float = DEFAULT_RATE_LIMIT_BACKOFF_SECS,
 ) -> tuple[list[ExportRow], int]:
     if max_concurrent_chunks < 1:
         raise ValueError("max_concurrent_chunks must be a positive integer")
@@ -684,6 +755,10 @@ def _execute_file_type(
         raise ValueError("token_expiry_retries must be a non-negative integer")
     if transient_chunk_retries < 0:
         raise ValueError("transient_chunk_retries must be a non-negative integer")
+    if rate_limit_retries < 0:
+        raise ValueError("rate_limit_retries must be a non-negative integer")
+    if rate_limit_backoff_secs < 0:
+        raise ValueError("rate_limit_backoff_secs must be non-negative")
 
     row_map: dict[int, ExportRow] = {}
 
@@ -705,6 +780,8 @@ def _execute_file_type(
                             client_handle=client_handle,
                             token_expiry_retries=token_expiry_retries,
                             transient_chunk_retries=transient_chunk_retries,
+                            rate_limit_retries=rate_limit_retries,
+                            rate_limit_backoff_secs=rate_limit_backoff_secs,
                         )
                     )
     else:
@@ -718,6 +795,8 @@ def _execute_file_type(
                     output_generated_at=output_generated_at,
                     token_expiry_retries=token_expiry_retries,
                     transient_chunk_retries=transient_chunk_retries,
+                    rate_limit_retries=rate_limit_retries,
+                    rate_limit_backoff_secs=rate_limit_backoff_secs,
                 )
                 for chunk_number, chunk in chunk_specs
             ]
@@ -736,6 +815,8 @@ def _execute_file_type_plan(
     max_concurrent_chunks: int,
     token_expiry_retries: int,
     transient_chunk_retries: int,
+    rate_limit_retries: int = DEFAULT_RATE_LIMIT_RETRIES,
+    rate_limit_backoff_secs: float = DEFAULT_RATE_LIMIT_BACKOFF_SECS,
 ) -> _FileTypeExecution:
     try:
         export_rows, chunk_count = _execute_file_type(
@@ -744,6 +825,8 @@ def _execute_file_type_plan(
             max_concurrent_chunks=max_concurrent_chunks,
             token_expiry_retries=token_expiry_retries,
             transient_chunk_retries=transient_chunk_retries,
+            rate_limit_retries=rate_limit_retries,
+            rate_limit_backoff_secs=rate_limit_backoff_secs,
         )
     except Exception as exc:
         raise RuntimeError(
@@ -768,6 +851,8 @@ def _execute_file_type_plans(
     max_concurrent_file_types: int,
     token_expiry_retries: int,
     transient_chunk_retries: int,
+    rate_limit_retries: int = DEFAULT_RATE_LIMIT_RETRIES,
+    rate_limit_backoff_secs: float = DEFAULT_RATE_LIMIT_BACKOFF_SECS,
 ) -> list[_FileTypeExecution]:
     if max_concurrent_file_types < 1:
         raise ValueError("max_concurrent_file_types must be a positive integer")
@@ -781,6 +866,8 @@ def _execute_file_type_plans(
                 max_concurrent_chunks=max_concurrent_chunks,
                 token_expiry_retries=token_expiry_retries,
                 transient_chunk_retries=transient_chunk_retries,
+                rate_limit_retries=rate_limit_retries,
+                rate_limit_backoff_secs=rate_limit_backoff_secs,
             )
             for plan in plans
         ]
@@ -797,6 +884,8 @@ def _execute_file_type_plans(
                 max_concurrent_chunks=max_concurrent_chunks,
                 token_expiry_retries=token_expiry_retries,
                 transient_chunk_retries=transient_chunk_retries,
+                rate_limit_retries=rate_limit_retries,
+                rate_limit_backoff_secs=rate_limit_backoff_secs,
             ): index
             for index, plan in enumerate(plans)
         }
@@ -841,6 +930,8 @@ def run_batch_ground_truth_export(
     max_concurrent_file_types: int = 1,
     token_expiry_retries: int = DEFAULT_TOKEN_EXPIRY_RETRIES,
     transient_chunk_retries: int = DEFAULT_TRANSIENT_CHUNK_RETRIES,
+    rate_limit_retries: int = DEFAULT_RATE_LIMIT_RETRIES,
+    rate_limit_backoff_secs: float = DEFAULT_RATE_LIMIT_BACKOFF_SECS,
 ) -> BatchGroundTruthRunResult:
     if max_concurrent_chunks < 1:
         raise ValueError("max_concurrent_chunks must be a positive integer")
@@ -850,6 +941,10 @@ def run_batch_ground_truth_export(
         raise ValueError("token_expiry_retries must be a non-negative integer")
     if transient_chunk_retries < 0:
         raise ValueError("transient_chunk_retries must be a non-negative integer")
+    if rate_limit_retries < 0:
+        raise ValueError("rate_limit_retries must be a non-negative integer")
+    if rate_limit_backoff_secs < 0:
+        raise ValueError("rate_limit_backoff_secs must be non-negative")
 
     parsed, grouped, plans = plan_file_types(
         fixture_registry=fixture_registry,
@@ -868,6 +963,8 @@ def run_batch_ground_truth_export(
         max_concurrent_file_types=max_concurrent_file_types,
         token_expiry_retries=token_expiry_retries,
         transient_chunk_retries=transient_chunk_retries,
+        rate_limit_retries=rate_limit_retries,
+        rate_limit_backoff_secs=rate_limit_backoff_secs,
     )
 
     results: list[FileTypeExportResult] = []
@@ -1000,6 +1097,8 @@ def run_batch_ground_truth_export(
         ),
         "token_expiry_retries": token_expiry_retries,
         "transient_chunk_retries": transient_chunk_retries,
+        "rate_limit_retries": rate_limit_retries,
+        "rate_limit_backoff_secs": rate_limit_backoff_secs,
         "selected_file_types": [plan.file_type for plan in plans],
         "skipped_rows": [
             {

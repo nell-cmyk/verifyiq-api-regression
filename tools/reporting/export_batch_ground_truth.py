@@ -14,6 +14,8 @@ from tests.fixtures.registry import REGISTRY_PATH as SHARED_REGISTRY_PATH
 from tools.reporting.batch_ground_truth.schema import load_reference_template
 from tools.reporting.batch_ground_truth.workflow import (
     DEFAULT_OUTPUT_ROOT,
+    DEFAULT_RATE_LIMIT_BACKOFF_SECS,
+    DEFAULT_RATE_LIMIT_RETRIES,
     DEFAULT_TOKEN_EXPIRY_RETRIES,
     DEFAULT_TRANSIENT_CHUNK_RETRIES,
     plan_file_types,
@@ -48,6 +50,16 @@ def _non_negative_int(value: str) -> int:
         raise argparse.ArgumentTypeError("must be a non-negative integer") from exc
     if parsed < 0:
         raise argparse.ArgumentTypeError("must be a non-negative integer")
+    return parsed
+
+
+def _non_negative_float(value: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a non-negative number") from exc
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be a non-negative number")
     return parsed
 
 
@@ -130,6 +142,24 @@ def build_parser() -> argparse.ArgumentParser:
             f"Defaults to {DEFAULT_TRANSIENT_CHUNK_RETRIES}."
         ),
     )
+    parser.add_argument(
+        "--rate-limit-retries",
+        type=_non_negative_int,
+        default=DEFAULT_RATE_LIMIT_RETRIES,
+        help=(
+            "Number of same-chunk retries after HTTP 429 rate limiting. "
+            f"Defaults to {DEFAULT_RATE_LIMIT_RETRIES}."
+        ),
+    )
+    parser.add_argument(
+        "--rate-limit-backoff-secs",
+        type=_non_negative_float,
+        default=DEFAULT_RATE_LIMIT_BACKOFF_SECS,
+        help=(
+            "Fallback seconds for HTTP 429 retry backoff when Retry-After is absent. "
+            f"Defaults to {DEFAULT_RATE_LIMIT_BACKOFF_SECS}."
+        ),
+    )
     return parser
 
 
@@ -169,6 +199,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Max concurrent chunks per fileType: {args.max_concurrent_chunks}")
     print(f"Token-expiry retries per chunk: {args.token_expiry_retries}")
     print(f"Transient transport retries per chunk: {args.transient_chunk_retries}")
+    print(f"Rate-limit retries per chunk: {args.rate_limit_retries}")
+    print(f"Rate-limit fallback backoff seconds: {args.rate_limit_backoff_secs:g}")
     print(
         "Approx max in-flight batch requests: "
         f"{args.max_concurrent_file_types * args.max_concurrent_chunks}"
@@ -194,6 +226,8 @@ def main(argv: list[str] | None = None) -> int:
             max_concurrent_file_types=args.max_concurrent_file_types,
             token_expiry_retries=args.token_expiry_retries,
             transient_chunk_retries=args.transient_chunk_retries,
+            rate_limit_retries=args.rate_limit_retries,
+            rate_limit_backoff_secs=args.rate_limit_backoff_secs,
         )
     except RuntimeError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

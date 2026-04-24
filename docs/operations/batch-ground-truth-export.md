@@ -95,7 +95,9 @@ Optional retry overrides:
 ./.venv/bin/python tools/reporting/export_batch_ground_truth.py \
   --reference-workbook /absolute/path/to/reference.xlsx \
   --token-expiry-retries 1 \
-  --transient-chunk-retries 1
+  --transient-chunk-retries 1 \
+  --rate-limit-retries 1 \
+  --rate-limit-backoff-secs 2
 ```
 
 ## Fixture Registry Source
@@ -108,6 +110,7 @@ Optional retry overrides:
 - `--max-concurrent-chunks` controls how many `/documents/batch` chunks can be in flight at once within each fileType.
 - Both defaults are `1`, which preserves the original fileType-sequential and chunk-sequential behavior.
 - A starting setting for a full export is `--max-concurrent-file-types 2 --max-concurrent-chunks 2`.
+- A full export at `--max-concurrent-file-types 4 --max-concurrent-chunks 4` can create up to 16 in-flight batch requests and may be too aggressive if the service returns a high HTTP `429` rate.
 - The approximate configured maximum in-flight `/documents/batch` requests is `max_concurrent_file_types * max_concurrent_chunks`; the manifest records this as `effective_max_concurrent_batch_requests`.
 - Workbook and manifest writing stay single-threaded after fileType execution returns, and all raw batch response artifacts still land in one shared batch artifact run folder.
 - The safe request size limit is unchanged: each batch request still contains at most `4` items.
@@ -116,14 +119,17 @@ Optional retry overrides:
 - The exporter keeps the default fileType and chunk execution model unchanged unless a recoverable chunk-level failure occurs.
 - Confirmed IAP/OIDC/JWT token expiry, including `OpenID Connect token expired` and `JWT has expired`, clears the cached IAP token, recreates the HTTP client with a refreshed token, and retries the same chunk once by default.
 - `httpx.ReadTimeout` and `httpx.RemoteProtocolError` retry the same chunk once by default. Other request errors are recorded without retry.
-- Retry counts are configurable with `--token-expiry-retries` and `--transient-chunk-retries`; both default to `1`, and `0` disables that retry class.
+- HTTP `429` means rate limiting or service pressure. The exporter retries the same chunk once by default, respects `Retry-After` when the response provides it, and otherwise uses bounded fallback backoff.
+- Retry counts are configurable with `--token-expiry-retries`, `--transient-chunk-retries`, and `--rate-limit-retries`; all default to `1`, and `0` disables that retry class.
+- `--rate-limit-backoff-secs` controls the fallback backoff for `429` retries when `Retry-After` is absent. It defaults to `2` seconds.
 - Application-level row failures from a completed `200` batch response are not retried. Expected fixture/API failures such as `DocumentSizeGuardError` or `MultiAccountDocumentError` and row-level `unusable_result` findings remain row failures for review.
 - When token expiry retries are exhausted, rows are recorded with `failure_tag=persistent_token_expired` rather than a generic HTTP/request failure.
+- When rate-limit retries are exhausted, rows are recorded with `failure_tag=http_429`, remain excluded from clean GT workbooks, and are triaged as rerun candidates rather than malformed responses.
 
 ## Retry Observability
 - The analyst-facing main sheet remains focused on `filename`, `parse_success`, `error`, and mapped fields.
 - The `_meta` sheet includes `batch_attempt_count`, `batch_retry_reason`, and `batch_final_attempt_error_type` for retry tracing.
-- `manifest.json` records the configured retry counts and a per-fileType `retry_summary` with rows retried, max attempt count, retry reasons, and final retry error types.
+- `manifest.json` records the configured retry counts, rate-limit backoff setting, and a per-fileType `retry_summary` with rows retried, max attempt count, retry reasons, and final retry error types.
 
 ## Inclusion And Skipping Rules
 - `⚠ Verify` and other non-final status rows are included. Status is preserved in the generated registry and output workbook, and is not used as a batch gate.
@@ -143,7 +149,7 @@ Optional retry overrides:
 - Clean workbooks are generated under `clean_workbooks/` and include only rows that already mapped a reliable successful parsed payload.
 - A row is included in a clean workbook only when the exporter has `ok=true`, no `failure_tag`, no `error_type`, no `error`, `parse_success=true`, and a usable `summaryResult[0]` payload.
 - Null or blank extracted fields do not remove a row from the clean workbook when the row otherwise has a usable successful parse. Blank values can be genuine extracted empty values.
-- Clean workbooks exclude unsupported fixtures, row-level API errors, retry-exhausted chunk failures, expected warning results, quality-gated no-payload results, and malformed or unexpected successful response shapes.
+- Clean workbooks exclude unsupported fixtures, row-level API errors, retry-exhausted chunk failures, exhausted HTTP `429` rate-limit rows, expected warning results, quality-gated no-payload results, and malformed or unexpected successful response shapes.
 - Excluding a row from the clean workbook only means it is not a clean ground-truth candidate right now. It does not mean the fixture should be deleted from the registry or removed from other automation.
 - `clean_manifest.json` records total selected source rows, clean included rows, triaged rows, counts by fileType, counts by recovery class, counts by ground-truth candidate status, and the paired full/audit and clean workbook paths.
 
@@ -154,6 +160,7 @@ Optional retry overrides:
 - The exporter does not mutate the source registry, does not bulk-tag fixtures invalid, and does not convert non-clean rows into successful GT rows.
 
 Common recovery classes:
+- `rate_limited`: HTTP `429` rate limiting or service pressure after bounded retry exhaustion. Action: targeted rerun with lower concurrency or explicit backoff.
 - `transient_or_auth_failure`: token expiry, timeout, request transport failure, selected auth failures, or likely transient 5xx chunk failure. Action: targeted rerun after retry/token/service recovery.
 - `document_size_guard`: `DocumentSizeGuardError`. Action: exclude from clean GT as-is, or replace/reduce the fixture if clean GT coverage is still needed.
 - `unsupported_fixture`: unsupported extension, missing GCS URI, or malformed GCS URI. Action: replace or correct the source artifact.
@@ -161,6 +168,12 @@ Common recovery classes:
 - `http_200_no_payload_quality_gate`: HTTP `200` and row `ok=true`, but parsed containers are empty and extraction was not attempted because a quality gate failed. Action: inspect fixture quality and replace if needed.
 - `http_200_no_payload_unknown`: HTTP `200` and row `ok=true`, but no usable payload and no clear quality-gate reason. Action: API behavior review before GT use.
 - `malformed_or_unexpected_response_shape`: response cannot be mapped and does not match a known no-payload quality-gate pattern. Action: API/exporter schema review.
+
+## HTTP 429 Rate-Limited Rows
+- HTTP `429` rows are rate-limit or service-pressure rows, not clean GT candidates and not invalid fixtures.
+- If a later same-chunk retry returns a valid HTTP `200` payload, the exporter records the final successful rows normally with `batch_retry_reason=rate_limited`.
+- If rate-limit retries are exhausted, the affected rows stay in the full/audit workbook with `failure_tag=http_429`, are excluded from clean workbooks, and appear in `recovery_triage.*` with `recovery_class=rate_limited`, `gt_candidate_status=rerun_candidate`, and `recovery_action=targeted_rerun_with_lower_concurrency_or_backoff`.
+- When a full run has a high `rate_limited` count, do not immediately repeat the same concurrency. Prefer targeted reruns for the affected fileTypes with lower pressure, such as `--max-concurrent-file-types 1 --max-concurrent-chunks 1`, then increase cautiously only after the 429 rate is acceptable.
 
 ## HTTP 200 No-Payload Rows
 - HTTP `200` and row `ok=true` are not enough for clean GT.
