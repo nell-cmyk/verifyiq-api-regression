@@ -121,35 +121,45 @@ VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting
 ./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix
 ```
 
-10. If you want the stronger explicit gate, run full regression:
+10. If the change needs a focused existing `/parse` category selection, use the canonical category mapping:
+
+```bash
+./.venv/bin/python tools/run_regression.py --endpoint parse --category contract
+./.venv/bin/python tools/run_regression.py --endpoint parse --category auth
+./.venv/bin/python tools/run_regression.py --endpoint parse --category negative
+```
+
+11. If you want the stronger explicit gate, run full regression:
 
 ```bash
 ./.venv/bin/python tools/run_regression.py --suite full
 ```
 
-11. If the change touches the GET smoke lane or cross-group GET coverage, run the canonical smoke suite:
+12. If the change touches the GET smoke lane or cross-group GET coverage, run the canonical smoke suite:
 
 ```bash
 ./.venv/bin/python tools/run_regression.py --suite smoke
 ```
 
-12. If the change touches `/documents/batch` tests, fixtures, or selected-fixture wrapper behavior, use the canonical batch selection:
+13. If the change touches `/documents/batch` tests, fixtures, or selected-fixture wrapper behavior, use the canonical batch selection:
 
 ```bash
 ./.venv/bin/python tools/run_regression.py --endpoint batch
+./.venv/bin/python tools/run_regression.py --endpoint batch --category contract
+./.venv/bin/python tools/run_regression.py --endpoint batch --category negative
 ./.venv/bin/python tools/run_regression.py --endpoint batch --fixtures-json /path/to/fixtures.json
 ```
 
-13. Review generated artifacts from the validation surface you used.
-14. If the task produced durable repo truth, promote it automatically in the same pass instead of leaving it only in Mind. Update `docs/knowledge-base/repo-roadmap.md` for project status and sequencing, `docs/operations/*` for command/workflow changes, `docs/knowledge-base/*` for durable findings, and `AGENTS.md` only for stable repo-wide rules.
-15. Before handoff or commit, the agent should save an explicit durable Mind summary when needed and run the repo-local finish step. In Codex this remains explicit, but it should not be left for the user to remember:
+14. Review generated artifacts from the validation surface you used.
+15. If the task produced durable repo truth, promote it automatically in the same pass instead of leaving it only in Mind. Update `docs/knowledge-base/repo-roadmap.md` for project status and sequencing, `docs/operations/*` for command/workflow changes, `docs/knowledge-base/*` for durable findings, and `AGENTS.md` only for stable repo-wide rules.
+16. Before handoff or commit, the agent should save an explicit durable Mind summary when needed and run the repo-local finish step. In Codex this remains explicit, but it should not be left for the user to remember:
 
 ```bash
 ./.venv/bin/python tools/mind_session.py save-summary --title "short-title" --body "Durable summary"
 ./.venv/bin/python tools/mind_session.py finish
 ```
 
-16. Review the diff, stage the intended files, and use the guarded Git flow:
+17. Review the diff, stage the intended files, and use the guarded Git flow:
 
 ```bash
 ./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"
@@ -241,6 +251,26 @@ Delegated engine and compatibility/debug path:
 
 Use [Matrix Triage](matrix.md) for deeper matrix-specific debugging guidance.
 
+## Parse Category Flow
+Canonical focused `/parse` category surfaces:
+
+```bash
+./.venv/bin/python tools/run_regression.py --endpoint parse --category contract
+./.venv/bin/python tools/run_regression.py --endpoint parse --category auth
+./.venv/bin/python tools/run_regression.py --endpoint parse --category negative
+```
+
+Use them:
+- when you want a narrower opt-in slice of the existing protected parse tests
+- when a change is category-specific and does not need the whole protected baseline
+- with `--dry-run` first when you only need to inspect mapped node IDs
+
+Current mapping notes:
+- `contract` targets existing successful response shape checks plus the current HTTPValidationError shape check.
+- `auth` targets existing tenant-token auth-negative checks.
+- `negative` targets existing missing-file, missing-fileType, empty-body, and validation-shape checks.
+- `matrix` remains separate because it is an opt-in fileType breadth lane with wrapper-managed `RUN_PARSE_MATRIX=1`.
+
 ## Full Regression Flow
 Canonical stronger gate:
 
@@ -277,6 +307,13 @@ Selected-fixture batch surface:
 ./.venv/bin/python tools/run_regression.py --endpoint batch --fixtures-json /path/to/fixtures.json
 ```
 
+Focused batch category surfaces:
+
+```bash
+./.venv/bin/python tools/run_regression.py --endpoint batch --category contract
+./.venv/bin/python tools/run_regression.py --endpoint batch --category negative
+```
+
 Delegated engines and compatibility/debug paths:
 
 ```bash
@@ -285,6 +322,11 @@ Delegated engines and compatibility/debug paths:
 ```
 
 Keep batch opt-in. Do not add `/documents/batch` to the default no-argument runner unless the roadmap explicitly changes the protected suite definition.
+
+Current mapping notes:
+- `contract` targets existing top-level structure, summary accounting, result order, per-item contract, and calculatedFields stub guard checks.
+- `negative` targets existing missing-items, empty-items, over-limit, malformed-item, and unsupported-fileType partial-failure checks.
+- `auth` is intentionally not mapped for `/documents/batch` while the auth-negative blocker remains open.
 
 ## Batch Auth Characterization
 The default `/documents/batch` suite stays green by excluding the currently

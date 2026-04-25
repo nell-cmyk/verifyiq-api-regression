@@ -7,7 +7,7 @@ This slice supports:
 - live execution for the protected suite
 - live execution for the opt-in GET smoke suite
 - live execution for `--suite full` via delegation
-- live execution for the opt-in parse matrix and batch mappings via delegation
+- live execution for mapped opt-in parse and batch category selections
 - structured reporting for protected, full, and parse matrix via existing helpers
 """
 from __future__ import annotations
@@ -49,8 +49,23 @@ GET_SMOKE_ENV_VARS = BATCH_ENV_VARS
 IMPLEMENTED_SUITES = ("protected", "smoke", "full")
 PLANNED_SUITES = ("extended",)
 IMPLEMENTED_ENDPOINTS = ("parse", "batch")
-IMPLEMENTED_CATEGORIES = ("matrix",)
-PLANNED_CATEGORIES = ("contract", "auth", "negative", "legacy")
+IMPLEMENTED_CATEGORIES = ("auth", "contract", "matrix", "negative")
+PLANNED_CATEGORIES = ("legacy",)
+
+
+PARSE_CONTRACT_TARGETS = (
+    "tests/endpoints/parse/test_parse.py::TestParseHappyPath::test_response_has_required_fields",
+    "tests/endpoints/parse/test_parse.py::TestParseHappyPath::test_file_type_matches_request",
+    "tests/endpoints/parse/test_parse.py::TestParseHappyPath::test_calculated_fields_not_stub",
+    "tests/endpoints/parse/test_parse.py::TestParseValidation::test_422_conforms_to_openapi_schema",
+)
+PARSE_AUTH_TARGETS = ("tests/endpoints/parse/test_parse.py::TestParseAuth",)
+PARSE_NEGATIVE_TARGETS = ("tests/endpoints/parse/test_parse.py::TestParseValidation",)
+BATCH_CONTRACT_TARGETS = (
+    "tests/endpoints/batch/test_batch.py::TestBatchHappyPath::test_response_has_expected_batch_structure",
+    "tests/endpoints/batch/test_batch.py::TestBatchHappyPath::test_results_preserve_request_order_and_item_contract",
+)
+BATCH_NEGATIVE_TARGETS = ("tests/endpoints/batch/test_batch.py::TestBatchValidation",)
 
 
 @dataclass(frozen=True)
@@ -70,6 +85,94 @@ class ResolvedPlan:
     required_env: tuple[str, ...]
     notes: tuple[str, ...]
     defaulted_to_protected: bool = False
+
+
+@dataclass(frozen=True)
+class CategoryMapping:
+    endpoint: str
+    category: str
+    description: str
+    targets: tuple[str, ...]
+    required_env: tuple[str, ...]
+    supported_flags: tuple[str, ...]
+    notes: tuple[str, ...]
+
+    @property
+    def selector(self) -> str:
+        return f"endpoint={self.endpoint} category={self.category}"
+
+
+CATEGORY_MAPPINGS: tuple[CategoryMapping, ...] = (
+    CategoryMapping(
+        endpoint="parse",
+        category="contract",
+        description="Focused /parse response and validation contract checks.",
+        targets=PARSE_CONTRACT_TARGETS,
+        required_env=PROTECTED_ENV_VARS,
+        supported_flags=("--k",),
+        notes=(
+            "Targets existing protected-suite tests only; no duplicate contract tests are introduced.",
+            "Includes successful document result shape checks plus the current HTTPValidationError shape check.",
+            "This mapping does not include the opt-in parse matrix; use category=matrix for fileType breadth.",
+        ),
+    ),
+    CategoryMapping(
+        endpoint="parse",
+        category="auth",
+        description="Focused /parse tenant-token auth-negative checks.",
+        targets=PARSE_AUTH_TARGETS,
+        required_env=PROTECTED_ENV_VARS,
+        supported_flags=("--k",),
+        notes=(
+            "Targets the existing tenant-token auth-negative class.",
+            "The tests accept the currently observed timeout behavior as a negative signal for /parse only.",
+        ),
+    ),
+    CategoryMapping(
+        endpoint="parse",
+        category="negative",
+        description="Focused /parse missing-payload validation checks.",
+        targets=PARSE_NEGATIVE_TARGETS,
+        required_env=PROTECTED_ENV_VARS,
+        supported_flags=("--k",),
+        notes=(
+            "Targets the existing /parse request-validation class.",
+            "Covers missing file, missing fileType, empty body, and HTTPValidationError shape behavior.",
+        ),
+    ),
+    CategoryMapping(
+        endpoint="batch",
+        category="contract",
+        description="Focused /documents/batch top-level and per-item contract checks.",
+        targets=BATCH_CONTRACT_TARGETS,
+        required_env=BATCH_ENV_VARS,
+        supported_flags=("--k",),
+        notes=(
+            "Targets existing default batch-suite tests only; no duplicate contract tests are introduced.",
+            "Covers response structure, summary accounting, request order, per-item shape, fileType echo, and calculatedFields stub guard.",
+        ),
+    ),
+    CategoryMapping(
+        endpoint="batch",
+        category="negative",
+        description="Focused /documents/batch validation, over-limit, and partial-failure checks.",
+        targets=BATCH_NEGATIVE_TARGETS,
+        required_env=BATCH_ENV_VARS,
+        supported_flags=("--k",),
+        notes=(
+            "Targets the existing default batch-suite request-validation class.",
+            "Covers missing items, empty items, over-limit requests, malformed items, and unsupported fileType partial failure.",
+        ),
+    ),
+)
+
+DEFERRED_CATEGORY_MAPPINGS = (
+    (
+        "endpoint=batch category=auth",
+        "Deferred until missing and invalid tenant-token requests return confirmed 401 or 403 responses; "
+        "see docs/knowledge-base/batch/auth-negative-blocker.md.",
+    ),
+)
 
 
 INVENTORY: tuple[InventoryItem, ...] = (
@@ -143,6 +246,8 @@ INVENTORY: tuple[InventoryItem, ...] = (
     ),
 )
 
+_CATEGORY_MAPPING_BY_SELECTOR = {item.selector: item for item in CATEGORY_MAPPINGS}
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -168,8 +273,9 @@ def _usage_error(parser: argparse.ArgumentParser, message: str) -> int:
     return 2
 
 
-def _base_pytest_command(target: str, *, k_expr: str = "") -> tuple[str, ...]:
-    command = [sys.executable, "-m", "pytest", target, "-v"]
+def _base_pytest_command(target: str | tuple[str, ...], *, k_expr: str = "") -> tuple[str, ...]:
+    targets = (target,) if isinstance(target, str) else target
+    command = [sys.executable, "-m", "pytest", *targets, "-v"]
     if k_expr:
         command.extend(["-k", k_expr])
     return tuple(command)
@@ -231,6 +337,10 @@ def _batch_wrapper_command(*, fixtures_json: str, k_expr: str = "") -> tuple[str
     if k_expr:
         command.extend(["--k", k_expr])
     return tuple(command)
+
+
+def _category_command(mapping: CategoryMapping, *, k_expr: str = "") -> tuple[str, ...]:
+    return _base_pytest_command(mapping.targets, k_expr=k_expr)
 
 
 def _normalize(value: str) -> str:
@@ -344,7 +454,8 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
         if not category:
             return _usage_error(
                 parser,
-                "--endpoint parse currently requires --category matrix, or use --suite protected/full.",
+                "--endpoint parse currently requires --category auth, contract, matrix, or negative; "
+                "or use --suite protected/full.",
             )
         if category not in IMPLEMENTED_CATEGORIES and category not in PLANNED_CATEGORIES:
             return _usage_error(parser, f"Unknown category: {category!r}.")
@@ -353,32 +464,62 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
                 parser,
                 f"Category {category!r} is planned for --endpoint parse but not yet mapped in the current runner.",
             )
-        if args.fixtures_json and args.file_types:
-            return _usage_error(parser, "--fixtures-json and --file-types are mutually exclusive for parse matrix.")
-        return ResolvedPlan(
-            selector="endpoint=parse category=matrix",
-            description="Opt-in /parse matrix wrapper with saved summary output.",
-            commands=(
-                _parse_matrix_command(
-                    report=args.report,
-                    file_types=args.file_types,
-                    fixtures_json=args.fixtures_json,
-                    k_expr=args.k_expr,
+        if category == "matrix":
+            if args.fixtures_json and args.file_types:
+                return _usage_error(parser, "--fixtures-json and --file-types are mutually exclusive for parse matrix.")
+            return ResolvedPlan(
+                selector="endpoint=parse category=matrix",
+                description="Opt-in /parse matrix wrapper with saved summary output.",
+                commands=(
+                    _parse_matrix_command(
+                        report=args.report,
+                        file_types=args.file_types,
+                        fixtures_json=args.fixtures_json,
+                        k_expr=args.k_expr,
+                    ),
                 ),
-            ),
-            required_env=PROTECTED_ENV_VARS,
-            notes=(
-                "Live execution delegates to the existing matrix wrapper.",
-                "The wrapper manages RUN_PARSE_MATRIX=1 internally.",
-            ),
+                required_env=PROTECTED_ENV_VARS,
+                notes=(
+                    "Live execution delegates to the existing matrix wrapper.",
+                    "The wrapper manages RUN_PARSE_MATRIX=1 internally.",
+                ),
+            )
+        if args.fixtures_json:
+            return _usage_error(parser, f"--fixtures-json is not supported for --endpoint parse --category {category}.")
+        if args.file_types:
+            return _usage_error(parser, f"--file-types is not supported for --endpoint parse --category {category}.")
+        if args.report:
+            return _usage_error(parser, f"--report is not supported for --endpoint parse --category {category}.")
+        mapping = _CATEGORY_MAPPING_BY_SELECTOR[f"endpoint=parse category={category}"]
+        return ResolvedPlan(
+            selector=mapping.selector,
+            description=mapping.description,
+            commands=(_category_command(mapping, k_expr=args.k_expr),),
+            required_env=mapping.required_env,
+            notes=mapping.notes,
         )
 
     if category:
         if category not in IMPLEMENTED_CATEGORIES and category not in PLANNED_CATEGORIES:
             return _usage_error(parser, f"Unknown category: {category!r}.")
-        return _usage_error(
-            parser,
-            f"Category {category!r} is not mapped for --endpoint batch in the current runner.",
+        mapping = _CATEGORY_MAPPING_BY_SELECTOR.get(f"endpoint=batch category={category}")
+        if mapping is None:
+            return _usage_error(
+                parser,
+                f"Category {category!r} is not mapped for --endpoint batch in the current runner.",
+            )
+        if args.fixtures_json:
+            return _usage_error(parser, f"--fixtures-json is not supported for --endpoint batch --category {category}.")
+        if args.file_types:
+            return _usage_error(parser, f"--file-types is not supported for --endpoint batch --category {category}.")
+        if args.report:
+            return _usage_error(parser, f"--report is not supported for --endpoint batch --category {category}.")
+        return ResolvedPlan(
+            selector=mapping.selector,
+            description=mapping.description,
+            commands=(_category_command(mapping, k_expr=args.k_expr),),
+            required_env=mapping.required_env,
+            notes=mapping.notes,
         )
     if args.file_types:
         return _usage_error(parser, "--file-types is not supported for --endpoint batch.")
@@ -460,9 +601,27 @@ def render_list() -> str:
             lines.append("  notes:")
             for note in item.notes:
                 lines.append(f"    - {note}")
+    for mapping in CATEGORY_MAPPINGS:
+        lines.append(f"- {mapping.selector}")
+        lines.append(f"  description: {mapping.description}")
+        supported_flags = ", ".join(mapping.supported_flags) if mapping.supported_flags else "none for live execution"
+        lines.append(f"  supported flags: {supported_flags}")
+        lines.append(f"  command: {_format_command(_category_command(mapping))}")
+        lines.append("  required env:")
+        for name in mapping.required_env:
+            lines.append(f"    - {name}")
+        if mapping.notes:
+            lines.append("  notes:")
+            for note in mapping.notes:
+                lines.append(f"    - {note}")
+    lines.append("")
+    lines.append("Deferred endpoint/category mappings:")
+    for selector, reason in DEFERRED_CATEGORY_MAPPINGS:
+        lines.append(f"- {selector}: {reason}")
     lines.append("")
     lines.append(
-        "Live execution is implemented for protected, smoke, full, parse matrix, and batch mappings. "
+        "Live execution is implemented for protected, smoke, full, parse matrix, mapped parse categories, "
+        "direct batch, selected batch, and mapped batch categories. "
         "Use --dry-run to inspect commands without executing them."
     )
     return "\n".join(lines) + "\n"
@@ -504,6 +663,7 @@ def execute_live(args: argparse.Namespace, plan: ResolvedPlan) -> int:
         "endpoint=batch",
         "endpoint=batch --fixtures-json",
     }
+    live_selectors.update(_CATEGORY_MAPPING_BY_SELECTOR)
     if plan.selector not in live_selectors:
         print(
             "Live execution is not implemented for this selection. "

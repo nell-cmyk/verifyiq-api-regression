@@ -50,7 +50,12 @@ def test_list_exits_zero_and_mentions_core_mappings():
     assert "parse" in stdout
     assert "batch" in stdout
     assert "matrix" in stdout
+    assert "contract" in stdout
+    assert "auth" in stdout
+    assert "negative" in stdout
     assert "tools/run_batch_with_fixtures.py" in stdout
+    assert "endpoint=batch category=auth" in stdout
+    assert "Deferred endpoint/category mappings" in stdout
 
 
 def test_list_marks_protected_as_exact_baseline_with_report_only():
@@ -408,6 +413,72 @@ def test_parse_matrix_executes_wrapper_with_fixtures_json():
     assert "Executing command:" in stdout
 
 
+def test_parse_contract_dry_run_prints_existing_test_nodeids():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--endpoint", "parse", "--category", "contract", "--dry-run"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert "Selection: endpoint=parse category=contract" in stdout
+    assert "tests/endpoints/parse/test_parse.py::TestParseHappyPath::test_response_has_required_fields" in stdout
+    assert "tests/endpoints/parse/test_parse.py::TestParseValidation::test_422_conforms_to_openapi_schema" in stdout
+    assert "RUN_PARSE_MATRIX=1" not in stdout
+
+
+def test_parse_auth_executes_existing_auth_class():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 0
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(module, ["--endpoint", "parse", "--category", "auth", "--k", "missing"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        "-m",
+        "pytest",
+        "tests/endpoints/parse/test_parse.py::TestParseAuth",
+        "-v",
+        "-k",
+        "missing",
+    )
+    assert "Executing command:" in stdout
+
+
+def test_parse_negative_executes_existing_validation_class():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 0
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(module, ["--endpoint", "parse", "--category", "negative"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        "-m",
+        "pytest",
+        "tests/endpoints/parse/test_parse.py::TestParseValidation",
+        "-v",
+    )
+    assert "Executing command:" in stdout
+
+
 def test_batch_dry_run_prints_batch_pytest_command():
     module = _load_module()
     module._run_command = _no_call_runner
@@ -513,6 +584,55 @@ def test_batch_fixtures_json_executes_batch_wrapper_and_returns_subprocess_code(
         "happy",
     )
     assert "Executing command:" in stdout
+
+
+def test_batch_contract_executes_existing_contract_nodeids():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 0
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(module, ["--endpoint", "batch", "--category", "contract"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        "-m",
+        "pytest",
+        "tests/endpoints/batch/test_batch.py::TestBatchHappyPath::test_response_has_expected_batch_structure",
+        "tests/endpoints/batch/test_batch.py::TestBatchHappyPath::test_results_preserve_request_order_and_item_contract",
+        "-v",
+    )
+    assert "Executing command:" in stdout
+
+
+def test_batch_negative_dry_run_prints_existing_validation_class():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--endpoint", "batch", "--category", "negative", "--dry-run"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert "Selection: endpoint=batch category=negative" in stdout
+    assert "tests/endpoints/batch/test_batch.py::TestBatchValidation" in stdout
+
+
+def test_batch_auth_remains_deferred():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--endpoint", "batch", "--category", "auth", "--dry-run"])
+
+    assert rc != 0
+    assert stdout == ""
+    assert "Category 'auth' is not mapped for --endpoint batch" in stderr
 
 
 def test_no_argument_invocation_executes_protected_live_path():
