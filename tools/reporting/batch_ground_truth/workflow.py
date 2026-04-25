@@ -95,7 +95,18 @@ def _ensure_output_dir(output_dir: str | Path | None) -> Path:
     return resolved
 
 
-def _skip_failure_tag(reason: str | None) -> str:
+def _skip_failure_tag(fixture: SourceFixtureRecord) -> str:
+    gt_skip_reason = fixture.gt_extraction_skip_reason
+    if gt_skip_reason == "document_size_guard":
+        return "document_size_guard"
+    if gt_skip_reason == "multi_account_document":
+        return "multi_account_document"
+    if gt_skip_reason == "unsupported_fixture":
+        return "unsupported_fixture"
+    if gt_skip_reason == "quality_gate_no_payload":
+        return "http_200_no_payload_quality_gate"
+
+    reason = fixture.skip_reason
     if not reason:
         return "skipped"
     if reason == "missing_gcs_uri":
@@ -143,6 +154,13 @@ def _metadata_for_fixture(
         "source_assignee": fixture.assignee,
         "source_workflow_status": fixture.workflow_status,
         "fixture_status_from_source": fixture.file_type_status,
+        "gt_extraction_eligible": fixture.gt_extraction_eligible,
+        "gt_extraction_excluded": not fixture.gt_extraction_eligible,
+        "gt_extraction_skip_reason": fixture.gt_extraction_skip_reason,
+        "gt_extraction_classification": fixture.gt_extraction_classification,
+        "gt_clean_eligible": fixture.gt_clean_eligible,
+        "negative_audit_useful": fixture.negative_audit_useful,
+        "gt_recovery_action": fixture.gt_recovery_action,
         "batch_chunk_number": batch_chunk_number,
         "batch_result_index": batch_result_index,
         "batch_http_status": batch_http_status,
@@ -162,6 +180,7 @@ def _metadata_for_fixture(
 
 
 def _skipped_export_row(fixture: SourceFixtureRecord, *, output_generated_at: str) -> ExportRow:
+    error = fixture.batch_expected_error or fixture.skip_reason
     return ExportRow(
         metadata=_metadata_for_fixture(
             fixture,
@@ -175,15 +194,15 @@ def _skipped_export_row(fixture: SourceFixtureRecord, *, output_generated_at: st
             batch_retry_reason=None,
             batch_final_attempt_error_type=None,
             ok=False,
-            failure_tag=_skip_failure_tag(fixture.skip_reason),
-            error_type=None,
-            error=fixture.skip_reason,
+            failure_tag=_skip_failure_tag(fixture),
+            error_type=fixture.batch_expected_error_type,
+            error=error,
             warning=fixture.batch_expected_warning,
             raw_result_json=None,
         ),
         template_values=build_failure_template_values(
             source_basename=fixture.source_basename,
-            error=fixture.skip_reason,
+            error=error,
         ),
     )
 
@@ -1053,6 +1072,12 @@ def run_batch_ground_truth_export(
         file_type: payload["triaged_rows"]
         for file_type, payload in clean_manifest_file_types.items()
     }
+    gt_extraction_excluded_by_file_type = {
+        execution.plan.file_type: sum(
+            1 for fixture in execution.fixtures if not fixture.gt_extraction_eligible
+        )
+        for execution in execution_results
+    }
     clean_manifest_payload = {
         "generated_at": output_generated_at,
         "fixture_registry": str(Path(fixture_registry).expanduser().resolve()),
@@ -1068,6 +1093,8 @@ def run_batch_ground_truth_export(
         "triaged_rejected_rows": len(all_triage_rows),
         "clean_rows_by_fileType": clean_rows_by_file_type,
         "triaged_rows_by_fileType": triaged_rows_by_file_type,
+        "gt_extraction_excluded_rows": sum(gt_extraction_excluded_by_file_type.values()),
+        "gt_extraction_excluded_rows_by_fileType": gt_extraction_excluded_by_file_type,
         "triaged_rows_by_recovery_class": count_by(all_triage_rows, "recovery_class"),
         "triaged_rows_by_gt_candidate_status": count_by(all_triage_rows, "gt_candidate_status"),
         "file_types": clean_manifest_file_types,
@@ -1107,6 +1134,10 @@ def run_batch_ground_truth_export(
                 "normalized_file_type": fixture.file_type,
                 "gcs_uri": fixture.gcs_uri,
                 "skip_reason": fixture.skip_reason,
+                "gt_extraction_eligible": fixture.gt_extraction_eligible,
+                "gt_extraction_skip_reason": fixture.gt_extraction_skip_reason,
+                "gt_extraction_classification": fixture.gt_extraction_classification,
+                "gt_recovery_action": fixture.gt_recovery_action,
             }
             for fixture in parsed.fixtures
             if not fixture.include_in_batch

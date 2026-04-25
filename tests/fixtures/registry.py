@@ -37,6 +37,14 @@ OPTIONAL_STRING_KEYS = (
     "batch_expected_warning",
     "batch_expected_error_type",
     "batch_expected_error",
+    "gt_extraction_skip_reason",
+    "gt_extraction_classification",
+    "gt_recovery_action",
+)
+OPTIONAL_BOOL_KEYS = (
+    "gt_extraction_eligible",
+    "gt_clean_eligible",
+    "negative_audit_useful",
 )
 
 
@@ -143,6 +151,16 @@ def _validate_fixture(fixture: Any, *, index: int, registry_path: Path) -> None:
             index=index,
             registry_path=registry_path,
         )
+
+    for key in OPTIONAL_BOOL_KEYS:
+        if key not in fixture:
+            continue
+        value = fixture[key]
+        if not isinstance(value, bool):
+            raise _registry_error(
+                f"fixture #{index} has invalid '{key}': {value!r}",
+                registry_path=registry_path,
+            )
 
 
 def load_registry(registry_path: str | Path = REGISTRY_PATH) -> dict[str, Any]:
@@ -317,4 +335,3 @@ def load_matrix_fixtures(
     if selection_json_path:
         return load_selected_fixtures(selection_json_path, registry_path=registry_path)
     return load_canonical_fixtures(registry_path)
-

@@ -40,12 +40,25 @@ def _fixture(**overrides):
 
 
 def test_shared_registry_loader_validates_schema_and_records(tmp_path):
-    registry_path = _write_registry(tmp_path / "fixture_registry.yaml", fixtures=[_fixture()])
+    registry_path = _write_registry(
+        tmp_path / "fixture_registry.yaml",
+        fixtures=[
+            _fixture(
+                gt_extraction_eligible=False,
+                gt_extraction_skip_reason="document_size_guard",
+                gt_extraction_classification="fixture_too_large",
+                gt_clean_eligible=False,
+                negative_audit_useful=True,
+                gt_recovery_action="reduce_fixture",
+            )
+        ],
+    )
 
     doc = load_registry(registry_path)
 
     assert doc["schema_version"] == 2
     assert doc["fixtures"][0]["source_file_type_status"] == "✓"
+    assert doc["fixtures"][0]["gt_extraction_eligible"] is False
     assert [fixture["name"] for fixture in load_canonical_fixtures(registry_path)] == ["fixture"]
 
 
@@ -55,6 +68,16 @@ def test_shared_registry_loader_rejects_missing_required_fixture_keys(tmp_path):
     registry_path = _write_registry(tmp_path / "fixture_registry.yaml", fixtures=[broken])
 
     with pytest.raises(RuntimeError, match="missing required keys"):
+        load_registry(registry_path)
+
+
+def test_shared_registry_loader_rejects_invalid_gt_bool_metadata(tmp_path):
+    registry_path = _write_registry(
+        tmp_path / "fixture_registry.yaml",
+        fixtures=[_fixture(gt_extraction_eligible="nope")],
+    )
+
+    with pytest.raises(RuntimeError, match="invalid 'gt_extraction_eligible'"):
         load_registry(registry_path)
 
 

@@ -15,6 +15,7 @@ from tools.generate_fixture_registry import (
     HEADER_ROW,
     SHEET_NAME,
     SOURCE_XLSX,
+    _gt_metadata_for_unsupported_fixture,
     classify,
     fixture_metadata_overrides_for,
 )
@@ -41,6 +42,10 @@ def _clean_string(value: object) -> str:
 def _optional_string(value: Any) -> str | None:
     cleaned = _clean_string(value)
     return cleaned or None
+
+
+def _optional_bool(value: Any, *, default: bool) -> bool:
+    return value if isinstance(value, bool) else default
 
 
 def _base_name_from_uri(uri: str) -> str:
@@ -104,7 +109,18 @@ def _registry_record(
         _clean_string(fixture.get("source_file_type_status"))
         or _status_from_verification(verification_status)
     )
-    skip_reason = _clean_string(fixture.get("fixture_unsupported_reason")) or unsupported_fixture_reason(gcs_uri)
+    fixture_skip_reason = (
+        _clean_string(fixture.get("fixture_unsupported_reason"))
+        or unsupported_fixture_reason(gcs_uri)
+    )
+    gt_extraction_eligible = _optional_bool(
+        fixture.get("gt_extraction_eligible"),
+        default=True,
+    )
+    gt_extraction_skip_reason = _optional_string(fixture.get("gt_extraction_skip_reason"))
+    skip_reason = fixture_skip_reason or (
+        gt_extraction_skip_reason if not gt_extraction_eligible else None
+    )
 
     return SourceFixtureRecord(
         record_id=record_id,
@@ -119,11 +135,17 @@ def _registry_record(
         workflow_status=_clean_string(fixture.get("source_workflow_status")),
         assignee=_clean_string(fixture.get("source_assignee")),
         verification_status=verification_status,
-        include_in_batch=skip_reason is None,
+        include_in_batch=skip_reason is None and gt_extraction_eligible,
         skip_reason=skip_reason,
         batch_expected_warning=_optional_string(fixture.get("batch_expected_warning")),
         batch_expected_error_type=_optional_string(fixture.get("batch_expected_error_type")),
         batch_expected_error=_optional_string(fixture.get("batch_expected_error")),
+        gt_extraction_eligible=gt_extraction_eligible,
+        gt_extraction_skip_reason=gt_extraction_skip_reason,
+        gt_extraction_classification=_optional_string(fixture.get("gt_extraction_classification")),
+        gt_recovery_action=_optional_string(fixture.get("gt_recovery_action")),
+        gt_clean_eligible=_optional_bool(fixture.get("gt_clean_eligible"), default=True),
+        negative_audit_useful=_optional_bool(fixture.get("negative_audit_useful"), default=False),
     )
 
 
@@ -257,6 +279,16 @@ def parse_source_workbook_for_comparison(
                 source_basename = _base_name_from_uri(gcs_uri)
 
             overrides = fixture_metadata_overrides_for(gcs_uri=gcs_uri, file_type=split_file_type)
+            if skip_reason and skip_reason.startswith("unsupported file extension"):
+                overrides |= _gt_metadata_for_unsupported_fixture(skip_reason)
+            gt_extraction_eligible = _optional_bool(
+                overrides.get("gt_extraction_eligible"),
+                default=True,
+            )
+            gt_extraction_skip_reason = _optional_string(overrides.get("gt_extraction_skip_reason"))
+            effective_skip_reason = skip_reason or (
+                gt_extraction_skip_reason if not gt_extraction_eligible else None
+            )
             record_id += 1
             fixtures.append(
                 SourceFixtureRecord(
@@ -272,11 +304,17 @@ def parse_source_workbook_for_comparison(
                     workflow_status=workflow_status,
                     assignee=assignee,
                     verification_status=verification_status,
-                    include_in_batch=skip_reason is None,
-                    skip_reason=skip_reason,
+                    include_in_batch=effective_skip_reason is None and gt_extraction_eligible,
+                    skip_reason=effective_skip_reason,
                     batch_expected_warning=overrides.get("batch_expected_warning"),
                     batch_expected_error_type=overrides.get("batch_expected_error_type"),
                     batch_expected_error=overrides.get("batch_expected_error"),
+                    gt_extraction_eligible=gt_extraction_eligible,
+                    gt_extraction_skip_reason=gt_extraction_skip_reason,
+                    gt_extraction_classification=_optional_string(overrides.get("gt_extraction_classification")),
+                    gt_recovery_action=_optional_string(overrides.get("gt_recovery_action")),
+                    gt_clean_eligible=_optional_bool(overrides.get("gt_clean_eligible"), default=True),
+                    negative_audit_useful=_optional_bool(overrides.get("negative_audit_useful"), default=False),
                 )
             )
 

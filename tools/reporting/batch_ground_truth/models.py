@@ -24,6 +24,12 @@ class SourceFixtureRecord:
     batch_expected_warning: str | None = None
     batch_expected_error_type: str | None = None
     batch_expected_error: str | None = None
+    gt_extraction_eligible: bool = True
+    gt_extraction_skip_reason: str | None = None
+    gt_extraction_classification: str | None = None
+    gt_recovery_action: str | None = None
+    gt_clean_eligible: bool = True
+    negative_audit_useful: bool = False
 
     def as_batch_fixture(self) -> dict[str, Any]:
         return {

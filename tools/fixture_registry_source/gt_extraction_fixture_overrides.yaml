@@ -1,0 +1,191 @@
+# Durable /documents/batch ground-truth extraction overrides.
+# Edit deliberately, then run tools/generate_fixture_registry.py.
+schema_version: 1
+groups:
+- description: Fixtures that hit /documents/batch size or page guards and cannot produce clean GT as-is.
+  metadata:
+    batch_expected_warning: "Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is."
+    batch_expected_error_type: DocumentSizeGuardError
+    gt_extraction_eligible: false
+    gt_extraction_skip_reason: document_size_guard
+    gt_extraction_classification: fixture_too_large
+    gt_clean_eligible: false
+    negative_audit_useful: true
+    gt_recovery_action: reduce_fixture
+  fixtures:
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_11_20_bir_registration_certificate_form_2303.pdf
+    file_type: BIRExemptionCertificate
+    batch_expected_error: Page 1 megapixels (52.1MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_12_05_bir_registration_certificate_form_2303.pdf
+    file_type: BIRExemptionCertificate
+    batch_expected_error: Page 1 megapixels (119.5MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_12_10_bir_registration_certificate_form_2303_additional_1.pdf
+    file_type: BIRExemptionCertificate
+    batch_expected_error: Page 1 megapixels (151.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_12_11_bir_registration_certificate_form_2303_additional_1.pdf
+    file_type: BIRExemptionCertificate
+    batch_expected_error: Page 1 megapixels (46.0MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2025_04_03_bir_registration_certificate_form_2303.pdf
+    file_type: BIRExemptionCertificate
+    batch_expected_error: Page 1 megapixels (217.6MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_11_20_bir_registration_certificate_form_2303.pdf
+    file_type: BIRForm2303
+    batch_expected_error: Page 1 megapixels (52.1MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_12_05_bir_registration_certificate_form_2303.pdf
+    file_type: BIRForm2303
+    batch_expected_error: Page 1 megapixels (119.5MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_12_10_bir_registration_certificate_form_2303_additional_1.pdf
+    file_type: BIRForm2303
+    batch_expected_error: Page 1 megapixels (151.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_12_11_bir_registration_certificate_form_2303_additional_1.pdf
+    file_type: BIRForm2303
+    batch_expected_error: Page 1 megapixels (46.0MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2025_04_03_bir_registration_certificate_form_2303.pdf
+    file_type: BIRForm2303
+    batch_expected_error: Page 1 megapixels (217.6MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/MJRL_MV Dela Cruz_Bank Statement (1).pdf
+    file_type: BankStatement
+    batch_expected_error: Page count (456) exceeds limit (50)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/MJRL_MV Dela Cruz_Bank Statement (3).pdf
+    file_type: BankStatement
+    batch_expected_error: Page count (66) exceeds limit (50)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/MJRL_MV Dela Cruz_Bank Statement (4).pdf
+    file_type: BankStatement
+    batch_expected_error: Page count (151) exceeds limit (50)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2024_12_05_dti_registration.pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (88.1MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_14_dti_registration (1).pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (97.4MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration (1).pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration(1).pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration(2).pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration.pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_08_dti_registration.pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (208.3MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_10_dti_registration(1).pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (164.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_10_dti_registration.pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (164.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration (1).pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration(1).pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration(2).pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration.pdf
+    file_type: DTIPermit
+    batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2024_12_05_dti_registration.pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (88.1MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_14_dti_registration (1).pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (97.4MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration (1).pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration(1).pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration(2).pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration.pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_08_dti_registration.pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (208.3MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_10_dti_registration(1).pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (164.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_10_dti_registration.pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (164.8MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration (1).pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration(1).pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration(2).pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration.pdf
+    file_type: DTIRegistrationCertificate
+    batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Mayor's Permit/2025_05_16_mayors_permit(1).jpeg
+    file_type: MayorsPermit
+    batch_expected_error: Page 1 megapixels (48.0MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Mayor's Permit/2025_05_16_mayors_permit.jpeg
+    file_type: MayorsPermit
+    batch_expected_error: Page 1 megapixels (48.0MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Mayor's Permit/2025_05_16_mayors_permit_additional_1.jpeg
+    file_type: MayorsPermit
+    batch_expected_error: Page 1 megapixels (48.0MP) exceeds limit (40.0MP)
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/ID/UMID/56111 Unified MultiPurpose ID.pdf
+    file_type: UMID
+    batch_expected_error: Page 1 megapixels (45.4MP) exceeds limit (40.0MP)
+- description: Multi-account fixtures unsuitable for clean single-account GT as-is.
+  metadata:
+    batch_expected_warning: "Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is."
+    batch_expected_error_type: MultiAccountDocumentError
+    gt_extraction_eligible: false
+    gt_extraction_skip_reason: multi_account_document
+    gt_extraction_classification: multi_account_fixture
+    gt_clean_eligible: false
+    negative_audit_useful: true
+    gt_recovery_action: split_fixture
+  fixtures:
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Tonik/TC01_Tonik_MultiAccount_PrimaryOnly.pdf
+    file_type: BankStatement
+    batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Tonik/TC02_Tonik_AdditionalAccountsFlag.pdf
+    file_type: BankStatement
+    batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Tonik/TC04_Tonik_NoMergedTransactions.pdf
+    file_type: BankStatement
+    batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Tonik/TC05_Tonik_NoFalseFraudFlag.pdf
+    file_type: BankStatement
+    batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard12.jpeg
+    file_type: CreditCardStatement
+    batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard13.jpeg
+    file_type: CreditCardStatement
+    batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard14.jpeg
+    file_type: CreditCardStatement
+    batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard15.jpeg
+    file_type: CreditCardStatement
+    batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard2.jpeg
+    file_type: CreditCardStatement
+    batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard6.jpeg
+    file_type: CreditCardStatement
+    batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard7.jpeg
+    file_type: CreditCardStatement
+    batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
+  - gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard8.jpeg
+    file_type: CreditCardStatement
+    batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.

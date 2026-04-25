@@ -5,6 +5,8 @@ Primary source (human-maintained):
   tools/fixture_registry_source/qa_fixture_registry.xlsx
 Supplemental source (JSON-onboarded fixtures):
   tools/fixture_registry_source/supplemental_fixture_registry.yaml
+GT extraction metadata source:
+  tools/fixture_registry_source/gt_extraction_fixture_overrides.yaml
 Outputs (automation source of truth plus /parse compatibility copy):
   tests/fixtures/fixture_registry.yaml
   tests/endpoints/parse/fixture_registry.yaml
@@ -35,7 +37,9 @@ from __future__ import annotations
 import argparse
 import sys
 from collections import Counter
+from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -49,6 +53,9 @@ SOURCE_XLSX = REPO_ROOT / "tools" / "fixture_registry_source" / "qa_fixture_regi
 SUPPLEMENTAL_YAML = (
     REPO_ROOT / "tools" / "fixture_registry_source" / "supplemental_fixture_registry.yaml"
 )
+GT_EXTRACTION_OVERRIDES_YAML = (
+    REPO_ROOT / "tools" / "fixture_registry_source" / "gt_extraction_fixture_overrides.yaml"
+)
 SHARED_OUTPUT_YAML = REPO_ROOT / "tests" / "fixtures" / "fixture_registry.yaml"
 PARSE_COMPAT_OUTPUT_YAML = REPO_ROOT / "tests" / "endpoints" / "parse" / "fixture_registry.yaml"
 OUTPUT_YAML = SHARED_OUTPUT_YAML
@@ -57,49 +64,44 @@ SHEET_NAME = "All"
 HEADER_ROW = 4  # Rows 1–2 are title, row 3 blank, row 4 is the header. Data from row 5.
 SCHEMA_VERSION = 2
 SUPPLEMENTAL_SCHEMA_VERSION = 1
+GT_EXTRACTION_OVERRIDES_SCHEMA_VERSION = 1
 
 EXCLUDED_FILE_TYPES = {"No fileType", "Fraud - Skipped"}
 COMPOSITE_DELIMITER = "||"
 CONFIRMED_MARK = "✓"
 UNVERIFIED_MARK = "⚠ Verify"
 VALID_VERIFICATION_STATUSES = {"confirmed", "unverified", "excluded", "unknown"}
-FIXTURE_METADATA_OVERRIDES = {
-    (
-        "gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/"
-        "MJRL_MV Dela Cruz_Bank Statement (1).pdf",
-        "BankStatement",
-    ): {
-        "batch_expected_warning": (
-            "Known /documents/batch page-limit warning: this fixture may return "
-            "DocumentSizeGuardError instead of parsed data."
-        ),
-        "batch_expected_error_type": "DocumentSizeGuardError",
-        "batch_expected_error": "Page count (456) exceeds limit (50)",
-    },
-    (
-        "gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/"
-        "MJRL_MV Dela Cruz_Bank Statement (3).pdf",
-        "BankStatement",
-    ): {
-        "batch_expected_warning": (
-            "Known /documents/batch page-limit warning: this fixture may return "
-            "DocumentSizeGuardError instead of parsed data."
-        ),
-        "batch_expected_error_type": "DocumentSizeGuardError",
-        "batch_expected_error": "Page count (66) exceeds limit (50)",
-    },
-    (
-        "gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/"
-        "MJRL_MV Dela Cruz_Bank Statement (4).pdf",
-        "BankStatement",
-    ): {
-        "batch_expected_warning": (
-            "Known /documents/batch page-limit warning: this fixture may return "
-            "DocumentSizeGuardError instead of parsed data."
-        ),
-        "batch_expected_error_type": "DocumentSizeGuardError",
-        "batch_expected_error": "Page count (151) exceeds limit (50)",
-    },
+GT_EXTRACTION_STRING_KEYS = {
+    "batch_expected_warning",
+    "batch_expected_error_type",
+    "batch_expected_error",
+    "gt_extraction_skip_reason",
+    "gt_extraction_classification",
+    "gt_recovery_action",
+}
+GT_EXTRACTION_BOOL_KEYS = {
+    "gt_extraction_eligible",
+    "gt_clean_eligible",
+    "negative_audit_useful",
+}
+VALID_GT_EXTRACTION_SKIP_REASONS = {
+    "document_size_guard",
+    "multi_account_document",
+    "unsupported_fixture",
+    "quality_gate_no_payload",
+}
+VALID_GT_EXTRACTION_CLASSIFICATIONS = {
+    "fixture_too_large",
+    "multi_account_fixture",
+    "unsupported_artifact",
+    "fixture_quality_gate_failed",
+}
+VALID_GT_RECOVERY_ACTIONS = {
+    "replace_fixture",
+    "split_fixture",
+    "reduce_fixture",
+    "review_fixture_quality",
+    "keep_as_negative_coverage",
 }
 
 
@@ -156,11 +158,202 @@ def default_enabled_for_status(verification_status: str) -> bool:
     return verification_status in {"confirmed", "unverified"}
 
 
-def fixture_metadata_overrides_for(*, gcs_uri: str, file_type: str | None) -> dict[str, str]:
-    override = FIXTURE_METADATA_OVERRIDES.get((gcs_uri, file_type or ""))
+def _validate_gt_metadata(
+    metadata: dict[str, Any],
+    *,
+    context: str,
+    override_yaml: Path,
+) -> dict[str, Any]:
+    allowed_keys = GT_EXTRACTION_STRING_KEYS | GT_EXTRACTION_BOOL_KEYS
+    unknown = sorted(set(metadata) - allowed_keys)
+    if unknown:
+        raise RuntimeError(
+            f"Invalid GT extraction overrides at {override_yaml}: "
+            f"{context} has unknown metadata keys: {unknown}"
+        )
+
+    normalized: dict[str, Any] = {}
+    for key in GT_EXTRACTION_STRING_KEYS:
+        if key not in metadata:
+            continue
+        value = metadata[key]
+        if not isinstance(value, str) or not value.strip():
+            raise RuntimeError(
+                f"Invalid GT extraction overrides at {override_yaml}: "
+                f"{context} has invalid '{key}': {value!r}"
+            )
+        normalized[key] = value.strip()
+
+    for key in GT_EXTRACTION_BOOL_KEYS:
+        if key not in metadata:
+            continue
+        value = metadata[key]
+        if not isinstance(value, bool):
+            raise RuntimeError(
+                f"Invalid GT extraction overrides at {override_yaml}: "
+                f"{context} has invalid '{key}': {value!r}"
+            )
+        normalized[key] = value
+
+    skip_reason = normalized.get("gt_extraction_skip_reason")
+    if skip_reason is not None and skip_reason not in VALID_GT_EXTRACTION_SKIP_REASONS:
+        raise RuntimeError(
+            f"Invalid GT extraction overrides at {override_yaml}: "
+            f"{context} has invalid 'gt_extraction_skip_reason': {skip_reason!r}"
+        )
+
+    classification = normalized.get("gt_extraction_classification")
+    if classification is not None and classification not in VALID_GT_EXTRACTION_CLASSIFICATIONS:
+        raise RuntimeError(
+            f"Invalid GT extraction overrides at {override_yaml}: "
+            f"{context} has invalid 'gt_extraction_classification': {classification!r}"
+        )
+
+    recovery_action = normalized.get("gt_recovery_action")
+    if recovery_action is not None and recovery_action not in VALID_GT_RECOVERY_ACTIONS:
+        raise RuntimeError(
+            f"Invalid GT extraction overrides at {override_yaml}: "
+            f"{context} has invalid 'gt_recovery_action': {recovery_action!r}"
+        )
+
+    if normalized.get("gt_extraction_eligible") is False:
+        required = {
+            "gt_extraction_skip_reason",
+            "gt_extraction_classification",
+            "gt_recovery_action",
+        }
+        missing = sorted(required - set(normalized))
+        if missing:
+            raise RuntimeError(
+                f"Invalid GT extraction overrides at {override_yaml}: "
+                f"{context} marks GT extraction ineligible but is missing {missing}"
+            )
+
+    return normalized
+
+
+@lru_cache(maxsize=None)
+def _load_gt_extraction_overrides_by_key(override_yaml_text: str) -> dict[tuple[str, str], dict[str, Any]]:
+    override_yaml = Path(override_yaml_text).expanduser().resolve()
+    if not override_yaml.exists():
+        return {}
+
+    try:
+        doc = yaml.safe_load(override_yaml.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise RuntimeError(f"Invalid GT extraction overrides at {override_yaml}: {exc}") from exc
+
+    if doc is None:
+        return {}
+    if not isinstance(doc, dict):
+        raise RuntimeError(
+            f"Invalid GT extraction overrides at {override_yaml}: "
+            f"top-level document must be a mapping, got {type(doc).__name__}"
+        )
+
+    schema_version = doc.get("schema_version", GT_EXTRACTION_OVERRIDES_SCHEMA_VERSION)
+    if not isinstance(schema_version, int) or isinstance(schema_version, bool):
+        raise RuntimeError(
+            f"Invalid GT extraction overrides at {override_yaml}: "
+            f"'schema_version' must be an integer, got {schema_version!r}"
+        )
+
+    groups = doc.get("groups", [])
+    if not isinstance(groups, list):
+        raise RuntimeError(
+            f"Invalid GT extraction overrides at {override_yaml}: "
+            f"'groups' must be a list, got {type(groups).__name__}"
+        )
+
+    overrides: dict[tuple[str, str], dict[str, Any]] = {}
+    for group_index, group in enumerate(groups, start=1):
+        if not isinstance(group, dict):
+            raise RuntimeError(
+                f"Invalid GT extraction overrides at {override_yaml}: "
+                f"group #{group_index} must be a mapping, got {type(group).__name__}"
+            )
+        group_metadata = group.get("metadata", {})
+        if not isinstance(group_metadata, dict):
+            raise RuntimeError(
+                f"Invalid GT extraction overrides at {override_yaml}: "
+                f"group #{group_index} metadata must be a mapping, got {type(group_metadata).__name__}"
+            )
+        normalized_group_metadata = _validate_gt_metadata(
+            group_metadata,
+            context=f"group #{group_index} metadata",
+            override_yaml=override_yaml,
+        )
+        fixtures = group.get("fixtures", [])
+        if not isinstance(fixtures, list):
+            raise RuntimeError(
+                f"Invalid GT extraction overrides at {override_yaml}: "
+                f"group #{group_index} fixtures must be a list, got {type(fixtures).__name__}"
+            )
+
+        for fixture_index, fixture in enumerate(fixtures, start=1):
+            if not isinstance(fixture, dict):
+                raise RuntimeError(
+                    f"Invalid GT extraction overrides at {override_yaml}: "
+                    f"group #{group_index} fixture #{fixture_index} must be a mapping, "
+                    f"got {type(fixture).__name__}"
+                )
+            gcs_uri = fixture.get("gcs_uri")
+            file_type = fixture.get("file_type")
+            if not isinstance(gcs_uri, str) or not gcs_uri.startswith("gs://"):
+                raise RuntimeError(
+                    f"Invalid GT extraction overrides at {override_yaml}: "
+                    f"group #{group_index} fixture #{fixture_index} has invalid 'gcs_uri': {gcs_uri!r}"
+                )
+            if not isinstance(file_type, str) or not file_type.strip():
+                raise RuntimeError(
+                    f"Invalid GT extraction overrides at {override_yaml}: "
+                    f"group #{group_index} fixture #{fixture_index} has invalid 'file_type': {file_type!r}"
+                )
+
+            fixture_metadata = {
+                key: value
+                for key, value in fixture.items()
+                if key not in {"gcs_uri", "file_type"}
+            }
+            normalized_fixture_metadata = _validate_gt_metadata(
+                fixture_metadata,
+                context=f"group #{group_index} fixture #{fixture_index}",
+                override_yaml=override_yaml,
+            )
+            key = (gcs_uri, file_type.strip())
+            if key in overrides:
+                raise RuntimeError(
+                    f"Invalid GT extraction overrides at {override_yaml}: "
+                    f"duplicate fixture override {key!r}"
+                )
+            overrides[key] = normalized_group_metadata | normalized_fixture_metadata
+
+    return overrides
+
+
+def fixture_metadata_overrides_for(
+    *,
+    gcs_uri: str,
+    file_type: str | None,
+    override_yaml: Path = GT_EXTRACTION_OVERRIDES_YAML,
+) -> dict[str, Any]:
+    overrides = _load_gt_extraction_overrides_by_key(str(Path(override_yaml).expanduser().resolve()))
+    override = overrides.get((gcs_uri, file_type or ""))
     if override is None:
         return {}
     return dict(override)
+
+
+def _gt_metadata_for_unsupported_fixture(unsupported_reason: str) -> dict[str, Any]:
+    return {
+        "fixture_unsupported_reason": unsupported_reason,
+        "gt_extraction_eligible": False,
+        "gt_extraction_skip_reason": "unsupported_fixture",
+        "gt_extraction_classification": "unsupported_artifact",
+        "gt_clean_eligible": False,
+        "negative_audit_useful": True,
+        "gt_recovery_action": "replace_fixture",
+    }
 
 
 def load_supplemental_registry_doc(
@@ -209,6 +402,7 @@ def load_supplemental_registry_doc(
 
 def _load_spreadsheet_fixtures(
     source_xlsx: Path = SOURCE_XLSX,
+    gt_extraction_overrides_yaml: Path = GT_EXTRACTION_OVERRIDES_YAML,
 ) -> tuple[list[dict], Counter[str], int, set[str], set[tuple[str, str | None]]]:
     if not source_xlsx.exists():
         raise RuntimeError(f"source spreadsheet not found at {source_xlsx}")
@@ -260,10 +454,14 @@ def _load_spreadsheet_fixtures(
             verification_status, enabled = classify(part, ft_status_clean)
             counts[verification_status] += 1
             candidate = f"{base_name}__{part}" if is_composite and part else base_name
-            metadata = fixture_metadata_overrides_for(gcs_uri=str(gcs_uri), file_type=part or None)
+            metadata = fixture_metadata_overrides_for(
+                gcs_uri=str(gcs_uri),
+                file_type=part or None,
+                override_yaml=gt_extraction_overrides_yaml,
+            )
             unsupported_reason = unsupported_fixture_reason(str(gcs_uri))
             if unsupported_reason is not None:
-                metadata["fixture_unsupported_reason"] = unsupported_reason
+                metadata |= _gt_metadata_for_unsupported_fixture(unsupported_reason)
             fixtures.append({
                 "name": reserve_name(candidate, used_names),
                 "file_type": part or None,
@@ -288,6 +486,7 @@ def _load_supplemental_fixtures(
     existing_pairs: set[tuple[str, str | None]],
     counts: Counter[str],
     supplemental_yaml: Path = SUPPLEMENTAL_YAML,
+    gt_extraction_overrides_yaml: Path = GT_EXTRACTION_OVERRIDES_YAML,
 ) -> list[dict]:
     fixtures: list[dict] = []
     seen_pairs: set[tuple[str, str]] = set()
@@ -398,7 +597,11 @@ def _load_supplemental_fixtures(
             "source_row": 0,
             "verification_status": verification_status,
             "enabled": enabled,
-        } | fixture_metadata_overrides_for(gcs_uri=gcs_uri, file_type=file_type.strip()))
+        } | fixture_metadata_overrides_for(
+            gcs_uri=gcs_uri,
+            file_type=file_type.strip(),
+            override_yaml=gt_extraction_overrides_yaml,
+        ))
         existing_pairs.add(key)
 
     return fixtures
@@ -408,8 +611,12 @@ def build_registry_document(
     *,
     source_xlsx: Path = SOURCE_XLSX,
     supplemental_yaml: Path | None = SUPPLEMENTAL_YAML,
+    gt_extraction_overrides_yaml: Path = GT_EXTRACTION_OVERRIDES_YAML,
 ) -> dict:
-    spreadsheet_fixtures, counts, split_rows, used_names, existing_pairs = _load_spreadsheet_fixtures(source_xlsx)
+    spreadsheet_fixtures, counts, split_rows, used_names, existing_pairs = _load_spreadsheet_fixtures(
+        source_xlsx,
+        gt_extraction_overrides_yaml=gt_extraction_overrides_yaml,
+    )
     supplemental_fixtures = []
     if supplemental_yaml is not None:
         supplemental_fixtures = _load_supplemental_fixtures(
@@ -417,6 +624,7 @@ def build_registry_document(
             existing_pairs=existing_pairs,
             counts=counts,
             supplemental_yaml=supplemental_yaml,
+            gt_extraction_overrides_yaml=gt_extraction_overrides_yaml,
         )
     fixtures = spreadsheet_fixtures + supplemental_fixtures
     fixtures.sort(key=lambda f: (f["source_folder"] or "", f["file_type"] or "", f["name"]))

@@ -31,6 +31,13 @@ TRIAGE_HEADERS = (
     "transactionsOCR_count",
     "batch_attempt_count",
     "batch_retry_reason",
+    "gt_extraction_eligible",
+    "gt_extraction_excluded",
+    "gt_extraction_skip_reason",
+    "gt_extraction_classification",
+    "gt_clean_eligible",
+    "negative_audit_useful",
+    "gt_recovery_action",
     "recovery_class",
     "recovery_action",
     "gt_candidate_status",
@@ -165,6 +172,31 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
     error = str(row.metadata.get("error") or "")
     batch_http_status = row.metadata.get("batch_http_status")
     data = _data(row)
+    gt_extraction_skip_reason = str(row.metadata.get("gt_extraction_skip_reason") or "")
+
+    if failure_tag == "document_size_guard" or gt_extraction_skip_reason == "document_size_guard":
+        return {
+            "recovery_class": "document_size_guard",
+            "recovery_action": "exclude_from_clean_gt_or_replace_fixture",
+            "gt_candidate_status": "not_gt_candidate_currently",
+        }
+
+    if failure_tag == "multi_account_document" or gt_extraction_skip_reason == "multi_account_document":
+        return {
+            "recovery_class": "multi_account_document",
+            "recovery_action": "split_or_replace_fixture_or_keep_as_negative_coverage",
+            "gt_candidate_status": "fixture_review_required",
+        }
+
+    if (
+        failure_tag == "http_200_no_payload_quality_gate"
+        or gt_extraction_skip_reason == "quality_gate_no_payload"
+    ):
+        return {
+            "recovery_class": "http_200_no_payload_quality_gate",
+            "recovery_action": "review_fixture_quality_or_replace_fixture",
+            "gt_candidate_status": "not_gt_candidate_currently",
+        }
 
     if error_type == "DocumentSizeGuardError" or "DocumentSizeGuardError" in error:
         return {
@@ -293,6 +325,13 @@ def build_recovery_triage_row(row: ExportRow) -> dict[str, Any]:
         "transactionsOCR_count": counts["transactionsOCR_count"],
         "batch_attempt_count": row.metadata.get("batch_attempt_count"),
         "batch_retry_reason": row.metadata.get("batch_retry_reason"),
+        "gt_extraction_eligible": row.metadata.get("gt_extraction_eligible"),
+        "gt_extraction_excluded": row.metadata.get("gt_extraction_excluded"),
+        "gt_extraction_skip_reason": row.metadata.get("gt_extraction_skip_reason"),
+        "gt_extraction_classification": row.metadata.get("gt_extraction_classification"),
+        "gt_clean_eligible": row.metadata.get("gt_clean_eligible"),
+        "negative_audit_useful": row.metadata.get("negative_audit_useful"),
+        "gt_recovery_action": row.metadata.get("gt_recovery_action"),
         **classification,
     }
 

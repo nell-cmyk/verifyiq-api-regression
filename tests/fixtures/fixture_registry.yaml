@@ -275,6 +275,15 @@ fixtures:
   source_row: 180
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (52.1MP) exceeds limit (40.0MP)
 - name: 2024_11_20_bir_registration_certificate_form_2303_additional_1 (1)__BIRExemptionCertificate
   file_type: BIRExemptionCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_11_20_bir_registration_certificate_form_2303_additional_1 (1).jpeg
@@ -836,6 +845,15 @@ fixtures:
   source_row: 231
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (119.5MP) exceeds limit (40.0MP)
 - name: 2024_12_06_bir_registration_certificate_form_2303__BIRExemptionCertificate
   file_type: BIRExemptionCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_12_06_bir_registration_certificate_form_2303.jpeg
@@ -869,6 +887,15 @@ fixtures:
   source_row: 234
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (151.8MP) exceeds limit (40.0MP)
 - name: 2024_12_11_bir_registration_certificate_form_2303_additional_1__BIRExemptionCertificate
   file_type: BIRExemptionCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_12_11_bir_registration_certificate_form_2303_additional_1.pdf
@@ -880,6 +907,15 @@ fixtures:
   source_row: 235
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (46.0MP) exceeds limit (40.0MP)
 - name: 2024_12_13_bir_registration_certificate_form_2303_additional_1__BIRExemptionCertificate
   file_type: BIRExemptionCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_12_13_bir_registration_certificate_form_2303_additional_1.jpeg
@@ -979,6 +1015,15 @@ fixtures:
   source_row: 244
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (217.6MP) exceeds limit (40.0MP)
 - name: 2025_04_04_bir_registration_certificate_form_2303__BIRExemptionCertificate
   file_type: BIRExemptionCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2025_04_04_bir_registration_certificate_form_2303.jpeg
@@ -2233,6 +2278,15 @@ fixtures:
   source_row: 180
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (52.1MP) exceeds limit (40.0MP)
 - name: 2024_11_20_bir_registration_certificate_form_2303_additional_1 (1)__BIRForm2303
   file_type: BIRForm2303
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_11_20_bir_registration_certificate_form_2303_additional_1 (1).jpeg
@@ -2794,6 +2848,15 @@ fixtures:
   source_row: 231
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (119.5MP) exceeds limit (40.0MP)
 - name: 2024_12_06_bir_registration_certificate_form_2303__BIRForm2303
   file_type: BIRForm2303
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_12_06_bir_registration_certificate_form_2303.jpeg
@@ -2827,6 +2890,15 @@ fixtures:
   source_row: 234
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (151.8MP) exceeds limit (40.0MP)
 - name: 2024_12_11_bir_registration_certificate_form_2303_additional_1__BIRForm2303
   file_type: BIRForm2303
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_12_11_bir_registration_certificate_form_2303_additional_1.pdf
@@ -2838,6 +2910,15 @@ fixtures:
   source_row: 235
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (46.0MP) exceeds limit (40.0MP)
 - name: 2024_12_13_bir_registration_certificate_form_2303_additional_1__BIRForm2303
   file_type: BIRForm2303
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2024_12_13_bir_registration_certificate_form_2303_additional_1.jpeg
@@ -2937,6 +3018,15 @@ fixtures:
   source_row: 244
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (217.6MP) exceeds limit (40.0MP)
 - name: 2025_04_04_bir_registration_certificate_form_2303__BIRForm2303
   file_type: BIRForm2303
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BIR/2025_04_04_bir_registration_certificate_form_2303.jpeg
@@ -4445,6 +4535,12 @@ fixtures:
   verification_status: unknown
   enabled: false
   fixture_unsupported_reason: 'unsupported file extension ''.xlsx'' (supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)'
+  gt_extraction_eligible: false
+  gt_extraction_skip_reason: unsupported_fixture
+  gt_extraction_classification: unsupported_artifact
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_recovery_action: replace_fixture
 - name: METROBANK 2025_09_14_statement_main
   file_type: BankStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/METROBANK 2025_09_14_statement_main.jpeg
@@ -4478,8 +4574,14 @@ fixtures:
   source_row: 61
   verification_status: confirmed
   enabled: true
-  batch_expected_warning: 'Known /documents/batch page-limit warning: this fixture may return DocumentSizeGuardError instead of parsed data.'
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
   batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
   batch_expected_error: Page count (456) exceeds limit (50)
 - name: MJRL_MV Dela Cruz_Bank Statement (2)
   file_type: BankStatement
@@ -4503,8 +4605,14 @@ fixtures:
   source_row: 63
   verification_status: confirmed
   enabled: true
-  batch_expected_warning: 'Known /documents/batch page-limit warning: this fixture may return DocumentSizeGuardError instead of parsed data.'
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
   batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
   batch_expected_error: Page count (66) exceeds limit (50)
 - name: MJRL_MV Dela Cruz_Bank Statement (4)
   file_type: BankStatement
@@ -4517,8 +4625,14 @@ fixtures:
   source_row: 64
   verification_status: confirmed
   enabled: true
-  batch_expected_warning: 'Known /documents/batch page-limit warning: this fixture may return DocumentSizeGuardError instead of parsed data.'
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
   batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
   batch_expected_error: Page count (151) exceeds limit (50)
 - name: OCR-Gemini for 4007_Bank Statement_Bank of the philippine islands (2).png
   file_type: BankStatement
@@ -4532,6 +4646,12 @@ fixtures:
   verification_status: unknown
   enabled: false
   fixture_unsupported_reason: 'unsupported file extension ''.xlsx'' (supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)'
+  gt_extraction_eligible: false
+  gt_extraction_skip_reason: unsupported_fixture
+  gt_extraction_classification: unsupported_artifact
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_recovery_action: replace_fixture
 - name: OCR-Gemini of 1160_Bank statement_PBCOM.png
   file_type: BankStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/BankStatement/OCR-Gemini of 1160_Bank statement_PBCOM.png.xlsx
@@ -4544,6 +4664,12 @@ fixtures:
   verification_status: unknown
   enabled: false
   fixture_unsupported_reason: 'unsupported file extension ''.xlsx'' (supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)'
+  gt_extraction_eligible: false
+  gt_extraction_skip_reason: unsupported_fixture
+  gt_extraction_classification: unsupported_artifact
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_recovery_action: replace_fixture
 - name: 2025_08_05_barangay_certificate_additional_2
   file_type: BarangayCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Brgy Cert/2025_08_05_barangay_certificate_additional_2.jpeg
@@ -5798,6 +5924,15 @@ fixtures:
   source_row: 402
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: multi_account_fixture
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is.'
+  gt_recovery_action: split_fixture
+  gt_extraction_skip_reason: multi_account_document
+  batch_expected_error_type: MultiAccountDocumentError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
 - name: CreditCard13
   file_type: CreditCardStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard13.jpeg
@@ -5809,6 +5944,15 @@ fixtures:
   source_row: 403
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: multi_account_fixture
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is.'
+  gt_recovery_action: split_fixture
+  gt_extraction_skip_reason: multi_account_document
+  batch_expected_error_type: MultiAccountDocumentError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
 - name: CreditCard14
   file_type: CreditCardStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard14.jpeg
@@ -5820,6 +5964,15 @@ fixtures:
   source_row: 404
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: multi_account_fixture
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is.'
+  gt_recovery_action: split_fixture
+  gt_extraction_skip_reason: multi_account_document
+  batch_expected_error_type: MultiAccountDocumentError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
 - name: CreditCard15
   file_type: CreditCardStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard15.jpeg
@@ -5831,6 +5984,15 @@ fixtures:
   source_row: 405
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: multi_account_fixture
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is.'
+  gt_recovery_action: split_fixture
+  gt_extraction_skip_reason: multi_account_document
+  batch_expected_error_type: MultiAccountDocumentError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
 - name: CreditCard2
   file_type: CreditCardStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard2.jpeg
@@ -5842,6 +6004,15 @@ fixtures:
   source_row: 406
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: multi_account_fixture
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is.'
+  gt_recovery_action: split_fixture
+  gt_extraction_skip_reason: multi_account_document
+  batch_expected_error_type: MultiAccountDocumentError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
 - name: CreditCard3
   file_type: CreditCardStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard3.jpeg
@@ -5886,6 +6057,15 @@ fixtures:
   source_row: 410
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: multi_account_fixture
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is.'
+  gt_recovery_action: split_fixture
+  gt_extraction_skip_reason: multi_account_document
+  batch_expected_error_type: MultiAccountDocumentError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
 - name: CreditCard7
   file_type: CreditCardStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard7.jpeg
@@ -5897,6 +6077,15 @@ fixtures:
   source_row: 411
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: multi_account_fixture
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is.'
+  gt_recovery_action: split_fixture
+  gt_extraction_skip_reason: multi_account_document
+  batch_expected_error_type: MultiAccountDocumentError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
 - name: CreditCard8
   file_type: CreditCardStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard8.jpeg
@@ -5908,6 +6097,15 @@ fixtures:
   source_row: 412
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: multi_account_fixture
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is.'
+  gt_recovery_action: split_fixture
+  gt_extraction_skip_reason: multi_account_document
+  batch_expected_error_type: MultiAccountDocumentError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
 - name: CreditCard9
   file_type: CreditCardStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Credit card/CreditCard9.jpeg
@@ -6711,6 +6909,15 @@ fixtures:
   source_row: 532
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (88.1MP) exceeds limit (40.0MP)
 - name: 2024_12_06_dti_registration(1)__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2024_12_06_dti_registration(1).jpeg
@@ -6876,6 +7083,15 @@ fixtures:
   source_row: 547
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (97.4MP) exceeds limit (40.0MP)
 - name: 2025_01_31_dti_registration (1)__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration (1).pdf
@@ -6887,6 +7103,15 @@ fixtures:
   source_row: 548
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
 - name: 2025_01_31_dti_registration(1)__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration(1).pdf
@@ -6898,6 +7123,15 @@ fixtures:
   source_row: 549
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
 - name: 2025_01_31_dti_registration(2)__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration(2).pdf
@@ -6909,6 +7143,15 @@ fixtures:
   source_row: 550
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
 - name: 2025_01_31_dti_registration__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration.pdf
@@ -6920,6 +7163,15 @@ fixtures:
   source_row: 551
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
 - name: 2025_02_08_dti_registration__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_08_dti_registration.jpeg
@@ -6942,6 +7194,15 @@ fixtures:
   source_row: 553
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (208.3MP) exceeds limit (40.0MP)
 - name: 2025_02_10_dti_registration(1)__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_10_dti_registration(1).pdf
@@ -6953,6 +7214,15 @@ fixtures:
   source_row: 554
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (164.8MP) exceeds limit (40.0MP)
 - name: 2025_02_10_dti_registration__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_10_dti_registration.jpeg
@@ -6975,6 +7245,15 @@ fixtures:
   source_row: 556
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (164.8MP) exceeds limit (40.0MP)
 - name: 2025_02_18_dti_registration__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_18_dti_registration.jpeg
@@ -7052,6 +7331,15 @@ fixtures:
   source_row: 563
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
 - name: 2025_03_05_dti_registration(1)__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration(1).pdf
@@ -7063,6 +7351,15 @@ fixtures:
   source_row: 564
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
 - name: 2025_03_05_dti_registration(2)__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration(2).pdf
@@ -7074,6 +7371,15 @@ fixtures:
   source_row: 565
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
 - name: 2025_03_05_dti_registration__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration.jpeg
@@ -7096,6 +7402,15 @@ fixtures:
   source_row: 567
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
 - name: 2025_03_09_dti_registration(1)__DTIPermit
   file_type: DTIPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_09_dti_registration(1).jpeg
@@ -8251,6 +8566,15 @@ fixtures:
   source_row: 532
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (88.1MP) exceeds limit (40.0MP)
 - name: 2024_12_06_dti_registration(1)__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2024_12_06_dti_registration(1).jpeg
@@ -8416,6 +8740,15 @@ fixtures:
   source_row: 547
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (97.4MP) exceeds limit (40.0MP)
 - name: 2025_01_31_dti_registration (1)__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration (1).pdf
@@ -8427,6 +8760,15 @@ fixtures:
   source_row: 548
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
 - name: 2025_01_31_dti_registration(1)__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration(1).pdf
@@ -8438,6 +8780,15 @@ fixtures:
   source_row: 549
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
 - name: 2025_01_31_dti_registration(2)__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration(2).pdf
@@ -8449,6 +8800,15 @@ fixtures:
   source_row: 550
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
 - name: 2025_01_31_dti_registration__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_01_31_dti_registration.pdf
@@ -8460,6 +8820,15 @@ fixtures:
   source_row: 551
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (207.8MP) exceeds limit (40.0MP)
 - name: 2025_02_08_dti_registration__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_08_dti_registration.jpeg
@@ -8482,6 +8851,15 @@ fixtures:
   source_row: 553
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (208.3MP) exceeds limit (40.0MP)
 - name: 2025_02_10_dti_registration(1)__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_10_dti_registration(1).pdf
@@ -8493,6 +8871,15 @@ fixtures:
   source_row: 554
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (164.8MP) exceeds limit (40.0MP)
 - name: 2025_02_10_dti_registration__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_10_dti_registration.jpeg
@@ -8515,6 +8902,15 @@ fixtures:
   source_row: 556
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (164.8MP) exceeds limit (40.0MP)
 - name: 2025_02_18_dti_registration__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_02_18_dti_registration.jpeg
@@ -8592,6 +8988,15 @@ fixtures:
   source_row: 563
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
 - name: 2025_03_05_dti_registration(1)__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration(1).pdf
@@ -8603,6 +9008,15 @@ fixtures:
   source_row: 564
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
 - name: 2025_03_05_dti_registration(2)__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration(2).pdf
@@ -8614,6 +9028,15 @@ fixtures:
   source_row: 565
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
 - name: 2025_03_05_dti_registration__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_05_dti_registration.jpeg
@@ -8636,6 +9059,15 @@ fixtures:
   source_row: 567
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (219.3MP) exceeds limit (40.0MP)
 - name: 2025_03_09_dti_registration(1)__DTIRegistrationCertificate
   file_type: DTIRegistrationCertificate
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/DTI/2025_03_09_dti_registration(1).jpeg
@@ -13861,6 +14293,15 @@ fixtures:
   source_row: 1436
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (45.4MP) exceeds limit (40.0MP)
 - name: 56111 Unified MultiPurpose ID__2
   file_type: UMID
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/ID/UMID/56111 Unified MultiPurpose ID.png
@@ -14038,6 +14479,12 @@ fixtures:
   verification_status: unknown
   enabled: false
   fixture_unsupported_reason: 'unsupported file extension ''.mp4'' (supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)'
+  gt_extraction_eligible: false
+  gt_extraction_skip_reason: unsupported_fixture
+  gt_extraction_classification: unsupported_artifact
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_recovery_action: replace_fixture
 - name: IMG20250217093406
   file_type: UMID
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/ID/UMID/IMG20250217093406.jpg
@@ -15457,6 +15904,15 @@ fixtures:
   source_row: 734
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (48.0MP) exceeds limit (40.0MP)
 - name: 2025_05_16_mayors_permit(1)
   file_type: MayorsPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Mayor's Permit/2025_05_16_mayors_permit(1).jpeg
@@ -15468,6 +15924,15 @@ fixtures:
   source_row: 733
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (48.0MP) exceeds limit (40.0MP)
 - name: 2025_05_16_mayors_permit_additional_1
   file_type: MayorsPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Mayor's Permit/2025_05_16_mayors_permit_additional_1.jpeg
@@ -15479,6 +15944,15 @@ fixtures:
   source_row: 735
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: fixture_too_large
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns DocumentSizeGuardError and cannot produce clean GT as-is.'
+  gt_recovery_action: reduce_fixture
+  gt_extraction_skip_reason: document_size_guard
+  batch_expected_error_type: DocumentSizeGuardError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Page 1 megapixels (48.0MP) exceeds limit (40.0MP)
 - name: 2025_05_19_mayors_permit
   file_type: MayorsPermit
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Mayor's Permit/2025_05_19_mayors_permit.jpeg
@@ -21606,6 +22080,15 @@ fixtures:
   source_row: 104
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: multi_account_fixture
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is.'
+  gt_recovery_action: split_fixture
+  gt_extraction_skip_reason: multi_account_document
+  batch_expected_error_type: MultiAccountDocumentError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
 - name: TC02_Tonik_AdditionalAccountsFlag
   file_type: BankStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Tonik/TC02_Tonik_AdditionalAccountsFlag.pdf
@@ -21617,6 +22100,15 @@ fixtures:
   source_row: 105
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: multi_account_fixture
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is.'
+  gt_recovery_action: split_fixture
+  gt_extraction_skip_reason: multi_account_document
+  batch_expected_error_type: MultiAccountDocumentError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
 - name: TC03_Tonik_SingleAccount
   file_type: BankStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Tonik/TC03_Tonik_SingleAccount.pdf
@@ -21639,6 +22131,15 @@ fixtures:
   source_row: 107
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: multi_account_fixture
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is.'
+  gt_recovery_action: split_fixture
+  gt_extraction_skip_reason: multi_account_document
+  batch_expected_error_type: MultiAccountDocumentError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
 - name: TC05_Tonik_NoFalseFraudFlag
   file_type: BankStatement
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Tonik/TC05_Tonik_NoFalseFraudFlag.pdf
@@ -21650,6 +22151,15 @@ fixtures:
   source_row: 108
   verification_status: confirmed
   enabled: true
+  gt_extraction_classification: multi_account_fixture
+  batch_expected_warning: 'Known /documents/batch GT exclusion: this fixture returns MultiAccountDocumentError and is unsuitable for clean single-account GT as-is.'
+  gt_recovery_action: split_fixture
+  gt_extraction_skip_reason: multi_account_document
+  batch_expected_error_type: MultiAccountDocumentError
+  gt_clean_eligible: false
+  negative_audit_useful: true
+  gt_extraction_eligible: false
+  batch_expected_error: Document contains multiple account sections. Multi-account documents are not supported.
 - name: 55555_manila Waters
   file_type: WaterBill
   gcs_uri: gs://verifyiq-internal-testing/QA/GroundTruth/Water Bill/55555_manila Waters.jpeg

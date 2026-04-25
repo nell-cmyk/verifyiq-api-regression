@@ -103,6 +103,9 @@ Optional retry overrides:
 ## Fixture Registry Source
 - The normal exporter path reads `tests/fixtures/fixture_registry.yaml`.
 - `tools/generate_fixture_registry.py` writes that shared registry plus `tests/endpoints/parse/fixture_registry.yaml` as a generated `/parse` compatibility copy.
+- Durable GT extraction exclusions live in `tools/fixture_registry_source/gt_extraction_fixture_overrides.yaml`; edit that source and run `./.venv/bin/python tools/generate_fixture_registry.py` instead of manually editing generated registry YAML.
+- Registry inclusion and GT extraction eligibility are separate. A fixture can stay in the broad registry for audit, negative coverage, or replacement planning while carrying `gt_extraction_eligible: false` for batch ground-truth extraction.
+- Supported GT extraction skip reasons are `document_size_guard`, `multi_account_document`, `unsupported_fixture`, and `quality_gate_no_payload`. Supported classifications are `fixture_too_large`, `multi_account_fixture`, `unsupported_artifact`, and `fixture_quality_gate_failed`.
 - `--source-workbook` is retained only as a migration guard and no longer drives normal export execution. To change export inputs, edit the curated workbook or supplemental YAML, run `./.venv/bin/python tools/generate_fixture_registry.py`, then rerun the exporter.
 
 ## Concurrency
@@ -136,6 +139,8 @@ Optional retry overrides:
 - Composite source labels such as `BIRForm2303 || BIRExemptionCertificate` are split into one output row per normalized fileType.
 - `No fileType` and `Fraud - Skipped` stay out of batch execution and are recorded in the run manifest as excluded source rows.
 - Unsupported or malformed fixture paths are not silently dropped. They are surfaced in `manifest.json`, and the affected workbook row is marked failed with empty mapped value columns.
+- Fixtures tagged with `gt_extraction_eligible: false` are skipped before live `/documents/batch` execution for GT export planning, counted as skipped/non-executable, and written as failed audit rows with explicit GT metadata.
+- Skipping GT-ineligible fixtures only affects this GT extraction workflow. It does not delete fixtures, disable registry traceability, or make them unavailable for future negative/audit coverage.
 
 ## Failed Rows
 - Workbook generation continues even when some fixtures fail.
@@ -151,13 +156,13 @@ Optional retry overrides:
 - Null or blank extracted fields do not remove a row from the clean workbook when the row otherwise has a usable successful parse. Blank values can be genuine extracted empty values.
 - Clean workbooks exclude unsupported fixtures, row-level API errors, retry-exhausted chunk failures, exhausted HTTP `429` rate-limit rows, expected warning results, quality-gated no-payload results, and malformed or unexpected successful response shapes.
 - Excluding a row from the clean workbook only means it is not a clean ground-truth candidate right now. It does not mean the fixture should be deleted from the registry or removed from other automation.
-- `clean_manifest.json` records total selected source rows, clean included rows, triaged rows, counts by fileType, counts by recovery class, counts by ground-truth candidate status, and the paired full/audit and clean workbook paths.
+- `clean_manifest.json` records total selected source rows, clean included rows, triaged rows, GT-extraction-excluded rows, counts by fileType, counts by recovery class, counts by ground-truth candidate status, and the paired full/audit and clean workbook paths.
 
 ## Recovery Triage Artifacts
 - `recovery_triage.json` and `recovery_triage.csv` contain every non-clean exported row.
-- Triage rows include source identity, request and response fileType, HTTP and row status, parse success, failure details, retry metadata, parsed-container counts, quality-gate details when available, `recovery_class`, `recovery_action`, and `gt_candidate_status`.
+- Triage rows include source identity, request and response fileType, HTTP and row status, parse success, failure details, retry metadata, GT extraction metadata, parsed-container counts, quality-gate details when available, `recovery_class`, `recovery_action`, and `gt_candidate_status`.
 - Use recovery triage to decide whether a row should be targeted for rerun, reviewed for fixture quality, reviewed for fileType/source metadata, replaced, excluded from clean GT as-is, or retained as negative API guard coverage.
-- The exporter does not mutate the source registry, does not bulk-tag fixtures invalid, and does not convert non-clean rows into successful GT rows.
+- The exporter does not mutate the source registry, does not bulk-tag fixtures invalid, and does not convert non-clean rows into successful GT rows. Durable exclusions require fixture-registry source metadata followed by registry regeneration.
 
 Common recovery classes:
 - `rate_limited`: HTTP `429` rate limiting or service pressure after bounded retry exhaustion. Action: targeted rerun with lower concurrency or explicit backoff.
@@ -180,12 +185,19 @@ Common recovery classes:
 - Rows with empty `summaryOCR`, `summaryResult`, `calculatedFields`, and `transactionsOCR`, plus `extractionStatus=not_attempted`, are not clean GT candidates.
 - When `documentQuality` or `qualityCheck.issueDescription` shows a quality-gate failure, the row is classified as `http_200_no_payload_quality_gate`.
 - These rows are completed row-level API results, so the exporter does not retry them automatically. They may still become clean GT candidates later if fixture quality is corrected, the fixture is replaced, or API behavior changes and a targeted rerun produces a usable parsed payload.
+- A no-payload quality-gate row is not automatically skipped from future live GT extraction just because it appeared in recovery triage once. Future skipping requires explicit evidence-backed `quality_gate_no_payload` metadata in `tools/fixture_registry_source/gt_extraction_fixture_overrides.yaml`.
 
 ## Document Size Guard Rows
 - `DocumentSizeGuardError` rows are classified as `document_size_guard`.
 - They are not rerun candidates as-is because the API explicitly refused extraction due to a size or page guard.
 - Their `gt_candidate_status` is `not_gt_candidate_currently`, and the recovery action is `exclude_from_clean_gt_or_replace_fixture`.
 - This is not a generic invalid-fixture tag and does not imply deletion from all automation. These rows may still be useful as negative API guard coverage outside clean GT.
+- Evidence-backed size/page guard fixtures should be tagged with `gt_extraction_eligible: false`, `gt_extraction_skip_reason: document_size_guard`, `gt_extraction_classification: fixture_too_large`, and a recovery action such as `reduce_fixture` or `replace_fixture`.
+
+## Multi-Account Rows
+- `MultiAccountDocumentError` rows are classified as `multi_account_document`.
+- Confirmed multi-account fixtures are unsuitable for clean single-account GT extraction as-is, but they may remain useful as negative coverage or manual-review examples.
+- Evidence-backed multi-account fixtures should be tagged with `gt_extraction_eligible: false`, `gt_extraction_skip_reason: multi_account_document`, `gt_extraction_classification: multi_account_fixture`, and `gt_recovery_action: split_fixture`.
 
 ## Heterogeneous Response Shapes
 - The workflow keeps the main sheet close to the reference workbook's flat analyst-facing layout.

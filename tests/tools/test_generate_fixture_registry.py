@@ -88,7 +88,46 @@ def test_fixture_metadata_overrides_for_known_batch_guard_error():
 
         assert override["batch_expected_error_type"] == "DocumentSizeGuardError"
         assert expected_fragment in override["batch_expected_error"]
-        assert "page-limit warning" in override["batch_expected_warning"]
+        assert "GT exclusion" in override["batch_expected_warning"]
+        assert override["gt_extraction_eligible"] is False
+        assert override["gt_extraction_skip_reason"] == "document_size_guard"
+        assert override["gt_extraction_classification"] == "fixture_too_large"
+        assert override["gt_clean_eligible"] is False
+        assert override["negative_audit_useful"] is True
+        assert override["gt_recovery_action"] == "reduce_fixture"
+
+
+def test_gt_extraction_override_loader_rejects_duplicate_fixture(tmp_path):
+    module = _load_module()
+    override_path = tmp_path / "gt_overrides.yaml"
+    override_path.write_text(
+        "\n".join(
+            [
+                "schema_version: 1",
+                "groups:",
+                "- metadata:",
+                "    gt_extraction_eligible: false",
+                "    gt_extraction_skip_reason: document_size_guard",
+                "    gt_extraction_classification: fixture_too_large",
+                "    gt_clean_eligible: false",
+                "    negative_audit_useful: true",
+                "    gt_recovery_action: reduce_fixture",
+                "  fixtures:",
+                "  - gcs_uri: gs://bucket/too-large.pdf",
+                "    file_type: Payslip",
+                "  - gcs_uri: gs://bucket/too-large.pdf",
+                "    file_type: Payslip",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(RuntimeError, match="duplicate fixture override"):
+        module.fixture_metadata_overrides_for(
+            gcs_uri="gs://bucket/too-large.pdf",
+            file_type="Payslip",
+            override_yaml=override_path,
+        )
 
 
 def test_write_registry_document_writes_shared_and_parse_compat_copies(tmp_path):
@@ -125,3 +164,25 @@ def test_write_registry_document_writes_shared_and_parse_compat_copies(tmp_path)
     assert shared == parse
     assert "schema_version: 2" in shared
     assert "source_file_type_status: ✓" in shared
+
+
+def test_generated_registry_preserves_gt_extraction_metadata_in_both_outputs(tmp_path):
+    module = _load_module()
+    source_path = tmp_path / "source.xlsx"
+    from tests.tools.test_export_batch_ground_truth import _write_source_workbook
+
+    _write_source_workbook(source_path)
+    shared_path = tmp_path / "tests" / "fixtures" / "fixture_registry.yaml"
+    parse_path = tmp_path / "tests" / "endpoints" / "parse" / "fixture_registry.yaml"
+
+    doc = module.build_registry_document(source_xlsx=source_path, supplemental_yaml=None)
+    module.write_registry_document(doc, output_paths=(shared_path, parse_path))
+
+    shared = shared_path.read_text(encoding="utf-8")
+    parse = parse_path.read_text(encoding="utf-8")
+    assert shared == parse
+    assert "gt_extraction_eligible: false" in shared
+    assert "gt_extraction_skip_reason: document_size_guard" in shared
+    assert "gt_extraction_classification: fixture_too_large" in shared
+    assert "gt_clean_eligible: false" in shared
+    assert "negative_audit_useful: true" in shared

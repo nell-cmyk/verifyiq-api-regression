@@ -222,6 +222,37 @@ def _write_mixed_fixture_registry(registry_path: Path) -> Path:
     return registry_path
 
 
+def _write_gt_exclusion_registry(
+    registry_path: Path,
+    *,
+    excluded_fixture: dict[str, object],
+) -> Path:
+    clean_fixture = {
+        "name": "clean",
+        "file_type": "Payslip",
+        "gcs_uri": "gs://bucket/clean.pdf",
+        "source_folder": "Payslip",
+        "source_file_type": "Payslip",
+        "source_file_type_status": "✓",
+        "source_assignee": "Thor",
+        "source_workflow_status": "Pending",
+        "source_row": 10,
+        "verification_status": "confirmed",
+        "enabled": True,
+    }
+    write_registry_document(
+        {
+            "schema_version": 2,
+            "total": 2,
+            "composite_rows_split": 0,
+            "counts": {"confirmed": 2},
+            "fixtures": [clean_fixture, excluded_fixture],
+        },
+        output_paths=(registry_path,),
+    )
+    return registry_path
+
+
 def _write_reference_workbook(path: Path) -> Path:
     workbook = Workbook()
     sheet = workbook.active
@@ -255,6 +286,12 @@ def _make_fixture(
     skip_reason: str | None = None,
     batch_expected_error_type: str | None = None,
     batch_expected_warning: str | None = None,
+    gt_extraction_eligible: bool = True,
+    gt_extraction_skip_reason: str | None = None,
+    gt_extraction_classification: str | None = None,
+    gt_recovery_action: str | None = None,
+    gt_clean_eligible: bool = True,
+    negative_audit_useful: bool = False,
 ) -> SourceFixtureRecord:
     return SourceFixtureRecord(
         record_id=record_id,
@@ -274,6 +311,12 @@ def _make_fixture(
         batch_expected_warning=batch_expected_warning,
         batch_expected_error_type=batch_expected_error_type,
         batch_expected_error="expected warning result" if batch_expected_error_type else None,
+        gt_extraction_eligible=gt_extraction_eligible,
+        gt_extraction_skip_reason=gt_extraction_skip_reason,
+        gt_extraction_classification=gt_extraction_classification,
+        gt_recovery_action=gt_recovery_action,
+        gt_clean_eligible=gt_clean_eligible,
+        negative_audit_useful=negative_audit_useful,
     )
 
 
@@ -550,11 +593,20 @@ def test_parse_source_workbook_comparison_helper_splits_and_keeps_verify_rows(tm
     bank_fixture = parsed.fixtures[2]
     assert bank_fixture.include_in_batch is False
     assert bank_fixture.skip_reason == "unsupported file extension '.xlsx' (supported: PDF, PNG, JPG, JPEG, TIFF, TIF, HEIC, HEIF)"
+    assert bank_fixture.gt_extraction_eligible is False
+    assert bank_fixture.gt_extraction_skip_reason == "unsupported_fixture"
+    assert bank_fixture.gt_extraction_classification == "unsupported_artifact"
+    assert bank_fixture.gt_recovery_action == "replace_fixture"
 
     warning_fixture = parsed.fixtures[3]
+    assert warning_fixture.include_in_batch is False
     assert warning_fixture.batch_expected_error_type == "DocumentSizeGuardError"
     assert "Page count (456)" in str(warning_fixture.batch_expected_error)
-    assert "page-limit warning" in str(warning_fixture.batch_expected_warning)
+    assert "GT exclusion" in str(warning_fixture.batch_expected_warning)
+    assert warning_fixture.gt_extraction_eligible is False
+    assert warning_fixture.gt_extraction_skip_reason == "document_size_guard"
+    assert warning_fixture.gt_extraction_classification == "fixture_too_large"
+    assert warning_fixture.gt_recovery_action == "reduce_fixture"
 
     assert len(parsed.excluded_rows) == 2
     assert parsed.excluded_rows[0].raw_file_type == "No fileType"
@@ -591,6 +643,12 @@ def test_registry_batch_planning_matches_legacy_workbook_parser(tmp_path):
             fixture.batch_expected_warning,
             fixture.batch_expected_error_type,
             fixture.batch_expected_error,
+            fixture.gt_extraction_eligible,
+            fixture.gt_extraction_skip_reason,
+            fixture.gt_extraction_classification,
+            fixture.gt_recovery_action,
+            fixture.gt_clean_eligible,
+            fixture.negative_audit_useful,
         )
 
     assert [fixture_signature(fixture) for fixture in registry.fixtures] == [
@@ -614,8 +672,8 @@ def test_plan_file_types_reports_executable_and_skipped_counts(tmp_path):
     plan_by_type = {plan.file_type: plan for plan in plans}
     assert plan_by_type["BIRForm2303"].executable_rows == 1
     assert plan_by_type["BankStatement"].total_rows == 2
-    assert plan_by_type["BankStatement"].executable_rows == 1
-    assert plan_by_type["BankStatement"].skipped_rows == 1
+    assert plan_by_type["BankStatement"].executable_rows == 0
+    assert plan_by_type["BankStatement"].skipped_rows == 2
 
     _selected_parsed, selected_grouped, selected_plans = plan_file_types(
         fixture_registry=registry_path,
@@ -1993,6 +2051,203 @@ def test_run_export_writes_clean_workbook_manifest_and_recovery_triage(monkeypat
         clean_sheet.cell(row, parse_success_column).value is not False
         for row in range(2, clean_sheet.max_row + 1)
     )
+
+
+@pytest.mark.parametrize(
+    (
+        "gt_skip_reason",
+        "gt_classification",
+        "gt_recovery_action",
+        "batch_error_type",
+        "expected_failure_tag",
+        "expected_recovery_class",
+        "expected_gt_status",
+    ),
+    [
+        (
+            "document_size_guard",
+            "fixture_too_large",
+            "reduce_fixture",
+            "DocumentSizeGuardError",
+            "document_size_guard",
+            "document_size_guard",
+            "not_gt_candidate_currently",
+        ),
+        (
+            "multi_account_document",
+            "multi_account_fixture",
+            "split_fixture",
+            "MultiAccountDocumentError",
+            "multi_account_document",
+            "multi_account_document",
+            "fixture_review_required",
+        ),
+    ],
+)
+def test_gt_extraction_excluded_fixture_is_skipped_but_kept_in_audit_and_triage(
+    monkeypatch,
+    tmp_path,
+    gt_skip_reason,
+    gt_classification,
+    gt_recovery_action,
+    batch_error_type,
+    expected_failure_tag,
+    expected_recovery_class,
+    expected_gt_status,
+):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    registry_path = _write_gt_exclusion_registry(
+        tmp_path / "fixture_registry.yaml",
+        excluded_fixture={
+            "name": "excluded",
+            "file_type": "Payslip",
+            "gcs_uri": "gs://bucket/excluded.pdf",
+            "source_folder": "Payslip",
+            "source_file_type": "Payslip",
+            "source_file_type_status": "✓",
+            "source_assignee": "Thor",
+            "source_workflow_status": "Pending",
+            "source_row": 11,
+            "verification_status": "confirmed",
+            "enabled": True,
+            "batch_expected_error_type": batch_error_type,
+            "batch_expected_error": "fixture cannot produce clean GT as-is",
+            "gt_extraction_eligible": False,
+            "gt_extraction_skip_reason": gt_skip_reason,
+            "gt_extraction_classification": gt_classification,
+            "gt_clean_eligible": False,
+            "negative_audit_useful": True,
+            "gt_recovery_action": gt_recovery_action,
+        },
+    )
+    output_dir = tmp_path / "output"
+    _configure_batch_artifact_dir(monkeypatch, tmp_path)
+    layout = load_reference_template(reference_path)
+    key = ("gs://bucket/clean.pdf",)
+    _install_fake_make_client(
+        monkeypatch,
+        {key: {"kind": "json", "body": _success_body_for_key(key)}},
+    )
+
+    result = batch_ground_truth_workflow.run_batch_ground_truth_export(
+        fixture_registry=registry_path,
+        reference_workbook=reference_path,
+        output_dir=output_dir,
+        selected_file_types=None,
+        template_layout=layout,
+        max_concurrent_chunks=1,
+        max_concurrent_file_types=1,
+    )
+
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    clean_manifest = json.loads(result.clean_manifest_path.read_text(encoding="utf-8"))
+    recovery_rows = json.loads(result.recovery_triage_json_path.read_text(encoding="utf-8"))
+
+    assert manifest["file_types"]["Payslip"]["executable_rows"] == 1
+    assert manifest["file_types"]["Payslip"]["skipped_rows"] == 1
+    assert manifest["file_types"]["Payslip"]["chunk_count"] == 1
+    assert manifest["skipped_rows"][0]["gt_extraction_skip_reason"] == gt_skip_reason
+    assert clean_manifest["clean_included_rows"] == 1
+    assert clean_manifest["gt_extraction_excluded_rows"] == 1
+    assert clean_manifest["gt_extraction_excluded_rows_by_fileType"] == {"Payslip": 1}
+    assert len(recovery_rows) == 1
+    triage_row = recovery_rows[0]
+    assert triage_row["failure_tag"] == expected_failure_tag
+    assert triage_row["error_type"] == batch_error_type
+    assert triage_row["recovery_class"] == expected_recovery_class
+    assert triage_row["gt_candidate_status"] == expected_gt_status
+    assert triage_row["gt_extraction_excluded"] is True
+    assert triage_row["gt_extraction_classification"] == gt_classification
+
+    audit_workbook = load_workbook(result.file_type_results[0].workbook_path, data_only=True)
+    assert audit_workbook["_meta"].max_row == 3
+    clean_workbook = load_workbook(result.file_type_results[0].clean_workbook_path, data_only=True)
+    assert clean_workbook["Payslip"].max_row == 2
+
+
+def test_quality_gate_rows_are_future_skipped_only_when_explicitly_tagged(monkeypatch, tmp_path):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    fixtures = [
+        {
+            "name": "quality-tagged",
+            "file_type": "Payslip",
+            "gcs_uri": "gs://bucket/quality-tagged.pdf",
+            "source_folder": "Payslip",
+            "source_file_type": "Payslip",
+            "source_file_type_status": "✓",
+            "source_assignee": "Thor",
+            "source_workflow_status": "Pending",
+            "source_row": 10,
+            "verification_status": "confirmed",
+            "enabled": True,
+            "gt_extraction_eligible": False,
+            "gt_extraction_skip_reason": "quality_gate_no_payload",
+            "gt_extraction_classification": "fixture_quality_gate_failed",
+            "gt_clean_eligible": False,
+            "negative_audit_useful": True,
+            "gt_recovery_action": "review_fixture_quality",
+        },
+        {
+            "name": "quality-untagged",
+            "file_type": "Payslip",
+            "gcs_uri": "gs://bucket/quality-untagged.pdf",
+            "source_folder": "Payslip",
+            "source_file_type": "Payslip",
+            "source_file_type_status": "✓",
+            "source_assignee": "Thor",
+            "source_workflow_status": "Pending",
+            "source_row": 11,
+            "verification_status": "confirmed",
+            "enabled": True,
+        },
+    ]
+    registry_path = tmp_path / "fixture_registry.yaml"
+    write_registry_document(
+        {
+            "schema_version": 2,
+            "total": len(fixtures),
+            "composite_rows_split": 0,
+            "counts": {"confirmed": len(fixtures)},
+            "fixtures": fixtures,
+        },
+        output_paths=(registry_path,),
+    )
+    output_dir = tmp_path / "output"
+    _configure_batch_artifact_dir(monkeypatch, tmp_path)
+    layout = load_reference_template(reference_path)
+    key = ("gs://bucket/quality-untagged.pdf",)
+    _install_fake_make_client(
+        monkeypatch,
+        {key: {"kind": "json", "body": {"results": [_quality_gated_no_payload_result(0)]}}},
+    )
+
+    result = batch_ground_truth_workflow.run_batch_ground_truth_export(
+        fixture_registry=registry_path,
+        reference_workbook=reference_path,
+        output_dir=output_dir,
+        selected_file_types=None,
+        template_layout=layout,
+        max_concurrent_chunks=1,
+        max_concurrent_file_types=1,
+    )
+
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    recovery_rows = json.loads(result.recovery_triage_json_path.read_text(encoding="utf-8"))
+    assert manifest["file_types"]["Payslip"]["executable_rows"] == 1
+    assert manifest["file_types"]["Payslip"]["skipped_rows"] == 1
+    assert [row["source_basename"] for row in recovery_rows] == [
+        "quality-tagged",
+        "quality-untagged",
+    ]
+    assert [row["recovery_class"] for row in recovery_rows] == [
+        "http_200_no_payload_quality_gate",
+        "http_200_no_payload_quality_gate",
+    ]
+    assert recovery_rows[0]["gt_extraction_excluded"] is True
+    assert recovery_rows[0]["batch_http_status"] is None
+    assert recovery_rows[1]["gt_extraction_excluded"] is False
+    assert recovery_rows[1]["batch_http_status"] == 200
+    assert result.file_type_results[0].clean_rows == 0
 
 
 def test_run_export_excludes_rate_limited_rows_from_clean_and_triages_them(monkeypatch, tmp_path):
