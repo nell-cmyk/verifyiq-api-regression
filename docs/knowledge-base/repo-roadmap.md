@@ -15,7 +15,7 @@ The target operating model is a lean, risk-based regression suite that stays pra
 - Requests are live, not mocked. `tests/client.py` builds an `httpx.Client` from `BASE_URL`, `API_KEY`, `TENANT_TOKEN`, and Google IAP credentials.
 - `/parse` uses GCS-backed fixtures from `PARSE_FIXTURE_FILE` and `PARSE_FIXTURE_FILE_TYPE`; `/documents/batch` also reuses registry-backed `gs://` fixtures.
 - No local mock server, `responses`, `respx`, VCR, or similar replay layer was found in the active regression surfaces.
-- The current checked-in CI surface is limited to `.github/workflows/protected-baseline.yml`, which runs the protected `/parse` baseline when required secrets are present.
+- The current checked-in CI surface includes `.github/workflows/protected-baseline.yml`, which runs the protected `/parse` baseline when required secrets are present, and `.github/workflows/non-live-validation.yml`, which runs non-live tooling/reporting/skills validation plus safe runner discovery checks without secrets.
 - The OpenAPI source currently present in the repo is `official-openapi.json` at the repository root.
 - `official-openapi.json` is OpenAPI `3.1.0` and contains many endpoint groups beyond current automated coverage, including `documents`, `applications`, `monitoring`, `parser_studio`, `qa`, `health`, and admin-style paths.
 - Current contract coverage is manual and selective. Shared assertions live in `tests/endpoints/document_contracts.py`, and no full OpenAPI-driven validator or generated-schema workflow is currently in place.
@@ -38,10 +38,10 @@ The target operating model is a lean, risk-based regression suite that stays pra
 
 | Surface | Current entry point | Current purpose | Consolidation note |
 | --- | --- | --- | --- |
-| Protected `/parse` baseline | `./.venv/bin/python -m pytest tests/endpoints/parse/ -v` | Default live gate for `/parse` | Must remain behaviorally stable during migration |
+| Protected `/parse` baseline | `./.venv/bin/python tools/run_regression.py` | Default live gate for `/parse`; direct pytest remains the exact implementation/debug path | Must remain behaviorally stable during migration |
 | Opt-in GET smoke suite | `./.venv/bin/python tools/run_regression.py --suite smoke` | Curated live GET smoke coverage: 200 assertions for safely testable current endpoints plus exact checks for known non-200 surfaces | Keep opt-in; do not let it silently replace the protected default |
 | `/parse` matrix | `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` | Opt-in broader fileType coverage plus saved summary | Good candidate to become a runner subcommand/category |
-| `/parse` full regression | `./.venv/bin/python tools/run_parse_full_regression.py` | Protected baseline followed by matrix | Strong signal that orchestration already exists but is fragmented |
+| `/parse` full regression | `./.venv/bin/python tools/run_regression.py --suite full` | Protected baseline followed by delegated full-wrapper execution | Strong signal that orchestration already exists but is fragmented |
 | Targeted `/parse` reporting | `./.venv/bin/python tools/run_parse_with_report.py` | Internal reporting/debug helper | Should become internal-only after consolidation |
 | Direct `/documents/batch` suite | `./.venv/bin/python -m pytest tests/endpoints/batch/ -v` | Live batch validation | Should be callable through the canonical runner |
 | Selected-fixture `/documents/batch` wrapper | `./.venv/bin/python tools/run_batch_with_fixtures.py --fixtures-json ...` | Fixture-targeted batch runs | Useful migration input for endpoint/category targeting |

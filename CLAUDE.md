@@ -3,7 +3,8 @@
 - Treat `AGENTS.md` as the canonical project contract. Use it first when repo rules and docs overlap.
 - Repo scope: VerifyIQ API regression automation only. Stay inside Python + pytest live regression work.
 - Use `./.venv/bin/python` for repo-local commands. Bootstrap `.venv` with `python3 -m venv .venv` when needed.
-- Default validation: `./.venv/bin/python -m pytest tests/endpoints/parse/ -v`
+- Default validation: `./.venv/bin/python tools/run_regression.py`
+- Exact protected implementation/debug path: `./.venv/bin/python -m pytest tests/endpoints/parse/ -v`
 - Broader validation when needed:
   - `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
   - `./.venv/bin/python tools/run_parse_full_regression.py`

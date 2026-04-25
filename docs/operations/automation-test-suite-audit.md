@@ -3,14 +3,14 @@
 ## Executive Summary
 This repository has a solid foundation for live `/v1/documents/parse` regression and a credible companion lane for `/v1/documents/batch`, but it is not yet a professional-grade API automation suite at repository scale.
 
-The strongest areas are regression discipline around the protected `/parse` baseline, fixture and registry management, raw and structured artifact generation, and offline coverage for runner and reporting utilities. The largest gaps are endpoint breadth, systematic contract validation, incomplete runner consolidation, and test-environment coupling that makes offline pytest suites depend on live environment configuration.
+The strongest areas are regression discipline around the protected `/parse` baseline, fixture and registry management, raw and structured artifact generation, offline coverage for runner and reporting utilities, and a checked-in non-live CI lane. The largest remaining gaps are endpoint breadth, systematic contract validation, incomplete runner parity for batch and matrix targeting, and the live-environment coupling that is still inherent to endpoint suites.
 
-The most important next steps are to decouple offline pytest suites from live env bootstrap, publish a real endpoint coverage inventory plus a minimum per-endpoint category bar, run the planned `/parse` OpenAPI drift pilot, finish canonical-runner parity or narrow the command story until parity exists, and add a non-live CI lane for tooling and reporting tests.
+Superseded audit findings: offline tooling/reporting/skills suites no longer depend on eager live client bootstrap at pytest import time, `docs/operations/endpoint-coverage-inventory.md` now exists, and `.github/workflows/non-live-validation.yml` now runs the non-live validation lane. The most important next steps are to keep those guardrails current, run the planned `/parse` OpenAPI drift pilot, finish canonical-runner parity or narrow the command story until parity exists, and define the missing endpoint onboarding standard.
 
 ## Overall Assessment
 Maturity rating: **Solid foundation**
 
-That rating is appropriate because the repository already has a disciplined protected baseline, useful negative and validation coverage, deterministic fixture selection, opt-in matrix breadth, reporting artifacts, and secret-aware CI. It is not yet **Professional-grade** because automation currently focuses on two live endpoints while `official-openapi.json` exposes a far larger surface, contract validation is still manual and selective, the canonical runner is only partially implemented, and even offline pytest suites are coupled to live environment setup through the root pytest configuration.
+That rating is appropriate because the repository already has a disciplined protected baseline, useful negative and validation coverage, deterministic fixture selection, opt-in matrix breadth, reporting artifacts, secret-aware live CI, and non-live CI for tooling/reporting infrastructure. It is not yet **Professional-grade** because automation still covers a narrow subset of the OpenAPI surface, contract validation is still manual and selective, the canonical runner is only partially implemented, and live endpoint suites remain dependent on live environment configuration by design.
 
 ### Maturity Scorecard
 
@@ -19,20 +19,20 @@ That rating is appropriate because the repository already has a disciplined prot
 | Test strategy | 3/5 | `/parse` has a clear protected baseline and matrix/full layers, and the repo now has an opt-in cross-group GET smoke lane, but the per-endpoint minimum category bar is still incomplete. |
 | Runner ergonomics | 3/5 | `tools/run_regression.py` now supports `--list`, `--dry-run`, live protected execution, live opt-in GET smoke, and live `--suite full`, but batch and other targeted execution parity are still incomplete. |
 | Regression discipline | 4/5 | The default gate stays narrow, the matrix uses one canonical fixture per file type, and `/documents/batch` caps default live request size at four items. |
-| Endpoint coverage | 1/5 | Live endpoint coverage is limited to `/v1/documents/parse` and `/v1/documents/batch` while the OpenAPI inventory exposes 218 paths across much broader groups. |
+| Endpoint coverage | 2/5 | Live endpoint coverage is still narrow relative to 218 OpenAPI paths, but it now includes `/v1/documents/parse`, `/v1/documents/batch`, and an opt-in cross-group GET smoke lane. |
 | Contract/schema validation | 2/5 | Shared assertions are useful, but success-response validation is selective and there is no systematic OpenAPI drift workflow in operation yet. |
 | Fixture/test data management | 4/5 | The generated registry, canonical fixture policy, JSON normalization, and batch chunking logic are strong and deliberate. |
 | Reporting/artifacts | 4/5 | Raw response capture, structured reports, redaction, and matrix summary rendering are materially better than a typical early-stage regression repo. |
-| CI integration | 2/5 | The protected live baseline workflow is conservative and correct, but there is no checked-in offline tooling/reporting lane or artifact publishing. |
+| CI integration | 3/5 | The protected live baseline workflow is conservative and correct, and a non-live tooling/reporting/skills lane exists; protected live artifact publishing is still missing. |
 | Reliability/flake control | 2/5 | Session-scoped live calls and safe request limits help, but the suite is still fully live and auth-negative timeout acceptance highlights upstream instability. |
 | Documentation/contributor experience | 3/5 | The repo has substantial documentation, but the command story is still mixed and there is no concise guide for adding a new endpoint under a defined taxonomy. |
 | Repo hygiene | 3/5 | Naming and structure are mostly consistent, but there are still overlapping wrappers, partial migration state, and a few command-surface inconsistencies. |
-| Scalability for endpoint expansion | 2/5 | The roadmap anticipates expansion, but the repo does not yet have a maintained coverage inventory, endpoint onboarding template, or isolated offline harness to support it cleanly. |
+| Scalability for endpoint expansion | 2/5 | The roadmap anticipates expansion and the repo now has a coverage inventory plus non-live harness, but it still lacks an endpoint onboarding template and enforced category bar. |
 
 ## What The Repo Already Does Well
 - Keeps the default live gate intentionally narrow. The protected baseline remains the repo's default signal in `README.md`, `AGENTS.md`, `docs/operations/workflow.md`, and `.github/workflows/protected-baseline.yml`.
 - Separates broader `/parse` breadth from the default gate. `tests/endpoints/parse/conftest.py` hard-gates matrix collection behind `RUN_PARSE_MATRIX=1`, and `tools/reporting/run_parse_matrix_with_summary.py` is the normal opt-in path.
-- Uses deterministic fixture selection instead of uncontrolled matrix sprawl. `tests/endpoints/parse/registry.py` selects one canonical enabled fixture per distinct registry `file_type`, and the current registry resolves to 26 canonical fixtures out of 1,817 enabled records.
+- Uses deterministic fixture selection instead of uncontrolled matrix sprawl. `tests/endpoints/parse/registry.py` selects one canonical enabled fixture per distinct registry `file_type`, and the current registry resolves to 26 canonical fixtures out of 1,813 enabled records.
 - Treats fixture data as curated source material. `tools/generate_fixture_registry.py`, `tools/onboard_fixture_json.py`, and `tests/endpoints/parse/fixture_json.py` enforce provenance, normalization, and unsupported-format filtering.
 - Reuses live responses to reduce redundant API calls. `tests/endpoints/parse/test_parse.py` and `tests/endpoints/batch/test_batch.py` rely on session-scoped happy-path responses.
 - Produces useful diagnostics and artifacts for live failures. `tests/diagnostics.py`, `tests/endpoints/parse/artifacts.py`, `tests/endpoints/batch/artifacts.py`, and `tests/reporting/*` make failures materially easier to classify.
@@ -46,10 +46,10 @@ That rating is appropriate because the repository already has a disciplined prot
 - The suite now has an explicit opt-in cross-endpoint GET smoke lane. `protected` remains the real default gate, while `smoke` is implemented as a bounded GET suite with 200 assertions for covered current endpoints plus exact-status checks for a small set of known non-200 surfaces.
 - Contract and schema validation are still manual and selective. There is no checked-in OpenAPI validator, drift register, or observed-schema comparison workflow in operation.
 - The canonical runner is still only partially real. `tools/run_regression.py` can list and dry-run multiple mappings and now executes live for `--suite protected`, `--suite smoke`, and `--suite full`, but batch and other targeted execution paths remain incomplete.
-- Offline pytest suites are not cleanly isolated from live env requirements because `tests/conftest.py` imports `tests.client`, which imports `tests.config` at module import time.
+- Offline tooling, reporting, skills, and runner tests are now isolated from eager live client bootstrap when run with `VERIFYIQ_SKIP_DOTENV=1`; live endpoint suites still require live environment configuration by design.
 - Auth coverage is still shallow. `/parse` only checks missing and invalid tenant-token behavior; `/documents/batch` still has only an opt-in auth blocker characterization rather than a closed auth lane, and there is no deeper authz/permission model anywhere.
 - The repo now has a maintained endpoint coverage inventory, but owner-area mapping and an explicit onboarding standard are still thin.
-- CI only covers the live protected baseline. It does not run the offline tool/reporting suites and does not publish artifacts.
+- CI now covers the live protected baseline and the non-live tooling/reporting/skills lane. The protected live workflow still does not publish artifacts.
 - The command story is still mixed across direct pytest, wrappers, and the partial canonical runner, which increases operator ambiguity.
 - There is no explicit repo-level decision yet on whether this repository remains parse/batch-focused or becomes the broader multi-endpoint automation hub implied by the roadmap's endpoint-expansion phase.
 
@@ -67,8 +67,8 @@ That rating is appropriate because the repository already has a disciplined prot
 ### 2. Regression Selection Discipline
 - Current state: This is one of the repo's best areas. The protected baseline is narrow by design, the parse matrix uses one canonical fixture per file type, and batch runs enforce a safe item limit of four.
 - Professional expectation: Default regression should be risk-based, lean, representative, and explicit about why each case is in or out.
-- Gap: The selection logic is disciplined in code, but the inclusion rules are not yet formalized as a maintained coverage inventory or onboarding standard. The protected baseline command also selects the entire `tests/endpoints/parse/` package, which mixes live parse tests with offline registry-selection tests.
-- Recommended improvement: Add a maintained inventory that documents which tests belong to `protected`, `full`, `extended`, and future `smoke`, and why.
+- Gap: The repo now has an endpoint coverage inventory, but test-to-suite inclusion rules and the endpoint onboarding standard are still thin. The protected baseline command also selects the entire `tests/endpoints/parse/` package, which mixes live parse tests with offline registry-selection tests.
+- Recommended improvement: Keep the endpoint inventory current and add a concise onboarding standard that documents which tests belong to `protected`, `smoke`, `full`, and `extended`, and why.
 - Priority: P1
 - Effort: Small
 - Risk if ignored: Regression scope will become harder to reason about as more tests accumulate, and default-suite trust will erode.
@@ -85,7 +85,7 @@ That rating is appropriate because the repository already has a disciplined prot
 ### 4. Test Architecture and Maintainability
 - Current state: The package layout is small and understandable. Shared helpers like `tests/diagnostics.py`, `tests/endpoints/document_contracts.py`, and the artifact modules keep endpoint tests readable. Session-scoped fixtures reduce repeated live requests.
 - Professional expectation: Adding a new endpoint should require a small number of obvious extension points and should not force duplicated client, fixture, artifact, and contract logic.
-- Gap: The current architecture is proven for two endpoints, but categories are not encoded as test metadata, endpoint onboarding is undocumented, and the root pytest setup couples all suites to live env loading.
+- Gap: The current architecture is proven for two endpoints, but categories are not encoded as test metadata, endpoint onboarding is undocumented, and live endpoint suites remain tied to live env loading.
 - Recommended improvement: Preserve the current small-module approach, but define a lightweight onboarding template for new endpoint groups and move live-client setup behind fixtures that only load when needed.
 - Priority: P1
 - Effort: Medium
@@ -103,11 +103,11 @@ That rating is appropriate because the repository already has a disciplined prot
 ### 6. Environment and Secrets Management
 - Current state: The required live inputs are documented clearly in `AGENTS.md`, `docs/operations/workflow.md`, and `.env.example`. CI handles missing secrets correctly.
 - Professional expectation: Live suites should fail clearly when secrets are missing, while offline/unit suites should remain runnable without live env configuration.
-- Gap: `tests/conftest.py` imports `tests.client.make_client`, which imports `tests.config` immediately. That means even non-live pytest suites are coupled to live env requirements unless the environment happens to be configured.
-- Recommended improvement: Move live-client creation and config loading behind fixtures or endpoint-local conftests so offline tool/reporting tests can run in a clean environment.
-- Priority: P0
+- Gap: The earlier eager-bootstrap problem is resolved for non-live tooling/reporting/skills validation when `VERIFYIQ_SKIP_DOTENV=1` is used. The remaining risk is regression: future shared fixtures or root imports could accidentally reintroduce live config loading into offline suites.
+- Recommended improvement: Keep live-client creation behind fixtures, keep `VERIFYIQ_SKIP_DOTENV=1` in non-live validation, and add targeted tests when shared pytest infrastructure changes.
+- Priority: P2
 - Effort: Small
-- Risk if ignored: Offline validation remains harder to run locally and in CI, and the repo cannot mature into a layered test strategy cleanly.
+- Risk if ignored: Offline validation could regress and again require secrets or live env configuration.
 
 ### 7. Contract and Schema Validation
 - Current state: Contract coverage is real but selective. `tests/endpoints/document_contracts.py` checks required fields, fileType echoing, calculated-field stub avoidance, and 422 validation shape. `/parse` and `/documents/batch` both reference `official-openapi.json` in test docstrings, but there is no general request/response schema validator.
@@ -130,8 +130,8 @@ That rating is appropriate because the repository already has a disciplined prot
 ### 9. CI/CD Integration
 - Current state: There is one checked-in live workflow, `.github/workflows/protected-baseline.yml`, and it is appropriately conservative.
 - Professional expectation: CI should run fast non-live validation on every change and reserve live suites for the right gated lanes, with artifact publishing where live evidence matters.
-- Gap: The repo does not currently run the offline tooling, reporting, or runner tests in CI, and it does not publish artifacts from the protected live lane.
-- Recommended improvement: Add a non-live CI lane for `tests/tools/`, `tests/reporting/`, and `tests/skills/` before expanding live CI coverage.
+- Gap: The repo now runs the offline tooling, reporting, skills, and runner discovery checks in CI. The protected live lane still does not publish artifacts.
+- Recommended improvement: Keep the non-live lane current as runner mappings expand, and add protected-run artifact publishing before broadening live CI coverage.
 - Priority: P1
 - Effort: Small
 - Risk if ignored: Regressions in wrappers, reporters, and command mapping can land undetected until someone runs them manually.
@@ -146,10 +146,10 @@ That rating is appropriate because the repository already has a disciplined prot
 - Risk if ignored: The repo will have difficulty broadening CI or default coverage without increasing noise.
 
 ### 11. Coverage Visibility and Endpoint Expansion
-- Current state: The roadmap acknowledges expansion, but there is no checked-in coverage inventory mapping endpoint groups to current automation status, required categories, or next priority.
+- Current state: The roadmap acknowledges expansion, and `docs/operations/endpoint-coverage-inventory.md` now maps endpoint groups to current automation status and blockers.
 - Professional expectation: A professional suite has a living inventory that shows what is covered, what is not, and what the minimum onboarding bar is for a new endpoint.
-- Gap: The repo can enumerate commands, but it cannot yet answer "which endpoint groups are covered by which categories and why" without reading multiple docs and test files.
-- Recommended improvement: Publish a compact endpoint coverage inventory and use it to gate future expansion.
+- Gap: The repo can answer endpoint-group status from one inventory, but it still cannot fully answer "which required categories must exist before a new endpoint is promoted" without reading multiple docs and test files.
+- Recommended improvement: Keep the compact endpoint coverage inventory current and add a minimum endpoint onboarding bar.
 - Priority: P0
 - Effort: Medium
 - Risk if ignored: Expansion will be ad hoc, and regression scope will become harder to rationalize.
@@ -303,7 +303,7 @@ Remaining runner gaps:
 - parse matrix is not live-runnable from the canonical runner
 - batch is not yet live-runnable from the canonical runner
 - categories such as `contract`, `auth`, and `negative` are planned but not mapped
-- operator docs still treat direct pytest and wrapper commands as primary paths
+- legacy direct pytest and wrapper commands remain documented as implementation/debug paths, so deprecation boundaries still need active maintenance
 - a few migration-state inconsistencies remain inside the runner itself
 
 Legacy wrapper status:
@@ -322,9 +322,9 @@ Protected CI status:
 
 What should go into CI next:
 
-- non-live `tests/tools/ -v`
-- non-live `tests/reporting/ -v`
-- non-live `tests/skills/ -v`
+- protected live artifact publishing
+- deliberate additions to non-live runner discovery checks as mappings become safely dry-runnable
+- broader live lanes only after runtime, stability, and ownership are understood
 
 What should not go into CI next:
 
@@ -339,8 +339,8 @@ What should not go into CI next:
 
 | Item | Reason | Expected Value | Suggested Owner Area | Validation Criteria |
 | --- | --- | --- | --- | --- |
-| Decouple offline pytest suites from live env bootstrap | Root pytest setup currently requires live env even for tool and reporting tests. | Enables fast local and CI feedback without secrets. | Test infrastructure | `pytest tests/tools/ -v` and `pytest tests/reporting/ -v` run in a clean env. |
-| Publish an endpoint coverage inventory | The repo cannot currently answer coverage questions from one maintained artifact. | Makes expansion and regression scope decisions evidence-based. | QA architecture / docs | A checked-in inventory maps covered groups, categories, priority, and gaps. |
+| Preserve non-live pytest isolation | The former eager live-bootstrap gap is resolved for tooling/reporting/skills validation; keep it from regressing. | Protects fast local and CI feedback without secrets. | Test infrastructure | `VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting/ tests/skills/ -v` runs in a clean env. |
+| Maintain the endpoint coverage inventory | The repo now has `docs/operations/endpoint-coverage-inventory.md`; it still needs to stay aligned as smoke and endpoint coverage evolve. | Keeps expansion and regression scope decisions evidence-based. | QA architecture / docs | The checked-in inventory maps covered groups, categories, priority, and gaps. |
 | Execute the `/parse` contract-drift pilot | Contract validation is the biggest quality-system gap in current coverage claims. | Creates a repeatable way to reconcile spec, tests, and live behavior. | Contract/schema | One checked-in drift artifact exists for `/v1/documents/parse` with explicit decisions. |
 | Resolve the command-surface story | Docs and commands still present multiple semi-primary paths. | Reduces contributor confusion and supports future expansion. | Runner / operations docs | README, workflow, and command registry all tell the same primary-runner story. |
 
@@ -348,7 +348,7 @@ What should not go into CI next:
 
 | Item | Reason | Expected Value | Suggested Owner Area | Validation Criteria |
 | --- | --- | --- | --- | --- |
-| Add offline CI for tools, reporting, and runner tests | Wrapper regressions are currently not gated in CI. | Protects the non-live infrastructure that operators depend on. | CI / tooling | A non-live workflow runs successfully without secrets. |
+| Extend non-live CI discovery as runner mappings grow | The non-live workflow exists; future runner mappings should be added deliberately. | Protects the non-live infrastructure that operators depend on. | CI / tooling | The non-live workflow runs successfully without secrets and covers current safe discovery surfaces. |
 | Define the minimum endpoint onboarding bar | New endpoints currently have no enforced category checklist. | Prevents uneven or low-value endpoint expansion. | QA architecture | A short onboarding standard exists and is referenced by the roadmap. |
 | Add auth-negative coverage for `/documents/batch` | Batch has no auth lane today. | Brings batch closer to parse coverage maturity. | Endpoint tests | `/documents/batch` has at least one supported auth-negative scenario. |
 | Decide whether `protected` stays parse-only or becomes cross-endpoint smoke | The roadmap and docs still mix these ideas. | Stabilizes regression selection discipline. | QA strategy / roadmap | The roadmap and runner taxonomy use one explicit default-suite definition. |
@@ -374,7 +374,7 @@ What should not go into CI next:
 - Do not make parse matrix, full regression, or batch live coverage part of the default no-argument regression until runtime and failure ownership are better characterized.
 - Do not deprecate `tools/run_parse_full_regression.py`, `tools/reporting/run_parse_matrix_with_summary.py`, or `tools/run_batch_with_fixtures.py` before canonical-runner parity exists.
 - Do not trust `official-openapi.json` blindly for success-schema validation while the current spec still uses generic object responses for parse and batch.
-- Do not expand CI to broad live suites before offline infrastructure tests are running in CI first.
+- Do not expand CI to broad live suites just because offline infrastructure tests now run in CI; broad live lanes still need explicit runtime, stability, and ownership decisions.
 - Do not chase exhaustive endpoint or fixture permutations; keep selection risk-based and representative.
 - Do not add mutating admin, monitoring, or application-management endpoints to default automation without an explicit safety framework.
 - Do not solve live instability with blanket retries as the first move; classify failures before normalizing them.
@@ -393,10 +393,10 @@ What should not go into CI next:
 
 | Priority | Action | Why it matters | Effort | Risk | Validation signal | Roadmap phase or doc to update |
 | --- | --- | --- | --- | --- | --- | --- |
-| P0 | Decouple offline pytest suites from root live env imports | Unlocks fast non-live validation and CI without secrets. | Small | High | Offline pytest suites run cleanly without live env vars. | Phase 4 prep, `docs/operations/workflow.md` |
-| P0 | Publish a checked-in endpoint coverage inventory | Makes scope, gaps, and next additions explicit. | Medium | High | One document maps covered and uncovered endpoint groups plus required categories. | Phase 0 / Phase 6 |
+| Guardrail | Keep offline pytest suites decoupled from live env imports | Preserves fast non-live validation and CI without secrets. | Small | Medium | Offline pytest suites run cleanly with `VERIFYIQ_SKIP_DOTENV=1`. | `docs/operations/workflow.md`, `.github/workflows/non-live-validation.yml` |
+| Guardrail | Keep the checked-in endpoint coverage inventory current | Keeps scope, gaps, and next additions explicit. | Small | Medium | One document maps covered and uncovered endpoint groups plus required categories. | Phase 0 / Phase 6 |
 | P0 | Run the `/parse` contract-drift pilot | Creates a real contract reconciliation workflow. | Medium | High | Parse drift decisions are documented against safe artifacts. | Phase 3 |
-| P1 | Add non-live CI for `tests/tools`, `tests/reporting`, and `tests/skills` | Protects the runner and reporting infrastructure continuously. | Small | Medium | CI passes without live secrets and fails on wrapper regressions. | Phase 5, `.github/workflows/` |
+| P1 | Extend non-live CI only as safe discovery surfaces grow | Protects the runner and reporting infrastructure continuously. | Small | Medium | CI passes without live secrets and fails on wrapper regressions. | Phase 5, `.github/workflows/non-live-validation.yml` |
 | P1 | Decide whether `protected` remains parse-only or evolves into curated smoke | Stabilizes default-suite identity. | Small | High | Roadmap, workflow docs, and runner all define the same default suite. | Phase 1 |
 | P1 | Define the minimum endpoint onboarding standard | Prevents uneven coverage as endpoints are added. | Medium | Medium | New endpoint proposals include categories, safety class, fixture plan, and runner mapping. | Phase 1 / Phase 6 |
 | P1 | Add `/documents/batch` auth-negative coverage | Closes a basic category gap on an in-scope endpoint. | Small | Medium | Batch endpoint has at least one reliable auth-negative check. | Phase 1 |

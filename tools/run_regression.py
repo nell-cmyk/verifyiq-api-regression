@@ -76,10 +76,11 @@ INVENTORY: tuple[InventoryItem, ...] = (
         selector="suite=protected",
         description="Current protected /parse baseline.",
         required_env=PROTECTED_ENV_VARS,
-        supported_flags=("--k", "--report"),
+        supported_flags=(),
         notes=(
             "Maps to the current protected pytest baseline.",
-            "This is the current default live runner target and the only live execution path implemented so far.",
+            "Live protected execution accepts no additional flags; use the exact no-arg or --suite protected runner invocation.",
+            "Smoke and full are separate opt-in live suites.",
         ),
     ),
     InventoryItem(
@@ -263,11 +264,16 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
                 return _usage_error(parser, "--fixtures-json is not supported for --suite protected.")
             notes = [
                 "Dry-run prints the exact protected baseline command without executing it.",
-                "The protected suite is the current default dry-run mapping and the only live execution path implemented so far.",
+                "The protected suite is the current default dry-run mapping.",
+                "Live protected execution accepts no additional flags; smoke and full are separate opt-in live suites.",
             ]
+            if args.k_expr:
+                notes.append(
+                    "--k appears only in this protected dry-run command preview; live protected execution rejects it."
+                )
             if args.report:
                 notes.append(
-                    "Structured reporting would rely on REGRESSION_REPORT=1 and REGRESSION_REPORT_TIER=baseline when execution is added."
+                    "--report is not live-supported for protected execution through this runner yet."
                 )
             return ResolvedPlan(
                 selector="suite=protected",
@@ -410,7 +416,8 @@ def render_list() -> str:
     for item in INVENTORY:
         lines.append(f"- {item.selector}")
         lines.append(f"  description: {item.description}")
-        lines.append(f"  supported flags: {', '.join(item.supported_flags)}")
+        supported_flags = ", ".join(item.supported_flags) if item.supported_flags else "none for live execution"
+        lines.append(f"  supported flags: {supported_flags}")
         if item.selector == "suite=protected":
             command = _protected_command()
         elif item.selector == "suite=smoke":

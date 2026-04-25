@@ -53,6 +53,23 @@ def test_list_exits_zero_and_mentions_core_mappings():
     assert "tools/run_batch_with_fixtures.py" in stdout
 
 
+def test_list_marks_protected_as_exact_live_baseline_without_extra_flags():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--list"])
+
+    assert rc == 0
+    assert stderr == ""
+    protected_start = stdout.index("- suite=protected")
+    smoke_start = stdout.index("- suite=smoke")
+    protected_block = stdout[protected_start:smoke_start]
+    assert "supported flags: none for live execution" in protected_block
+    assert "Live protected execution accepts no additional flags" in protected_block
+    assert "--k" not in protected_block
+    assert "--report" not in protected_block
+
+
 def test_dry_run_without_selection_defaults_to_protected():
     module = _load_module()
     module._run_command = _no_call_runner
@@ -75,6 +92,23 @@ def test_suite_protected_dry_run_prints_protected_pytest_command():
     assert rc == 0
     assert "Selection: suite=protected" in stdout
     assert "-m pytest tests/endpoints/parse/ -v" in stdout
+
+
+def test_suite_protected_dry_run_labels_extra_flags_as_preview_only():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(
+        module,
+        ["--suite", "protected", "--dry-run", "--k", "happy", "--report"],
+    )
+
+    assert rc == 0
+    assert stderr == ""
+    assert "-k happy" in stdout
+    assert "Live protected execution accepts no additional flags" in stdout
+    assert "--k appears only in this protected dry-run command preview" in stdout
+    assert "--report is not live-supported for protected execution" in stdout
 
 
 def test_suite_full_dry_run_prints_full_wrapper_command():

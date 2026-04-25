@@ -52,6 +52,6 @@ Python-first live API regression automation for VerifyIQ, centered on the protec
 - The protected parse-only suite remains the default live validation gate.
 - `tools/run_regression.py` is the canonical operator path for the default protected live suite.
 - The matrix remains opt-in and separate from the default baseline.
-- `smoke` remains planned terminology, not a broader current default.
+- `smoke` is a real opt-in GET suite, not a broader current default.
 - The human-facing reporting commands live under `tools/reporting/`.
 - `docs/operations/current-handoff.md` is pointer-only; active session continuity now lives in Mind.
