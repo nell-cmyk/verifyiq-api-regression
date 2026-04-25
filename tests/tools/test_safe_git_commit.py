@@ -48,6 +48,14 @@ def _staged_repo_responses() -> dict[tuple[str, ...], list[subprocess.CompletedP
     }
 
 
+def _canonical_runner_command(*args: str) -> tuple[str, ...]:
+    return (
+        safe_git_commit.sys.executable,
+        str(safe_git_commit.REGRESSION_RUNNER),
+        *args,
+    )
+
+
 def test_refuses_when_nothing_is_staged(monkeypatch, tmp_path, capsys):
     runner = FakeRunner(
         {
@@ -110,8 +118,8 @@ def test_refuses_when_leftover_changes_remain_after_targeted_stage(monkeypatch, 
 @pytest.mark.parametrize(
     ("validation", "expected_command"),
     [
-        ("baseline", tuple(safe_git_commit.VALIDATION_COMMANDS["baseline"])),
-        ("full", tuple(safe_git_commit.VALIDATION_COMMANDS["full"])),
+        ("baseline", _canonical_runner_command()),
+        ("full", _canonical_runner_command("--suite", "full")),
     ],
 )
 def test_selects_expected_validation_command(
@@ -139,6 +147,14 @@ def test_selects_expected_validation_command(
     assert f"Running validation ({validation})" in stdout
     assert expected_command in runner.calls
     assert ("git", "commit", "-m", "test commit") in runner.calls
+
+
+def test_validation_commands_use_canonical_regression_runner():
+    assert tuple(safe_git_commit.VALIDATION_COMMANDS["baseline"]) == _canonical_runner_command()
+    assert tuple(safe_git_commit.VALIDATION_COMMANDS["full"]) == _canonical_runner_command(
+        "--suite",
+        "full",
+    )
 
 
 def test_auto_message_dry_run_previews_generated_commit_subject(monkeypatch, tmp_path, capsys):

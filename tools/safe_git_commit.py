@@ -11,10 +11,11 @@ from pathlib import Path
 from typing import Sequence
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+REGRESSION_RUNNER = REPO_ROOT / "tools" / "run_regression.py"
 
 VALIDATION_COMMANDS: dict[str, list[str]] = {
-    "baseline": [sys.executable, "-m", "pytest", "tests/endpoints/parse/", "-v"],
-    "full": [sys.executable, str(REPO_ROOT / "tools" / "run_parse_full_regression.py")],
+    "baseline": [sys.executable, str(REGRESSION_RUNNER)],
+    "full": [sys.executable, str(REGRESSION_RUNNER), "--suite", "full"],
 }
 
 
