@@ -1565,6 +1565,39 @@ def test_recovery_triage_classifies_transient_or_auth_failures(
     assert triage_row["recovery_action"] == "targeted_rerun_after_retry_or_token_fix"
 
 
+def test_recovery_triage_classifies_5xx_invalid_json_as_review_not_transient(monkeypatch):
+    fixtures = [_make_fixture(1)]
+    key = _chunk_key(fixtures)
+    plans = {
+        key: {
+            "kind": "invalid_json",
+            "status": 503,
+            "text": "Service Unavailable",
+        }
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    rows, _chunk_count = batch_ground_truth_workflow._execute_file_type(
+        fixtures=fixtures,
+        output_generated_at="2026-04-24T00:00:00+00:00",
+        max_concurrent_chunks=1,
+    )
+
+    attempts = state["attempts"]
+    assert isinstance(attempts, dict)
+    assert attempts[key] == 1
+    assert rows[0].metadata["failure_tag"] == "invalid_json_response"
+    assert rows[0].metadata["batch_http_status"] == 503
+    assert rows[0].metadata["batch_retry_reason"] is None
+    assert is_clean_candidate(rows[0]) is False
+
+    triage_row = build_recovery_triage_row(rows[0])
+    assert triage_row["recovery_class"] == "invalid_json_5xx_review"
+    assert triage_row["gt_outcome_class"] == "api_or_fixture_review"
+    assert triage_row["gt_candidate_status"] == "inconclusive"
+    assert triage_row["recovery_action"] == "review_api_or_fixture_before_gt_use"
+
+
 def test_recovery_triage_classifies_document_size_guard_as_not_current_gt(monkeypatch):
     fixtures = [
         _make_fixture(

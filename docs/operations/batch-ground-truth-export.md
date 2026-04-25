@@ -126,6 +126,7 @@ Optional retry overrides:
 - Retry counts are configurable with `--token-expiry-retries`, `--transient-chunk-retries`, and `--rate-limit-retries`; all default to `1`, and `0` disables that retry class.
 - `--rate-limit-backoff-secs` controls the fallback backoff for `429` retries when `Retry-After` is absent. It defaults to `2` seconds.
 - Application-level row failures from a completed `200` batch response are not retried. Expected fixture/API failures such as `DocumentSizeGuardError` or `MultiAccountDocumentError` remain row failures for review. HTTP `200` quality-gated no-extraction results remain completed model-behavior evidence in the primary GT workbook even though they are not strict parsed-field successes.
+- Invalid JSON returned with HTTP `5xx` is not retried or treated as a retryable transient/auth failure in this GT workflow. It remains a non-clean review row until artifact inspection confirms whether the issue belongs to API behavior, fixture quality, unsupported document side/content, or another cause.
 - When token expiry retries are exhausted, rows are recorded with `failure_tag=persistent_token_expired` rather than a generic HTTP/request failure.
 - When rate-limit retries are exhausted, rows are recorded with `failure_tag=http_429`, remain excluded from clean GT workbooks, and are triaged as rerun candidates rather than malformed responses.
 
@@ -166,7 +167,8 @@ Optional retry overrides:
 
 Common recovery classes:
 - `rate_limited`: HTTP `429` rate limiting or service pressure after bounded retry exhaustion. Status: excluded from GT evidence for this run. Action: targeted rerun with lower concurrency or explicit backoff.
-- `transient_or_auth_failure`: token expiry, timeout, request transport failure, selected auth failures, or likely transient 5xx chunk failure. Status: excluded from GT evidence for this run. Action: targeted rerun after retry/token/service recovery.
+- `transient_or_auth_failure`: token expiry, timeout, request transport failure, or selected auth failures. Status: excluded from GT evidence for this run. Action: targeted rerun after retry/token/service recovery.
+- `invalid_json_5xx_review`: HTTP `5xx` response whose body could not be parsed as JSON. Status: non-clean review row, not a retryable transient/auth recovery target. Action: inspect raw artifacts before deciding whether this is API behavior, fixture quality, unsupported-side/content, or another cause.
 - `document_size_guard`: `DocumentSizeGuardError`. Action: exclude from clean GT as-is, or replace/reduce the fixture if clean GT coverage is still needed.
 - `unsupported_fixture`: unsupported extension, missing GCS URI, or malformed GCS URI. Status: excluded from GT evidence because it was not executable as a reliable API input. Action: replace or correct the source artifact.
 - `multi_account_document`: `MultiAccountDocumentError`. Action: split or replace if single-account clean GT is needed, otherwise keep outside clean GT as negative coverage.

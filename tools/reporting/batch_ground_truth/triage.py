@@ -302,10 +302,10 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
 
     if failure_tag == "invalid_json_response" and isinstance(batch_http_status, int) and batch_http_status >= 500:
         return {
-            "recovery_class": "transient_or_auth_failure",
-            "recovery_action": "targeted_rerun_after_retry_or_token_fix",
-            "gt_outcome_class": "execution_failure",
-            "gt_candidate_status": "gt_excluded_execution_failure",
+            "recovery_class": "invalid_json_5xx_review",
+            "recovery_action": "review_api_or_fixture_before_gt_use",
+            "gt_outcome_class": "api_or_fixture_review",
+            "gt_candidate_status": "inconclusive",
         }
 
     if failure_tag in MALFORMED_RESPONSE_TAGS or failure_tag == "unusable_result":
