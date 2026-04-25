@@ -56,7 +56,7 @@ RUN_PARSE_MATRIX=1 ./.venv/bin/python -m pytest tests/endpoints/parse/test_parse
 ```
 
 5. Reporting surfaces:
-- Use `./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix` for normal matrix runs and saved summaries.
+- Use `./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix` for normal matrix runs and saved summaries; add `--report` there for structured per-run report artifacts.
 - Use `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` as the delegated engine and compatibility/debug path.
 - Use `./.venv/bin/python tools/reporting/render_regression_summary.py ...` for rerendering from saved terminal output.
 - Do not document or rely on `.codex/.../scripts/...` reporting entrypoints.

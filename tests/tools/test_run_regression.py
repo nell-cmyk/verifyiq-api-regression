@@ -53,7 +53,7 @@ def test_list_exits_zero_and_mentions_core_mappings():
     assert "tools/run_batch_with_fixtures.py" in stdout
 
 
-def test_list_marks_protected_as_exact_live_baseline_without_extra_flags():
+def test_list_marks_protected_as_exact_baseline_with_report_only():
     module = _load_module()
     module._run_command = _no_call_runner
 
@@ -64,10 +64,11 @@ def test_list_marks_protected_as_exact_live_baseline_without_extra_flags():
     protected_start = stdout.index("- suite=protected")
     smoke_start = stdout.index("- suite=smoke")
     protected_block = stdout[protected_start:smoke_start]
-    assert "supported flags: none for live execution" in protected_block
-    assert "Live protected execution accepts no additional flags" in protected_block
+    assert "supported flags: --report" in protected_block
+    assert "The no-arg and --suite protected runner invocations keep the exact protected baseline command" in protected_block
+    assert "--report delegates to the existing baseline structured-report helper" in protected_block
+    assert "Live protected execution accepts no targeting flags" in protected_block
     assert "--k" not in protected_block
-    assert "--report" not in protected_block
 
 
 def test_dry_run_without_selection_defaults_to_protected():
@@ -83,6 +84,20 @@ def test_dry_run_without_selection_defaults_to_protected():
     assert "-m pytest tests/endpoints/parse/ -v" in stdout
 
 
+def test_dry_run_with_report_defaults_to_protected_report_wrapper():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--report", "--dry-run"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert "Selection: suite=protected" in stdout
+    assert "Default selection: suite=protected" in stdout
+    assert "tools/run_parse_with_report.py --tier baseline" in stdout
+    assert "-m pytest tests/endpoints/parse/ -v" not in stdout
+
+
 def test_suite_protected_dry_run_prints_protected_pytest_command():
     module = _load_module()
     module._run_command = _no_call_runner
@@ -94,21 +109,33 @@ def test_suite_protected_dry_run_prints_protected_pytest_command():
     assert "-m pytest tests/endpoints/parse/ -v" in stdout
 
 
+def test_suite_protected_report_dry_run_prints_baseline_report_wrapper():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "protected", "--report", "--dry-run"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert "Selection: suite=protected" in stdout
+    assert "tools/run_parse_with_report.py --tier baseline" in stdout
+    assert "--report delegates to tools/run_parse_with_report.py --tier baseline" in stdout
+
+
 def test_suite_protected_dry_run_labels_extra_flags_as_preview_only():
     module = _load_module()
     module._run_command = _no_call_runner
 
     rc, stdout, stderr = _invoke(
         module,
-        ["--suite", "protected", "--dry-run", "--k", "happy", "--report"],
+        ["--suite", "protected", "--dry-run", "--k", "happy"],
     )
 
     assert rc == 0
     assert stderr == ""
     assert "-k happy" in stdout
-    assert "Live protected execution accepts no additional flags" in stdout
+    assert "Live protected execution accepts only --report as an optional reporting mode" in stdout
     assert "--k appears only in this protected dry-run command preview" in stdout
-    assert "--report is not live-supported for protected execution" in stdout
 
 
 def test_suite_full_dry_run_prints_full_wrapper_command():
@@ -120,6 +147,19 @@ def test_suite_full_dry_run_prints_full_wrapper_command():
     assert rc == 0
     assert "Selection: suite=full" in stdout
     assert "tools/run_parse_full_regression.py" in stdout
+
+
+def test_suite_full_report_dry_run_forwards_report_to_full_wrapper():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "full", "--report", "--dry-run"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert "Selection: suite=full" in stdout
+    assert "tools/run_parse_full_regression.py --report" in stdout
+    assert "Executing command:" not in stdout
 
 
 def test_suite_smoke_dry_run_prints_get_smoke_pytest_command():
@@ -151,6 +191,54 @@ def test_suite_full_executes_full_wrapper_and_returns_subprocess_code():
     assert calls[0] == (
         sys.executable,
         str(module.FULL_WRAPPER),
+    )
+    assert "Executing command:" in stdout
+
+
+def test_suite_protected_report_executes_baseline_report_wrapper_and_returns_subprocess_code():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 19
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "protected", "--report"])
+
+    assert rc == 19
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        str(module.PARSE_REPORT_WRAPPER),
+        "--tier",
+        "baseline",
+    )
+    assert "Executing command:" in stdout
+
+
+def test_no_argument_report_invocation_executes_protected_report_wrapper():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 23
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(module, ["--report"])
+
+    assert rc == 23
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        str(module.PARSE_REPORT_WRAPPER),
+        "--tier",
+        "baseline",
     )
     assert "Executing command:" in stdout
 
@@ -202,6 +290,22 @@ def test_parse_matrix_dry_run_prints_matrix_wrapper_command():
     assert rc == 0
     assert "Selection: endpoint=parse category=matrix" in stdout
     assert "tools/reporting/run_parse_matrix_with_summary.py" in stdout
+
+
+def test_parse_matrix_report_dry_run_forwards_report_to_matrix_wrapper():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(
+        module,
+        ["--endpoint", "parse", "--category", "matrix", "--report", "--dry-run"],
+    )
+
+    assert rc == 0
+    assert stderr == ""
+    assert "Selection: endpoint=parse category=matrix" in stdout
+    assert "tools/reporting/run_parse_matrix_with_summary.py --report" in stdout
+    assert "Executing command:" not in stdout
 
 
 def test_parse_matrix_executes_matrix_wrapper_and_returns_subprocess_code():
@@ -611,6 +715,28 @@ def test_batch_rejects_unsupported_report_flag():
     assert rc != 0
     assert stdout == ""
     assert "--report is not supported for --endpoint batch" in stderr
+
+
+def test_suite_smoke_rejects_report_flag():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "smoke", "--report"])
+
+    assert rc != 0
+    assert stdout == ""
+    assert "--report is not supported for --suite smoke" in stderr
+
+
+def test_suite_protected_report_rejects_targeting_flags():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "protected", "--report", "--k", "happy"])
+
+    assert rc != 0
+    assert stdout == ""
+    assert "--k is not supported for --suite protected --report" in stderr
 
 
 def test_suite_extended_without_dry_run_exits_nonzero_without_execution():

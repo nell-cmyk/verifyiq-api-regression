@@ -8,7 +8,7 @@ The target operating model is a lean, risk-based regression suite that stays pra
 ## Current Repository Status
 - The existing roadmap already lived at `docs/knowledge-base/repo-roadmap.md`.
 - The runner-consolidation design artifact now lives at `docs/operations/regression-runner-plan.md`.
-- The canonical runner now lives at `tools/run_regression.py` and supports inventory-backed `--list`, `--dry-run`, live protected-baseline execution, live opt-in `--suite smoke` GET coverage, live `--suite full` delegation, live parse matrix delegation, direct batch delegation, and selected-fixture batch delegation.
+- The canonical runner now lives at `tools/run_regression.py` and supports inventory-backed `--list`, `--dry-run`, live protected-baseline execution, live protected structured reporting through `--report`, live opt-in `--suite smoke` GET coverage, live `--suite full` delegation with report forwarding, live parse matrix delegation with report forwarding, direct batch delegation, and selected-fixture batch delegation.
 - The checked-in protected-baseline CI workflow now calls `python tools/run_regression.py --suite protected` via the `setup-python` interpreter while preserving the existing secret-aware skip behavior and protected baseline scope.
 - The repository is Python-first and uses `pytest`, `httpx`, `python-dotenv`, `google-auth`, and `pyyaml`.
 - Live endpoint tests are under `tests/`, with current automated endpoint coverage focused on `/v1/documents/parse`, `/v1/documents/batch`, and the new opt-in cross-group GET smoke lane.
@@ -42,7 +42,8 @@ The target operating model is a lean, risk-based regression suite that stays pra
 | Opt-in GET smoke suite | `./.venv/bin/python tools/run_regression.py --suite smoke` | Curated live GET smoke coverage: 200 assertions for safely testable current endpoints plus exact checks for known non-200 surfaces | Keep opt-in; do not let it silently replace the protected default |
 | `/parse` matrix | `./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix` | Opt-in broader fileType coverage plus saved summary | Delegates to the matrix wrapper; wrapper remains compatibility/debug |
 | `/parse` full regression | `./.venv/bin/python tools/run_regression.py --suite full` | Protected baseline followed by delegated full-wrapper execution | Strong signal that orchestration already exists but is fragmented |
-| Targeted `/parse` reporting | `./.venv/bin/python tools/run_parse_with_report.py` | Internal reporting/debug helper | Should become internal-only after consolidation |
+| Structured `/parse` reporting | `./.venv/bin/python tools/run_regression.py --report`; add `--report` to full or matrix runner selections | Opt-in structured report artifacts under `reports/regression/` | Protected reports delegate to the existing report helper; full and matrix reports delegate to existing wrappers |
+| Targeted `/parse` reporting | `./.venv/bin/python tools/run_parse_with_report.py` | Internal reporting/debug helper for targeted nodeids and report iteration | Keep advanced/internal; do not delete |
 | Direct `/documents/batch` suite | `./.venv/bin/python tools/run_regression.py --endpoint batch` | Live batch validation | Delegates to direct batch pytest; direct pytest remains compatibility/debug |
 | Selected-fixture `/documents/batch` wrapper | `./.venv/bin/python tools/run_regression.py --endpoint batch --fixtures-json ...` | Fixture-targeted batch runs | Delegates to `tools/run_batch_with_fixtures.py`; wrapper remains compatibility/debug |
 
@@ -157,7 +158,7 @@ Initial categorization of current endpoint coverage:
 | `pytest tests/endpoints/parse/ -v` | Keep as protected baseline implementation and debug surface | Still valid for direct pytest debugging, but no longer the primary operator command |
 | `tools/reporting/run_parse_matrix_with_summary.py` | Delegated engine behind `tools/run_regression.py --endpoint parse --category matrix`; keep as compatibility/debug | Internal helper or compatibility wrapper after direct-use deprecation criteria are met |
 | `tools/run_parse_full_regression.py` | Delegated engine behind `tools/run_regression.py --suite full`; keep as compatibility/debug | Deprecated only after direct-use deprecation criteria are met |
-| `tools/run_parse_with_report.py` | Keep as advanced/internal reporting iteration | Internal-only or removed if superseded by runner flags and approved separately |
+| `tools/run_parse_with_report.py` | Keep as delegated protected-report helper and advanced/internal targeted-reporting iteration | Internal-only or removed if superseded by runner flags and approved separately |
 | `pytest tests/endpoints/batch/ -v` | Keep as a direct debug path | No longer primary operator command |
 | `tools/run_batch_with_fixtures.py` | Delegated engine behind `tools/run_regression.py --endpoint batch --fixtures-json ...`; keep as compatibility/debug | Deprecated or retained as an internal utility after direct-use deprecation criteria are met |
 
@@ -228,7 +229,7 @@ Expected reporting behavior for the canonical runner:
 ## Recommended Next Implementation Steps
 1. Use `docs/operations/regression-runner-plan.md` as the implementation design artifact for runner consolidation.
 2. Keep `./.venv/bin/python tools/run_regression.py` aligned with exact protected, smoke, full, matrix, direct batch, and selected-batch delegated behavior.
-3. Finish structured-reporting parity before reducing direct dependence on `tools/run_parse_with_report.py`.
+3. Keep structured-reporting parity covered as wrapper behavior evolves, with `tools/run_parse_with_report.py` retained for targeted report iteration.
 4. Define metadata for current `/parse` and `/batch` tests so future category selections can target them without duplicating logic.
 5. Extend the `/v1/documents/parse` drift pilot with fresh safe response artifacts so the remaining spec-vs-behavior questions can be resolved explicitly.
 6. Re-run the opt-in `/documents/batch` auth characterization until both missing and invalid tenant-token requests return confirmed 401/403 rejection; current evidence is still blocking because missing-token requests time out while invalid-token requests can return `200`, so keep the blocker out of the default batch suite and keep the auth gap open. See `docs/knowledge-base/batch/auth-negative-blocker.md`.

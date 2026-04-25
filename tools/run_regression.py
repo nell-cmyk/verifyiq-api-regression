@@ -8,6 +8,7 @@ This slice supports:
 - live execution for the opt-in GET smoke suite
 - live execution for `--suite full` via delegation
 - live execution for the opt-in parse matrix and batch mappings via delegation
+- structured reporting for protected, full, and parse matrix via existing helpers
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 FULL_WRAPPER = REPO_ROOT / "tools" / "run_parse_full_regression.py"
 PARSE_MATRIX_WRAPPER = REPO_ROOT / "tools" / "reporting" / "run_parse_matrix_with_summary.py"
 BATCH_WRAPPER = REPO_ROOT / "tools" / "run_batch_with_fixtures.py"
+PARSE_REPORT_WRAPPER = REPO_ROOT / "tools" / "run_parse_with_report.py"
 GET_SMOKE_TARGET = "tests/endpoints/get_smoke/"
 
 PROTECTED_ENV_VARS = (
@@ -75,10 +77,12 @@ INVENTORY: tuple[InventoryItem, ...] = (
         selector="suite=protected",
         description="Current protected /parse baseline.",
         required_env=PROTECTED_ENV_VARS,
-        supported_flags=(),
+        supported_flags=("--report",),
         notes=(
             "Maps to the current protected pytest baseline.",
-            "Live protected execution accepts no additional flags; use the exact no-arg or --suite protected runner invocation.",
+            "The no-arg and --suite protected runner invocations keep the exact protected baseline command.",
+            "--report delegates to the existing baseline structured-report helper.",
+            "Live protected execution accepts no targeting flags.",
             "Smoke and full are separate opt-in live suites.",
         ),
     ),
@@ -175,6 +179,15 @@ def _protected_command(*, k_expr: str = "") -> tuple[str, ...]:
     return _base_pytest_command("tests/endpoints/parse/", k_expr=k_expr)
 
 
+def _protected_report_command() -> tuple[str, ...]:
+    return (
+        sys.executable,
+        str(PARSE_REPORT_WRAPPER),
+        "--tier",
+        "baseline",
+    )
+
+
 def _smoke_command(*, k_expr: str = "") -> tuple[str, ...]:
     return _base_pytest_command(GET_SMOKE_TARGET, k_expr=k_expr)
 
@@ -264,23 +277,30 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
                 return _usage_error(parser, "--file-types is not supported for --suite protected.")
             if args.fixtures_json:
                 return _usage_error(parser, "--fixtures-json is not supported for --suite protected.")
-            notes = [
-                "Dry-run prints the exact protected baseline command without executing it.",
-                "The protected suite is the current default dry-run mapping.",
-                "Live protected execution accepts no additional flags; smoke and full are separate opt-in live suites.",
-            ]
+            if args.report and args.k_expr:
+                return _usage_error(parser, "--k is not supported for --suite protected --report.")
+            command = _protected_report_command() if args.report else _protected_command(k_expr=args.k_expr)
+            if args.report:
+                notes = [
+                    "Dry-run prints the exact protected reporting command without executing it.",
+                    "The protected suite is the current default dry-run mapping.",
+                    "Live protected execution accepts only --report as an optional reporting mode; smoke and full are separate opt-in live suites.",
+                    "--report delegates to tools/run_parse_with_report.py --tier baseline.",
+                ]
+            else:
+                notes = [
+                    "Dry-run prints the exact protected baseline command without executing it.",
+                    "The protected suite is the current default dry-run mapping.",
+                    "Live protected execution accepts only --report as an optional reporting mode; smoke and full are separate opt-in live suites.",
+                ]
             if args.k_expr:
                 notes.append(
                     "--k appears only in this protected dry-run command preview; live protected execution rejects it."
                 )
-            if args.report:
-                notes.append(
-                    "--report is not live-supported for protected execution through this runner yet."
-                )
             return ResolvedPlan(
                 selector="suite=protected",
                 description="Current protected /parse baseline.",
-                commands=(_protected_command(k_expr=args.k_expr),),
+                commands=(command,),
                 required_env=PROTECTED_ENV_VARS,
                 notes=tuple(notes),
                 defaulted_to_protected=defaulted_to_protected,
@@ -492,9 +512,9 @@ def execute_live(args: argparse.Namespace, plan: ResolvedPlan) -> int:
         )
         return 2
 
-    if plan.selector == "suite=protected" and (args.file_types or args.fixtures_json or args.k_expr or args.report):
+    if plan.selector == "suite=protected" and (args.file_types or args.fixtures_json or args.k_expr):
         print(
-            "Live protected execution currently supports only the exact protected baseline command with no additional flags. "
+            "Live protected execution currently supports only the exact protected baseline command or --report. "
             "Use --dry-run to inspect extended mappings.",
             file=sys.stderr,
         )

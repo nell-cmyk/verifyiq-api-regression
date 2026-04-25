@@ -37,7 +37,7 @@ The roadmap previously named `scripts/run_regression.py`, but the repository's e
 | `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` | `/v1/documents/parse` | Opt-in matrix breadth across canonical file types | Runs matrix, captures terminal output, renders summary, optionally emits structured report | Core parse env above; wrapper sets `RUN_PARSE_MATRIX=1`; optional `PARSE_MATRIX_FIXTURES_JSON`; optional `REGRESSION_REPORT` / `REGRESSION_REPORT_TIER` | Canonical registry fixtures or explicit fixtures JSON; supports `--file-types`, `--fixtures-json`, `--k`, optional custom command | `reports/parse/matrix/latest-terminal.txt`, `reports/parse/matrix/latest-summary.md`, parse response artifacts, optional `reports/regression/<timestamp>/...`; `--mode apply` can update promotion-candidate docs | Live API via `httpx` with GCS-backed fixtures | Delegated matrix engine behind the canonical runner | Callable through `--endpoint parse --category matrix`; keep direct wrapper use as compatibility/debug until deprecation criteria are met | Slow breadth surface; tied to summary-rendering behavior and optional doc-mutation mode |
 | `RUN_PARSE_MATRIX=1 ./.venv/bin/python -m pytest tests/endpoints/parse/test_parse_matrix.py -v` | `/v1/documents/parse` | Direct matrix module | Debug-level direct entry point for matrix contract coverage | Core parse env; `RUN_PARSE_MATRIX=1`; optional `PARSE_MATRIX_FIXTURES_JSON` | Canonical one-fixture-per-fileType selection from registry, or explicit fixture selection JSON | Raw parse response artifacts only; no wrapper-generated summary | Live API via `httpx` with GCS-backed fixtures | Internal/debug surface only | Keep as a debug path only; do not document as the primary operator path | Easy to misuse without summary output; collection must stay gated |
 | `./.venv/bin/python tools/run_parse_full_regression.py` | `/v1/documents/parse` | Orchestrated protected baseline plus matrix | Stronger explicit gate that runs baseline first, then matrix | Core parse env; optional `REGRESSION_REPORT`; forwards `--file-types` and `--k` to the matrix wrapper | Baseline command plus matrix wrapper; shared parse artifact run directory | Parse response artifacts, matrix terminal and summary outputs, optional structured regression report | Live API via delegated commands | Delegated full-regression engine behind `--suite full` | Keep direct wrapper use as compatibility/debug until deprecation criteria are met | Must preserve current sequencing and shared parse artifact run directory behavior |
-| `./.venv/bin/python tools/run_parse_with_report.py` | `/v1/documents/parse` | Advanced/internal targeted reporting surface | Generates structured JSON + Markdown reports for baseline, matrix, or full flows, including targeted nodeids | Core parse env; baseline tier sets `REGRESSION_REPORT`; matrix/full delegate to other wrappers | `--tier baseline|matrix|full`, optional repeated `--case`, `--file-types`, `--k` | `reports/regression/<timestamp>/report.json`, `report.md`, `LATEST.txt` | Live API via direct baseline pytest or delegated wrappers | Capability source for `--report` and targeted selection | Migrate features into the canonical runner, then deprecate direct use | Very high command-surface duplication; already documented as advanced/internal |
+| `./.venv/bin/python tools/run_parse_with_report.py` | `/v1/documents/parse` | Advanced/internal targeted reporting surface plus delegated baseline report helper | Generates structured JSON + Markdown reports for baseline, matrix, or full flows, including targeted nodeids | Core parse env; baseline tier sets `REGRESSION_REPORT`; matrix/full delegate to other wrappers | `--tier baseline|matrix|full`, optional repeated `--case`, `--file-types`, `--k` | `reports/regression/<timestamp>/report.json`, `report.md`, `LATEST.txt` | Live API via direct baseline pytest or delegated wrappers | Delegated helper behind `tools/run_regression.py --report`; advanced/internal for targeted selection | Keep for targeted report iteration; normal protected reports should go through the canonical runner | Very high command-surface duplication; already documented as advanced/internal |
 | `./.venv/bin/python -m pytest tests/endpoints/batch/ -v` and `./.venv/bin/python -m pytest tests/endpoints/batch/test_batch.py -v` | `/v1/documents/batch` | Direct batch suite: happy path, validation, negative, limit handling, partial-failure behavior | Current direct batch validation path | `BASE_URL`, `TENANT_TOKEN`, `API_KEY`, `IAP_CLIENT_ID`, `GOOGLE_APPLICATION_CREDENTIALS`; optional `BATCH_FIXTURES_JSON` for selection | Default registry-backed batch fixture set or explicit selection through env; safe item limit is `4` | Raw batch response artifacts under `reports/batch/batch_<timestamp>/...` | Live API via `httpx` with GCS-backed registry fixtures | Direct batch engine behind `--endpoint batch` | Callable through the canonical runner; keep direct pytest as a debug path | Not currently part of protected CI; broader runtime and fixture-risk profile than protected parse |
 | `./.venv/bin/python tools/run_batch_with_fixtures.py --fixtures-json ...` | `/v1/documents/batch` | Wrapper for selected-fixture and chunked batch execution | Runs selected-fixture batch flows, validates JSON input, surfaces registry warnings, chunks selections over safe limit, supports custom command passthrough | Core batch env above; wrapper sets `BATCH_FIXTURES_JSON` internally when needed | Fixture selection JSON, registry lookup, optional custom pytest command, optional `--k` | Raw batch response artifacts; chunked runs reuse one batch run-dir name | Live API via delegated pytest commands | Delegated selected-batch engine behind the canonical runner | Callable through `--endpoint batch --fixtures-json`; keep direct wrapper use as compatibility/debug until deprecation criteria are met | Chunking and warning behavior are meaningful repo logic and must be preserved exactly |
 | `tests/endpoints/document_contracts.py` | `/v1/documents/parse`, `/v1/documents/batch` | Shared assertion helper, not a runner | Provides reusable required-field, fileType, calculated-field, and HTTP validation shape assertions | None directly | Response objects and parsed JSON bodies from parse and batch tests | None directly | Local helper only; does not call APIs itself | Reusable contract-helper module behind runner metadata | Keep | Current contract coverage is manual and selective, not full OpenAPI validation |
@@ -46,24 +46,24 @@ The roadmap previously named `scripts/run_regression.py`, but the repository's e
 ## Current-State Conclusions
 - The protected baseline is the only current default gate and must remain the default until parity is proven.
 - The new `smoke` suite is now real, but it must remain opt-in so the default gate does not silently broaden.
-- `tools/run_regression.py` now supports live execution for the protected default, opt-in GET smoke, full parse regression, direct parse matrix, direct batch, and selected-fixture batch mappings.
+- `tools/run_regression.py` now supports live execution for the protected default, protected structured reporting, opt-in GET smoke, full parse regression, direct parse matrix, direct batch, and selected-fixture batch mappings.
 - The repo already has orchestration logic worth reusing. This is especially true for:
   - `tools/run_parse_full_regression.py`
   - `tools/reporting/run_parse_matrix_with_summary.py`
   - `tools/run_batch_with_fixtures.py`
 - The direct pytest surfaces should remain valid for debugging, but they should stop being the primary operator story after consolidation.
-- `tools/run_parse_with_report.py` is the clearest direct-command candidate for later deprecation because it overlaps other surfaces and is already documented as advanced/internal.
+- `tools/run_parse_with_report.py` remains the focused reporting helper and is still a later direct-command deprecation candidate, but normal protected structured reporting now enters through `tools/run_regression.py --report`.
 - Current contract validation is shared-assertion based, not full OpenAPI validation. The future runner must not blur that distinction.
 
 ## Current Runner Status And Labels
 
 | Surface | Current label | Runner status | Deletion status |
 | --- | --- | --- | --- |
-| `tools/run_regression.py` | canonical runner | Implements protected, smoke, full, parse matrix, direct batch, and selected batch mappings | keep |
+| `tools/run_regression.py` | canonical runner | Implements protected, protected structured report, smoke, full, parse matrix, direct batch, and selected batch mappings | keep |
 | `tools/reporting/run_parse_matrix_with_summary.py` | delegated engine; compatibility/debug | Called by `tools/run_regression.py --endpoint parse --category matrix`; direct use remains valid for matrix debugging | do-not-delete-yet |
 | `tools/run_parse_full_regression.py` | delegated engine; compatibility/debug | Called by `tools/run_regression.py --suite full` | do-not-delete-yet |
 | `tools/run_batch_with_fixtures.py` | delegated engine; compatibility/debug | Called by `tools/run_regression.py --endpoint batch --fixtures-json ...` | do-not-delete-yet |
-| `tools/run_parse_with_report.py` | advanced/internal | Still useful for targeted structured-report iteration; not a default operator path | do-not-delete-yet |
+| `tools/run_parse_with_report.py` | delegated helper; advanced/internal | Called by `tools/run_regression.py --report` for baseline report mode; still useful for targeted structured-report iteration | do-not-delete-yet |
 | Direct `pytest` endpoint package commands | implementation/debug | Remain exact lower-level test surfaces behind runner mappings | keep as debug paths |
 
 ## Canonical Runner Path Recommendation
@@ -262,11 +262,12 @@ Status: implemented for direct batch and selected-fixture batch delegation.
 4. Keep direct batch pytest and batch wrapper available as compatibility/debug surfaces.
 
 ### Phase D: Consolidate Reporting Behavior
-Status: pending.
+Status: implemented for current supported non-targeted reporting selections.
 
-1. Move user-facing structured reporting to `tools/run_regression.py --report`.
-2. Keep report-tier naming internal to the canonical runner.
-3. Reduce direct operator dependence on `tools/run_parse_with_report.py`.
+1. Move user-facing protected structured reporting to `tools/run_regression.py --report`.
+2. Keep full structured reporting at `tools/run_regression.py --suite full --report`, delegated to the existing full wrapper.
+3. Keep matrix structured reporting at `tools/run_regression.py --endpoint parse --category matrix --report`, delegated to the existing matrix wrapper.
+4. Keep `tools/run_parse_with_report.py` as the delegated baseline report helper and advanced/internal targeted-reporting surface.
 
 ### Phase E: Documentation And CI Cutover
 Status: protected CI cutover complete; broader live CI lanes remain opt-in or future work.
@@ -369,6 +370,8 @@ The current runner parity slice is complete for protected, smoke, full, parse ma
 - parse raw response artifacts still exist
 - batch raw response artifacts still exist
 - existing summary/report artifacts remain available where currently expected
+- `tools/run_regression.py --report` delegates to the existing protected baseline report helper
+- `--suite full --report` and `--endpoint parse --category matrix --report` forward to existing wrapper report modes
 - shared run-directory behavior is preserved where current wrappers depend on it
 
 ### Error Handling
@@ -394,7 +397,7 @@ Only after unit parity and when live validation is explicitly approved:
 ## Recommended Implementation Sequence
 1. Keep the roadmap aligned to `tools/run_regression.py` rather than `scripts/run_regression.py`.
 2. Keep protected, smoke, full, parse matrix, direct batch, and selected batch mappings covered by non-live tests.
-3. Add remaining reporting parity deliberately, especially structured report behavior that still lives in `tools/run_parse_with_report.py`.
+3. Keep reporting parity covered by non-live runner tests as wrapper behavior evolves.
 4. Update docs and CI only when command behavior changes.
 5. Deprecate legacy direct-wrapper docs only after the criteria above are met.
 6. Audit wrapper files separately before any deletion is proposed.
@@ -408,4 +411,4 @@ This tracker currently advances:
 It also partially advances the taxonomy, documentation, and CI-preparation work needed before direct wrapper deprecation.
 
 Next implementation step:
-- finish reporting parity for structured report workflows and keep wrapper deprecation blocked until the direct-use criteria above are met
+- define metadata for current `/parse` and `/batch` test categories while keeping wrapper deprecation blocked until the direct-use criteria above are met

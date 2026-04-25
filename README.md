@@ -10,6 +10,7 @@ Python-first live API regression automation for VerifyIQ, centered on the protec
 
 ## Canonical Commands
 - Protected default runner: `./.venv/bin/python tools/run_regression.py`
+- Protected structured report: `./.venv/bin/python tools/run_regression.py --report`
 - Stronger live gate: `./.venv/bin/python tools/run_regression.py --suite full`
 - Matrix run + saved summary: `./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix`
 - Batch validation: `./.venv/bin/python tools/run_regression.py --endpoint batch`
@@ -52,8 +53,8 @@ Python-first live API regression automation for VerifyIQ, centered on the protec
 
 ## Notes
 - The protected parse-only suite remains the default live validation gate.
-- `tools/run_regression.py` is the canonical operator path for the default protected live suite and opt-in smoke, full, matrix, and batch selections.
+- `tools/run_regression.py` is the canonical operator path for the default protected live suite, protected structured reporting, and opt-in smoke, full, matrix, and batch selections.
 - The matrix and batch lanes remain opt-in and separate from the default baseline.
 - `smoke` is a real opt-in GET suite, not a broader current default.
-- The human-facing reporting commands live under `tools/reporting/`.
+- Structured report mode is opt-in with `--report`; focused reporting helpers remain available for advanced/debug use.
 - `docs/operations/current-handoff.md` is pointer-only; active session continuity now lives in Mind.

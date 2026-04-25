@@ -162,6 +162,12 @@ Mandatory default validation surface:
 ./.venv/bin/python tools/run_regression.py
 ```
 
+Optional protected structured reporting:
+
+```bash
+./.venv/bin/python tools/run_regression.py --report
+```
+
 Exact underlying implementation/debug path:
 
 ```bash
@@ -172,9 +178,11 @@ Use it:
 - for ordinary `/parse` changes
 - before handoff or merge when baseline validation is needed
 - as the default validation gate unless a task explicitly calls for broader coverage
+- with `--report` when you need the same protected baseline plus structured `reports/regression/` artifacts
 
 Current default-suite rule:
 - `tools/run_regression.py` currently maps to the parse-only protected suite.
+- `tools/run_regression.py --report` keeps the protected suite selection and delegates only to the existing baseline reporting helper.
 - `smoke` is now a real opt-in GET suite, not a broader current default.
 
 Do not replace this with the matrix or full regression by default.
@@ -348,7 +356,9 @@ Optional structured report artifacts when `--report` is enabled:
 - `reports/regression/LATEST.txt`
 
 Default operator expectation:
+- protected structured reporting should use `./.venv/bin/python tools/run_regression.py --report`
 - normal matrix runs should use `./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix`
+- matrix and full structured reporting should add `--report` to their canonical runner commands
 - deeper rerendering and targeted reporting commands are secondary; see the [Command Registry](command-registry.md)
 
 Protected CI artifact upload:
@@ -431,7 +441,7 @@ Do not use it:
 
 ## What Not To Use By Default
 - Do not use direct matrix pytest with manual `RUN_PARSE_MATRIX=1` as the normal operator path; use the matrix wrapper instead.
-- Do not use `./.venv/bin/python tools/run_parse_with_report.py ...` as the default workflow; it is advanced/internal.
+- Do not use `./.venv/bin/python tools/run_parse_with_report.py ...` as the default workflow; use `tools/run_regression.py --report` for normal protected structured reports, and keep the helper for advanced/internal targeting.
 - Do not use `./.venv/bin/python tools/reporting/render_regression_summary.py ...` as a substitute for the normal matrix wrapper; it is for saved-output rerendering.
 - Do not use historical `.codex` reporting paths from old notes or old artifacts; the current reporting surface is `tools/reporting/*` only.
 - Do not rebuild a repo-local note-taking workflow around Obsidian or transcript watchers; Mind is now the canonical memory and continuity layer.
