@@ -11,6 +11,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tests.fixtures.registry import REGISTRY_PATH as SHARED_REGISTRY_PATH
+from tools.reporting.batch_ground_truth.recovery import (
+    RecoveryTriageError,
+    load_retryable_recovery_selection,
+    recovery_row_key_from_fixture,
+)
 from tools.reporting.batch_ground_truth.schema import load_reference_template
 from tools.reporting.batch_ground_truth.workflow import (
     DEFAULT_OUTPUT_ROOT,
@@ -101,6 +106,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Repeat or comma-separate to export selected split fileTypes only.",
     )
     parser.add_argument(
+        "--recovery-triage-csv",
+        default="",
+        help=(
+            "Restrict export to exact retryable row identities from a previous recovery_triage.csv. "
+            "Only transient/auth and rate-limited rows are selected; HTTP 5xx invalid JSON is excluded."
+        ),
+    )
+    parser.add_argument(
         "--plan",
         action="store_true",
         help="Inspect registry coverage and planned chunking without calling the live endpoint.",
@@ -176,18 +189,85 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     selected_file_types = _parse_file_types(args.file_types)
+    recovery_row_keys = None
+    recovery_selection = None
+    if args.recovery_triage_csv:
+        try:
+            recovery_selection = load_retryable_recovery_selection(
+                args.recovery_triage_csv,
+                selected_file_types=selected_file_types or None,
+            )
+        except RecoveryTriageError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        if not recovery_selection.row_keys:
+            print(
+                "ERROR: No retryable row-level recovery candidates were found in the triage CSV.",
+                file=sys.stderr,
+            )
+            return 2
+        recovery_row_keys = recovery_selection.row_keys
+        selected_file_types = selected_file_types or set(recovery_selection.retryable_by_file_type)
+
     selected = selected_file_types or None
     try:
         parsed, _grouped, plans = plan_file_types(
             fixture_registry=args.fixture_registry,
             selected_file_types=selected,
+            recovery_row_keys=recovery_row_keys,
         )
     except RuntimeError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
     if not plans:
-        print("ERROR: No matching fileTypes were found in the fixture registry.", file=sys.stderr)
+        if recovery_row_keys is not None:
+            print(
+                "ERROR: No matching row-level recovery fixtures were found in the fixture registry.",
+                file=sys.stderr,
+            )
+        else:
+            print("ERROR: No matching fileTypes were found in the fixture registry.", file=sys.stderr)
+        return 2
+
+    if recovery_row_keys is not None:
+        matched_row_keys = {
+            recovery_row_key_from_fixture(fixture)
+            for fixtures in _grouped.values()
+            for fixture in fixtures
+        }
+        missing_row_keys = sorted(recovery_row_keys - matched_row_keys)
+        if missing_row_keys:
+            missing_preview = ", ".join(
+                (
+                    f"{key.file_type}:{key.source_row}:{key.source_gcs_uri}"
+                    for key in missing_row_keys[:5]
+                )
+            )
+            if len(missing_row_keys) > 5:
+                missing_preview += f", ... ({len(missing_row_keys)} total)"
+            print(
+                "ERROR: Recovery row filter did not match registry fixture rows: "
+                f"{missing_preview}",
+                file=sys.stderr,
+            )
+            return 2
+
+    if recovery_selection is not None and recovery_selection.invalid_json_5xx_review_rows:
+        print(
+            "Recovery triage note: "
+            f"{recovery_selection.invalid_json_5xx_review_rows} HTTP 5xx invalid-JSON row(s) "
+            "were excluded as review-only."
+        )
+    if recovery_row_keys is not None:
+        print(f"Recovery triage CSV: {Path(args.recovery_triage_csv).expanduser().resolve()}")
+        print(f"Row-level recovery filter rows: {len(recovery_row_keys)}")
+
+    if recovery_row_keys is not None and not any(plan.executable_rows for plan in plans):
+        print(
+            "ERROR: Row-level recovery filter matched only non-executable fixture rows.",
+            file=sys.stderr,
+        )
         return 2
 
     print(f"Fixture registry: {Path(args.fixture_registry).expanduser().resolve()}")
@@ -228,6 +308,7 @@ def main(argv: list[str] | None = None) -> int:
             transient_chunk_retries=args.transient_chunk_retries,
             rate_limit_retries=args.rate_limit_retries,
             rate_limit_backoff_secs=args.rate_limit_backoff_secs,
+            recovery_row_keys=recovery_row_keys,
         )
     except RuntimeError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

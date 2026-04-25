@@ -24,6 +24,7 @@ from tests.endpoints.batch.artifacts import (
 from tools.generate_fixture_registry import build_registry_document, write_registry_document
 from tools.reporting.batch_ground_truth.excel import clean_workbook_filename_for, write_workbook
 from tools.reporting.batch_ground_truth.models import ExportRow, FileTypePlan, SourceFixtureRecord
+from tools.reporting.batch_ground_truth.recovery import RecoveryRowKey
 from tools.reporting.batch_ground_truth.schema import (
     FIXED_METADATA_HEADERS,
     build_success_template_values,
@@ -683,6 +684,41 @@ def test_plan_file_types_reports_executable_and_skipped_counts(tmp_path):
     assert [plan.file_type for plan in selected_plans] == ["BankStatement"]
 
 
+def test_plan_file_types_can_filter_to_recovery_row_keys(tmp_path):
+    registry_path = _write_fixture_registry(
+        tmp_path / "fixture_registry.yaml",
+        file_type_counts={"Payslip": 3},
+    )
+    row_filter = frozenset(
+        {
+            RecoveryRowKey(
+                file_type="Payslip",
+                request_file_type="Payslip",
+                source_row=6,
+                source_gcs_uri="gs://bucket/payslip-2.pdf",
+            )
+        }
+    )
+
+    _parsed, grouped, plans = plan_file_types(
+        fixture_registry=registry_path,
+        recovery_row_keys=row_filter,
+    )
+
+    assert list(grouped) == ["Payslip"]
+    assert [fixture.source_row for fixture in grouped["Payslip"]] == [6]
+    assert [fixture.gcs_uri for fixture in grouped["Payslip"]] == ["gs://bucket/payslip-2.pdf"]
+    assert plans == [
+        FileTypePlan(
+            file_type="Payslip",
+            total_rows=1,
+            executable_rows=1,
+            skipped_rows=0,
+            chunk_count=1,
+        )
+    ]
+
+
 def test_build_success_template_values_maps_common_and_extra_fields():
     result = {
         "index": 0,
@@ -1215,6 +1251,58 @@ def test_run_export_manifest_records_retry_policy_and_summary(monkeypatch, tmp_p
         "batch_retry_reasons": {"token_expired": 1},
         "batch_final_attempt_error_types": {},
     }
+
+
+def test_run_export_with_recovery_row_filter_only_executes_matched_rows(monkeypatch, tmp_path):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    registry_path = _write_fixture_registry(
+        tmp_path / "fixture_registry.yaml",
+        file_type_counts={"Payslip": 3},
+    )
+    _configure_batch_artifact_dir(monkeypatch, tmp_path)
+    layout = load_reference_template(reference_path)
+    recovery_row_keys = frozenset(
+        {
+            RecoveryRowKey(
+                file_type="Payslip",
+                request_file_type="Payslip",
+                source_row=6,
+                source_gcs_uri="gs://bucket/payslip-2.pdf",
+            )
+        }
+    )
+    key = ("gs://bucket/payslip-2.pdf",)
+    plans = {
+        key: {
+            "kind": "json",
+            "body": _success_body_for_key(key),
+            "name": "recovered-row",
+        }
+    }
+    state = _install_fake_make_client(monkeypatch, plans)
+
+    result = batch_ground_truth_workflow.run_batch_ground_truth_export(
+        fixture_registry=registry_path,
+        reference_workbook=reference_path,
+        output_dir=tmp_path / "output",
+        selected_file_types=None,
+        template_layout=layout,
+        max_concurrent_chunks=1,
+        max_concurrent_file_types=1,
+        recovery_row_keys=recovery_row_keys,
+    )
+
+    manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+    clean_manifest = json.loads(result.clean_manifest_path.read_text(encoding="utf-8"))
+    assert state["attempts"] == {key: 1}
+    assert result.selected_file_types == ("Payslip",)
+    assert result.file_type_results[0].total_rows == 1
+    assert result.file_type_results[0].clean_rows == 1
+    assert manifest["recovery_row_filter"] == {"enabled": True, "row_count": 1}
+    assert manifest["file_types"]["Payslip"]["total_rows"] == 1
+    assert manifest["file_types"]["Payslip"]["success_rows"] == 1
+    assert clean_manifest["total_source_rows"] == 1
+    assert clean_manifest["clean_included_rows"] == 1
 
 
 def test_persistent_token_expiry_after_refresh_is_recorded_clearly(monkeypatch):
@@ -2630,3 +2718,69 @@ def test_main_passes_concurrency_values_to_workflow(monkeypatch, tmp_path):
     assert captured["rate_limit_retries"] == 3
     assert captured["rate_limit_backoff_secs"] == 0.5
     assert captured["fixture_registry"] == str(registry_path)
+
+
+def test_main_plans_row_level_recovery_from_triage_csv(tmp_path, capsys):
+    reference_path = _write_reference_workbook(tmp_path / "reference.xlsx")
+    registry_path = _write_fixture_registry(
+        tmp_path / "fixture_registry.yaml",
+        file_type_counts={"Payslip": 3},
+    )
+    triage_path = tmp_path / "recovery_triage.csv"
+    with triage_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "fileType",
+                "source_row",
+                "source_gcs_uri",
+                "request_file_type",
+                "recovery_class",
+                "failure_tag",
+                "batch_http_status",
+            ],
+        )
+        writer.writeheader()
+        writer.writerows(
+            [
+                {
+                    "fileType": "Payslip",
+                    "source_row": "6",
+                    "source_gcs_uri": "gs://bucket/payslip-2.pdf",
+                    "request_file_type": "Payslip",
+                    "recovery_class": "transient_or_auth_failure",
+                    "failure_tag": "request_timeout",
+                    "batch_http_status": "",
+                },
+                {
+                    "fileType": "Payslip",
+                    "source_row": "5",
+                    "source_gcs_uri": "gs://bucket/payslip-1.pdf",
+                    "request_file_type": "Payslip",
+                    "recovery_class": "transient_or_auth_failure",
+                    "failure_tag": "invalid_json_response",
+                    "batch_http_status": "503",
+                },
+            ]
+        )
+
+    exit_code = export_batch_ground_truth.main(
+        [
+            "--fixture-registry",
+            str(registry_path),
+            "--reference-workbook",
+            str(reference_path),
+            "--recovery-triage-csv",
+            str(triage_path),
+            "--plan",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert captured.err == ""
+    assert "Recovery triage note: 1 HTTP 5xx invalid-JSON row(s) were excluded as review-only." in captured.out
+    assert f"Recovery triage CSV: {triage_path.resolve()}" in captured.out
+    assert "Row-level recovery filter rows: 1" in captured.out
+    assert "Selected fileTypes: 1" in captured.out
+    assert "- Payslip: total_rows=1, executable_rows=1, skipped_rows=0, chunk_count=1" in captured.out

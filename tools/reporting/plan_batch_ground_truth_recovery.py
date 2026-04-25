@@ -4,34 +4,25 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
-import csv
 from pathlib import Path
 import shlex
 import sys
-from typing import Any
 
-RETRYABLE_RECOVERY_CLASSES = {
-    "rate_limited",
-    "transient_or_auth_failure",
-}
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-INVALID_JSON_5XX_REVIEW_CLASS = "invalid_json_5xx_review"
-
-REQUIRED_TRIAGE_COLUMNS = (
-    "fileType",
-    "recovery_class",
-    "failure_tag",
-    "batch_http_status",
+from tools.reporting.batch_ground_truth.recovery import (
+    INVALID_JSON_5XX_REVIEW_CLASS,
+    RecoveryTriageError,
+    read_recovery_triage_rows,
+    summarize_retryable_recovery_rows,
 )
 
 EXPORTER_COMMAND = (
     "./.venv/bin/python",
     "tools/reporting/export_batch_ground_truth.py",
 )
-
-
-class PlannerError(RuntimeError):
-    """Raised for clear operator-facing planner input errors."""
 
 
 def _positive_int(value: str) -> int:
@@ -84,6 +75,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Absolute path to the reference workbook to pass to the generated exporter command.",
     )
     parser.add_argument(
+        "--row-level",
+        action="store_true",
+        help=(
+            "Generate exporter commands that restrict execution to exact retryable rows "
+            "from the triage CSV via --recovery-triage-csv. Defaults to fileType-level commands."
+        ),
+    )
+    parser.add_argument(
         "--max-concurrent-file-types",
         type=_positive_int,
         default=1,
@@ -129,57 +128,18 @@ def _resolve_triage_csv(args: argparse.Namespace) -> Path:
         triage_csv = Path(args.run_dir).expanduser() / "recovery_triage.csv"
     triage_csv = triage_csv.resolve()
     if not triage_csv.is_file():
-        raise PlannerError(f"triage CSV does not exist: {triage_csv}")
+        raise RecoveryTriageError(f"triage CSV does not exist: {triage_csv}")
     return triage_csv
 
 
 def _resolve_reference_workbook(value: str) -> Path:
     reference_workbook = Path(value).expanduser()
     if not reference_workbook.is_absolute():
-        raise PlannerError("--reference-workbook must be an absolute path")
+        raise RecoveryTriageError("--reference-workbook must be an absolute path")
     reference_workbook = reference_workbook.resolve()
     if not reference_workbook.is_file():
-        raise PlannerError(f"reference workbook does not exist: {reference_workbook}")
+        raise RecoveryTriageError(f"reference workbook does not exist: {reference_workbook}")
     return reference_workbook
-
-
-def _read_triage_rows(triage_csv: Path) -> list[dict[str, str]]:
-    with triage_csv.open(newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        fieldnames = set(reader.fieldnames or ())
-        missing_columns = [column for column in REQUIRED_TRIAGE_COLUMNS if column not in fieldnames]
-        if missing_columns:
-            raise PlannerError(
-                "triage CSV is missing required columns: " + ", ".join(missing_columns)
-            )
-        return [
-            row
-            for row in reader
-            if any(str(value or "").strip() for value in row.values())
-        ]
-
-
-def _parse_http_status(value: Any) -> int | None:
-    text = str(value or "").strip()
-    if not text:
-        return None
-    try:
-        return int(text)
-    except ValueError:
-        return None
-
-
-def _is_invalid_json_5xx_review(row: dict[str, str]) -> bool:
-    failure_tag = str(row.get("failure_tag") or "").strip()
-    return failure_tag == "invalid_json_response" and (
-        (_parse_http_status(row.get("batch_http_status")) or 0) >= 500
-    )
-
-
-def _effective_recovery_class(row: dict[str, str]) -> str:
-    if _is_invalid_json_5xx_review(row):
-        return INVALID_JSON_5XX_REVIEW_CLASS
-    return str(row.get("recovery_class") or "").strip() or "<none>"
 
 
 def _shell_command(parts: list[str]) -> str:
@@ -193,6 +153,7 @@ def _format_float(value: float) -> str:
 def _build_export_command(
     *,
     reference_workbook: Path,
+    recovery_triage_csv: Path | None,
     file_types: list[str],
     max_concurrent_file_types: int,
     max_concurrent_chunks: int,
@@ -207,6 +168,8 @@ def _build_export_command(
         "--reference-workbook",
         str(reference_workbook),
     ]
+    if recovery_triage_csv is not None:
+        parts.extend(["--recovery-triage-csv", str(recovery_triage_csv)])
     for file_type in file_types:
         parts.extend(["--file-type", file_type])
     parts.extend(
@@ -246,54 +209,47 @@ def main(argv: list[str] | None = None) -> int:
     try:
         triage_csv = _resolve_triage_csv(args)
         reference_workbook = _resolve_reference_workbook(args.reference_workbook)
-        rows = _read_triage_rows(triage_csv)
-    except PlannerError as exc:
+        rows = read_recovery_triage_rows(
+            triage_csv,
+            require_row_identity=args.row_level,
+        )
+        selection = summarize_retryable_recovery_rows(
+            rows,
+            include_row_keys=args.row_level,
+        )
+    except RecoveryTriageError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
-    retryable_by_class: Counter[str] = Counter()
-    retryable_by_file_type: Counter[str] = Counter()
-    excluded_by_class: Counter[str] = Counter()
-    missing_file_type_rows = 0
-
-    for row in rows:
-        recovery_class = _effective_recovery_class(row)
-        if recovery_class in RETRYABLE_RECOVERY_CLASSES:
-            file_type = str(row.get("fileType") or "").strip()
-            if not file_type:
-                missing_file_type_rows += 1
-                continue
-            retryable_by_class[recovery_class] += 1
-            retryable_by_file_type[file_type] += 1
-        else:
-            excluded_by_class[recovery_class] += 1
-
-    if missing_file_type_rows:
+    if "<none>" in selection.retryable_by_file_type:
         print(
-            f"ERROR: {missing_file_type_rows} retryable triage row(s) are missing fileType values.",
+            "ERROR: retryable triage row(s) are missing fileType values.",
             file=sys.stderr,
         )
         return 2
 
-    retryable_count = sum(retryable_by_class.values())
-    excluded_count = len(rows) - retryable_count
-    invalid_json_5xx_review_count = excluded_by_class.get(INVALID_JSON_5XX_REVIEW_CLASS, 0)
     approx_in_flight = args.max_concurrent_file_types * args.max_concurrent_chunks
-    file_types = sorted(retryable_by_file_type)
+    file_types = sorted(selection.retryable_by_file_type)
+    retryable_by_class = Counter(selection.retryable_by_class)
+    retryable_by_file_type = Counter(selection.retryable_by_file_type)
+    excluded_by_class = Counter(selection.excluded_by_class)
 
     print("Batch GT recovery planner")
     print(f"Triage CSV: {triage_csv}")
     print(f"Reference workbook: {reference_workbook}")
-    print(f"Total triage rows: {len(rows)}")
-    print(f"Retryable recovery rows: {retryable_count}")
-    print(f"Excluded/non-retryable rows: {excluded_count}")
-    print(f"Invalid JSON 5xx review-only rows: {invalid_json_5xx_review_count}")
+    print(f"Recovery command mode: {'row-level' if args.row_level else 'fileType-level'}")
+    print(f"Total triage rows: {selection.total_rows}")
+    print(f"Retryable recovery rows: {selection.retryable_rows}")
+    print(f"Excluded/non-retryable rows: {selection.excluded_rows}")
+    print(f"Invalid JSON 5xx review-only rows: {selection.invalid_json_5xx_review_rows}")
+    if args.row_level:
+        print(f"Row-level recovery filter rows: {len(selection.row_keys)}")
     print(f"Approx max in-flight batch requests for generated commands: {approx_in_flight}")
     _print_counter("Retryable rows by recovery_class", retryable_by_class)
     _print_counter("Retryable rows by fileType", retryable_by_file_type)
     _print_counter("Excluded rows by recovery_class", excluded_by_class)
 
-    if invalid_json_5xx_review_count:
+    if selection.invalid_json_5xx_review_rows:
         print(
             "Note: invalid_json_response rows with HTTP status >=500 are review-only, "
             "not retryable transient/auth recovery candidates."
@@ -307,6 +263,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         _build_export_command(
             reference_workbook=reference_workbook,
+            recovery_triage_csv=triage_csv if args.row_level else None,
             file_types=file_types,
             max_concurrent_file_types=args.max_concurrent_file_types,
             max_concurrent_chunks=args.max_concurrent_chunks,
@@ -321,6 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     print(
         _build_export_command(
             reference_workbook=reference_workbook,
+            recovery_triage_csv=triage_csv if args.row_level else None,
             file_types=file_types,
             max_concurrent_file_types=args.max_concurrent_file_types,
             max_concurrent_chunks=args.max_concurrent_chunks,

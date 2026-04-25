@@ -110,6 +110,17 @@ Plan a targeted recovery rerun from a previous triage CSV, without calling the l
 
 The recovery planner accepts either `--run-dir` or `--triage-csv`, prints retryable and non-retryable triage counts, and emits both a paste-ready exporter `--plan` command and a live rerun command for only the affected fileTypes. It does not call `/documents/batch`, write report artifacts, or mutate registry metadata.
 
+Plan an exact row-level recovery rerun from a previous triage CSV:
+
+```bash
+./.venv/bin/python tools/reporting/plan_batch_ground_truth_recovery.py \
+  --run-dir reports/batch_ground_truth/batch_ground_truth_<timestamp> \
+  --reference-workbook /absolute/path/to/reference.xlsx \
+  --row-level
+```
+
+Row-level planner output adds `--recovery-triage-csv /absolute/path/to/recovery_triage.csv` to the generated exporter commands. The exporter then restricts the run to exact retryable row identities from that triage file, using `fileType`, `request_file_type`, `source_row`, and `source_gcs_uri`. This is the preferred recovery path when only a few rows remain retryable inside an otherwise useful fileType workbook.
+
 ## Fixture Registry Source
 - The normal exporter path reads `tests/fixtures/fixture_registry.yaml`.
 - `tools/generate_fixture_registry.py` writes that shared registry plus `tests/endpoints/parse/fixture_registry.yaml` as a generated `/parse` compatibility copy.
@@ -173,7 +184,8 @@ The recovery planner accepts either `--run-dir` or `--triage-csv`, prints retrya
 - `recovery_triage.json` and `recovery_triage.csv` contain every non-clean exported row.
 - Triage rows include source identity, request and response fileType, HTTP and row status, parse success, failure details, retry metadata, GT extraction metadata, parsed-container counts, quality-gate details when available, `recovery_class`, `recovery_action`, and `gt_candidate_status`.
 - Use recovery triage to decide whether a row should be targeted for rerun, reviewed for fixture quality, reviewed for fileType/source metadata, replaced, excluded from strict parsed-only compatibility output as-is, or retained as negative API/model-behavior evidence in the primary GT workbook.
-- Use `tools/reporting/plan_batch_ground_truth_recovery.py` to turn a previous `recovery_triage.csv` into a conservative fileType-level targeted rerun plan. The planner treats only `transient_or_auth_failure` and `rate_limited` as retryable recovery classes, and it also excludes historical `failure_tag=invalid_json_response` rows with HTTP status `>=500` even if an older triage CSV labeled them as transient/auth failures.
+- Use `tools/reporting/plan_batch_ground_truth_recovery.py` to turn a previous `recovery_triage.csv` into a conservative targeted rerun plan. The default output is fileType-level for compatibility; add `--row-level` to generate commands that rerun only exact retryable row identities. The planner and exporter treat only `transient_or_auth_failure` and `rate_limited` as retryable recovery classes, and they also exclude historical `failure_tag=invalid_json_response` rows with HTTP status `>=500` even if an older triage CSV labeled them as transient/auth failures.
+- Row-level recovery output is a partial recovery package, not a replacement full fileType run. Merge it with earlier evidence deliberately and preserve the source report folders.
 - The exporter does not mutate the source registry, does not bulk-tag fixtures invalid, and does not convert non-clean rows into successful GT rows. Durable exclusions require fixture-registry source metadata followed by registry regeneration.
 
 Common recovery classes:

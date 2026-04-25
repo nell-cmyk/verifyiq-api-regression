@@ -34,6 +34,7 @@ from .models import (
     SourceRegistryParseResult,
     TemplateLayout,
 )
+from .recovery import RecoveryRowKey, recovery_row_key_from_fixture
 from .schema import build_failure_template_values, build_success_template_values
 from .source import grouped_fixtures_by_file_type, parse_source_registry
 from .triage import (
@@ -919,9 +920,24 @@ def plan_file_types(
     *,
     fixture_registry: Path | str,
     selected_file_types: set[str] | None = None,
+    recovery_row_keys: frozenset[RecoveryRowKey] | None = None,
 ) -> tuple[SourceRegistryParseResult, dict[str, list[SourceFixtureRecord]], list[FileTypePlan]]:
     parsed = parse_source_registry(fixture_registry)
     grouped = grouped_fixtures_by_file_type(parsed, selected_file_types=selected_file_types)
+    if recovery_row_keys is not None:
+        grouped = {
+            file_type: [
+                fixture
+                for fixture in fixtures
+                if recovery_row_key_from_fixture(fixture) in recovery_row_keys
+            ]
+            for file_type, fixtures in grouped.items()
+        }
+        grouped = {
+            file_type: fixtures
+            for file_type, fixtures in grouped.items()
+            if fixtures
+        }
     plans = []
     for file_type, fixtures in sorted(grouped.items()):
         executable_rows = sum(1 for fixture in fixtures if fixture.include_in_batch)
@@ -951,6 +967,7 @@ def run_batch_ground_truth_export(
     transient_chunk_retries: int = DEFAULT_TRANSIENT_CHUNK_RETRIES,
     rate_limit_retries: int = DEFAULT_RATE_LIMIT_RETRIES,
     rate_limit_backoff_secs: float = DEFAULT_RATE_LIMIT_BACKOFF_SECS,
+    recovery_row_keys: frozenset[RecoveryRowKey] | None = None,
 ) -> BatchGroundTruthRunResult:
     if max_concurrent_chunks < 1:
         raise ValueError("max_concurrent_chunks must be a positive integer")
@@ -968,7 +985,28 @@ def run_batch_ground_truth_export(
     parsed, grouped, plans = plan_file_types(
         fixture_registry=fixture_registry,
         selected_file_types=selected_file_types,
+        recovery_row_keys=recovery_row_keys,
     )
+    if recovery_row_keys is not None:
+        matched_row_keys = {
+            recovery_row_key_from_fixture(fixture)
+            for fixtures in grouped.values()
+            for fixture in fixtures
+        }
+        missing_row_keys = sorted(recovery_row_keys - matched_row_keys)
+        if missing_row_keys:
+            missing_preview = ", ".join(
+                (
+                    f"{key.file_type}:{key.source_row}:{key.source_gcs_uri}"
+                    for key in missing_row_keys[:5]
+                )
+            )
+            if len(missing_row_keys) > 5:
+                missing_preview += f", ... ({len(missing_row_keys)} total)"
+            raise RuntimeError(
+                "Recovery row filter did not match registry fixture rows: "
+                f"{missing_preview}"
+            )
     output_root = _ensure_output_dir(output_dir)
     workbooks_dir = output_root / "workbooks"
     clean_workbooks_dir = output_root / "clean_workbooks"
@@ -1127,6 +1165,14 @@ def run_batch_ground_truth_export(
         "transient_chunk_retries": transient_chunk_retries,
         "rate_limit_retries": rate_limit_retries,
         "rate_limit_backoff_secs": rate_limit_backoff_secs,
+        "recovery_row_filter": (
+            {
+                "enabled": True,
+                "row_count": len(recovery_row_keys),
+            }
+            if recovery_row_keys is not None
+            else {"enabled": False}
+        ),
         "selected_file_types": [plan.file_type for plan in plans],
         "skipped_rows": [
             {
