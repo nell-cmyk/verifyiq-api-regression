@@ -94,11 +94,9 @@ Codified now with exact expected-status assertions:
 - `/parser_studio`, `/parser_studio/auth/login`, and `/qa` are UI surfaces rather than API JSON smoke targets
 - `/sentry-debug` and `/api/v1/sentry-debug` are explicit debug/error routes and should stay out of smoke
 
-## Sequenced Next Tranches For Remaining GET Work
-1. Resolve the remaining query/input-backed current GETs that still lack a legitimate 200 path: `/v1/admin/cache/stats`, `/monitoring/api/v1/providers`, and `/ai-gateway/s3/s3/list`.
-2. Add the remaining setup-backed current GET that still lacks a legitimate derived input: `/v1/documents/fraud-status/{job_id}`.
-3. Preserve the exact-status smoke codification for `/api/v1/health/database-pools` (`401`), `/api/v1/health/database-pools/metrics` (`401`), `/v1/admin/cache/health` (`403`), and `/monitoring/api/v1/golden-dataset/gcs/structure` (`502`) so they do not regress back into the unresolved 200 bucket.
-4. Decide whether UI/debug and explicit admin/storage surfaces such as `/parser_studio`, `/parser_studio/auth/login`, `/qa`, `/sentry-debug`, `/api/v1/sentry-debug`, and the AI Gateway file routes belong in API automation at all.
+## Planning Boundary
+This file records current coverage, deferrals, blockers, and onboarding requirements.
+Roadmap sequencing and priority decisions live in `docs/knowledge-base/repo-roadmap.md`.
 
 ## Endpoint Group Onboarding Checklist
 Before a new endpoint group is added here as "in progress" or "covered", keep the decision endpoint-group based and record:
@@ -112,9 +110,3 @@ Before a new endpoint group is added here as "in progress" or "covered", keep th
 7. Runner mapping requirement: the canonical `tools/run_regression.py` selection or the reason runner mapping is deferred.
 8. CI eligibility: whether the group is eligible for non-live CI, protected live CI, opt-in/scheduled live CI, or local-only validation.
 9. Owner and blocker notes: the current owner area, known upstream blocker, and evidence needed before promotion.
-
-## Immediate Follow-ups
-- Re-run the opt-in `batch` auth characterization after any auth-layer or staging change; the blocker remains open until both missing and invalid tenant-token requests return confirmed 401/403 rejection.
-- Start the next GET tranche with the remaining query/input-backed endpoints that still surface concrete request-shape or auth gaps (`tenant_id`, provider inputs, and safe AI Gateway list inputs).
-- Extend the parse OpenAPI drift pilot with safe observed artifacts from a future protected run.
-- Do not broaden the default suite until a deliberate cross-endpoint smoke composition exists.

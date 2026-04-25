@@ -19,6 +19,7 @@ Python-first live API regression automation for VerifyIQ, centered on the protec
 - Safe Git commit flow: `./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"`
 - Command registry: `docs/operations/command-registry.md`
 - Workflow runbook: `docs/operations/workflow.md`
+- Planning roadmap: `docs/knowledge-base/repo-roadmap.md`
 
 ## Mind Memory Workflow
 - Active workflow memory lives in Mind space `projects/verifyiq-api-regression`, not in repo docs.
@@ -41,7 +42,7 @@ Python-first live API regression automation for VerifyIQ, centered on the protec
 - `docs/operations/`
   Runbooks and exact operational commands.
 - `docs/knowledge-base/`
-  Durable repo and endpoint findings.
+  Durable repo and endpoint findings. `repo-roadmap.md` is the canonical planning source for project progression and future-development decisions.
 - `.agents/`
   Repo-local shared skills, including the Codex-facing Mind session fallback skill.
 - `.codex/`

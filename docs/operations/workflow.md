@@ -14,7 +14,7 @@ Use it for the normal end-to-end flow:
 - review artifacts
 - use the guarded Git flow
 
-Use [Command Registry](command-registry.md) for command classification, [Regression Runner Plan](regression-runner-plan.md) for the canonical-runner consolidation design, [Endpoint Coverage Inventory](endpoint-coverage-inventory.md) for current suite breadth, and [Matrix Triage](matrix.md) for deeper matrix-specific triage details.
+Use [Command Registry](command-registry.md) for command classification, [Repo Roadmap](../knowledge-base/repo-roadmap.md) for planning and future-development direction, [Endpoint Coverage Inventory](endpoint-coverage-inventory.md) for current suite breadth, and [Matrix Triage](matrix.md) for deeper matrix-specific triage details.
 
 Planning governance for development work lives in `AGENTS.md`: use `docs/knowledge-base/repo-roadmap.md` as the planning source of truth, and treat the repo itself as the source of truth for current implementation details.
 
@@ -404,6 +404,7 @@ Do not use it:
 - Review the diff first.
 - Stage only the intended files.
 - Use `./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"` for the guarded mechanical commit step.
+- Use `--validation non-live` for documentation, tooling, reporting, or skills changes where live API validation is intentionally out of scope.
 - Use `--validation full` only when the stronger full-regression gate is intentionally required.
 - Use `--push` only when you are ready to push to the current branch's matching upstream.
 

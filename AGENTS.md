@@ -13,7 +13,7 @@
 - `.codex/`: repo-local Codex config and hooks for Mind MCP plus checkpoint continuity.
 - `.opencode/`: repo-local OpenCode plugin, config, and skills for automatic Mind session continuity.
 - `docs/operations/`: canonical runbooks and command registry.
-- `docs/knowledge-base/`: durable findings only.
+- `docs/knowledge-base/`: durable findings plus the canonical planning roadmap.
 - `reports/`: generated local artifacts only.
 - Active workflow memory lives in Mind space `projects/verifyiq-api-regression` via local Mind checkpoints, memories, and session summaries.
 
@@ -37,9 +37,12 @@
 - Protected default runner: `./.venv/bin/python tools/run_regression.py`
 - Opt-in GET smoke suite: `./.venv/bin/python tools/run_regression.py --suite smoke`
 - Exact protected implementation/debug path: `./.venv/bin/python -m pytest tests/endpoints/parse/ -v`
-- Matrix wrapper: `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
+- Matrix run + saved summary: `./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix`
+- Matrix delegated engine / compatibility-debug path: `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
 - Full regression: `./.venv/bin/python tools/run_regression.py --suite full`
-- Batch suite: `./.venv/bin/python -m pytest tests/endpoints/batch/ -v`
+- Batch suite: `./.venv/bin/python tools/run_regression.py --endpoint batch`
+- Selected batch fixtures: `./.venv/bin/python tools/run_regression.py --endpoint batch --fixtures-json /path/to/fixtures.json`
+- Batch implementation/debug path: `./.venv/bin/python -m pytest tests/endpoints/batch/ -v`
 - Tooling/reporting suites:
   - `VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ -v`
   - `VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/skills/ -v`
@@ -48,9 +51,9 @@
 ## Test Tiers And When To Run Each
 - Protected baseline: default parse-only live gate through `./.venv/bin/python tools/run_regression.py` for ordinary repo changes and before handoff or merge.
 - GET smoke: opt-in cross-group GET 200 coverage through `./.venv/bin/python tools/run_regression.py --suite smoke` when touching GET smoke tests, GET inventory expansion, or runner wiring for the smoke lane.
-- Matrix: when touching fileType mapping, registry selection, reporting, or matrix triage.
+- Matrix: canonical opt-in matrix coverage through `./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix` when touching fileType mapping, registry selection, reporting, or matrix triage.
 - Full regression: when a stronger `/parse` gate is intentionally required.
-- Batch suite: when touching `/documents/batch` tests, fixtures, or wrappers.
+- Batch suite: canonical opt-in batch coverage through `./.venv/bin/python tools/run_regression.py --endpoint batch` when touching `/documents/batch` tests, fixtures, or wrappers.
 - Tooling/reporting suites: when editing `tools/`, reporting helpers, or agent/reporting surfaces.
 - Trust live terminal output over hardcoded test counts.
 
@@ -61,8 +64,8 @@
   - `--help` on repo-owned tools
   - protected baseline
   - GET smoke suite
-  - matrix wrapper
-  - batch suite
+  - canonical matrix runner selection
+  - canonical batch runner selection
   - repo-local pytest suites
   - `./.venv/bin/python tools/mind_session.py doctor`
   - `./.venv/bin/python tools/mind_session.py start`
@@ -139,7 +142,7 @@
 - Treat `reports/` as disposable generated output, not durable truth.
 - Protected baseline writes raw `/parse` response artifacts under `reports/parse/responses/`.
 - `/documents/batch` runs write raw artifacts under `reports/batch/`.
-- Matrix wrapper writes `reports/parse/matrix/latest-terminal.txt` and `reports/parse/matrix/latest-summary.md`.
+- Canonical matrix selection delegates to the matrix wrapper, which writes `reports/parse/matrix/latest-terminal.txt` and `reports/parse/matrix/latest-summary.md`.
 - Structured reports under `reports/regression/` are opt-in via `--report`.
 
 ## Known Gotchas

@@ -56,6 +56,20 @@ def _canonical_runner_command(*args: str) -> tuple[str, ...]:
     )
 
 
+def _non_live_validation_command() -> tuple[str, ...]:
+    return (
+        "env",
+        "VERIFYIQ_SKIP_DOTENV=1",
+        safe_git_commit.sys.executable,
+        "-m",
+        "pytest",
+        "tests/tools/",
+        "tests/reporting/",
+        "tests/skills/",
+        "-v",
+    )
+
+
 def test_refuses_when_nothing_is_staged(monkeypatch, tmp_path, capsys):
     runner = FakeRunner(
         {
@@ -120,6 +134,7 @@ def test_refuses_when_leftover_changes_remain_after_targeted_stage(monkeypatch, 
     [
         ("baseline", _canonical_runner_command()),
         ("full", _canonical_runner_command("--suite", "full")),
+        ("non-live", _non_live_validation_command()),
     ],
 )
 def test_selects_expected_validation_command(
@@ -155,6 +170,10 @@ def test_validation_commands_use_canonical_regression_runner():
         "--suite",
         "full",
     )
+
+
+def test_non_live_validation_command_uses_offline_pytest_suites():
+    assert tuple(safe_git_commit.VALIDATION_COMMANDS["non-live"]) == _non_live_validation_command()
 
 
 def test_auto_message_dry_run_previews_generated_commit_subject(monkeypatch, tmp_path, capsys):

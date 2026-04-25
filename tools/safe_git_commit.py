@@ -16,6 +16,17 @@ REGRESSION_RUNNER = REPO_ROOT / "tools" / "run_regression.py"
 VALIDATION_COMMANDS: dict[str, list[str]] = {
     "baseline": [sys.executable, str(REGRESSION_RUNNER)],
     "full": [sys.executable, str(REGRESSION_RUNNER), "--suite", "full"],
+    "non-live": [
+        "env",
+        "VERIFYIQ_SKIP_DOTENV=1",
+        sys.executable,
+        "-m",
+        "pytest",
+        "tests/tools/",
+        "tests/reporting/",
+        "tests/skills/",
+        "-v",
+    ],
 }
 
 
