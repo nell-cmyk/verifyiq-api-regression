@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from tests.endpoints.get_smoke.helpers import GetSmokeCase, assert_get_smoke_200, get_smoke_json
+from tests.endpoints.get_smoke.helpers import (
+    GetSmokeCase,
+    assert_get_smoke_200,
+    first_mapping_value,
+    get_smoke_json,
+    require_setup_list,
+)
 
 
 _QUEUE_CASE = GetSmokeCase("qa-queue", "/qa/api/v1/queue")
@@ -11,17 +17,20 @@ _QUEUE_CASE = GetSmokeCase("qa-queue", "/qa/api/v1/queue")
 @pytest.fixture(scope="module")
 def qa_correlation_id(client) -> str:
     body = get_smoke_json(client, _QUEUE_CASE)
-    items = body.get("items") or body.get("queue") or body.get("requests")
-    assert isinstance(items, list) and items, "QA queue response did not contain any queue items."
-    first = items[0]
-    assert isinstance(first, dict), "QA queue first item was not an object."
-
-    for key in ("correlation_id", "correlationId", "request_id", "id"):
-        value = str(first.get(key, "")).strip()
-        if value:
-            return value
-
-    pytest.fail("QA queue response did not include a correlation identifier for the first item.")
+    items = require_setup_list(
+        body,
+        _QUEUE_CASE,
+        fields=("items", "queue", "requests"),
+        prerequisite="QA correlation identifier",
+        item_label="queue item",
+    )
+    return first_mapping_value(
+        items,
+        keys=("correlation_id", "correlationId", "request_id", "id"),
+        source_case=_QUEUE_CASE,
+        prerequisite="QA correlation identifier",
+        item_label="queue item",
+    )
 
 
 @pytest.mark.parametrize(

@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from tests.endpoints.get_smoke.helpers import GetSmokeCase, assert_get_smoke_200, get_smoke_json
+from tests.endpoints.get_smoke.helpers import (
+    GetSmokeCase,
+    assert_get_smoke_200,
+    first_mapping_value,
+    get_smoke_json,
+    require_setup_list,
+)
 
 
 _BENCHMARK_JOBS_CASE = GetSmokeCase("benchmark-jobs-list", "/api/v1/benchmark/jobs")
@@ -12,42 +18,62 @@ _APPLICATIONS_CASE = GetSmokeCase("bls-applications-list", "/api/v1/applications
 @pytest.fixture(scope="module")
 def benchmark_job_id(client) -> str:
     body = get_smoke_json(client, _BENCHMARK_JOBS_CASE)
-    jobs = body.get("jobs")
-    assert isinstance(jobs, list) and jobs, "Benchmark jobs response did not contain any jobs."
-    job_id = str(jobs[0].get("job_id", "")).strip() if isinstance(jobs[0], dict) else ""
-    assert job_id, "Benchmark jobs response did not include job_id for the first job."
-    return job_id
+    jobs = require_setup_list(
+        body,
+        _BENCHMARK_JOBS_CASE,
+        fields=("jobs",),
+        prerequisite="benchmark job_id",
+        item_label="benchmark job",
+    )
+    return first_mapping_value(
+        jobs,
+        keys=("job_id",),
+        source_case=_BENCHMARK_JOBS_CASE,
+        prerequisite="benchmark job_id",
+        item_label="benchmark job",
+    )
 
 
 @pytest.fixture(scope="module")
 def application_id(client) -> str:
     body = get_smoke_json(client, _APPLICATIONS_CASE)
-    items = body.get("items")
-    assert isinstance(items, list) and items, "Applications response did not contain any items."
-    first = items[0]
-    assert isinstance(first, dict), "Applications response first item was not an object."
-    app_id = str(first.get("applicationId", "")).strip()
-    assert app_id, "Applications response did not include applicationId for the first item."
-    return app_id
+    items = require_setup_list(
+        body,
+        _APPLICATIONS_CASE,
+        fields=("items",),
+        prerequisite="applicationId",
+        item_label="application",
+    )
+    return first_mapping_value(
+        items,
+        keys=("applicationId",),
+        source_case=_APPLICATIONS_CASE,
+        prerequisite="applicationId",
+        item_label="application",
+    )
 
 
 @pytest.fixture(scope="module")
 def application_document_id(client, application_id: str) -> str:
+    documents_case = GetSmokeCase("bls-application-documents", f"/api/v1/applications/{application_id}/documents")
     body = get_smoke_json(
         client,
-        GetSmokeCase("bls-application-documents", f"/api/v1/applications/{application_id}/documents"),
+        documents_case,
     )
-    items = body.get("items") or body.get("documents") or body.get("data")
-    assert isinstance(items, list) and items, "Application documents response did not contain any documents."
-    first = items[0]
-    assert isinstance(first, dict), "Application documents response first item was not an object."
-
-    for key in ("documentId", "document_id", "id"):
-        value = str(first.get(key, "")).strip()
-        if value:
-            return value
-
-    pytest.fail("Application documents response did not include a document identifier for the first document.")
+    items = require_setup_list(
+        body,
+        documents_case,
+        fields=("items", "documents", "data"),
+        prerequisite="application document id",
+        item_label="application document",
+    )
+    return first_mapping_value(
+        items,
+        keys=("documentId", "document_id", "id"),
+        source_case=documents_case,
+        prerequisite="application document id",
+        item_label="application document",
+    )
 
 
 @pytest.mark.parametrize(

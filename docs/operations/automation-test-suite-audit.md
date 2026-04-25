@@ -3,35 +3,35 @@
 ## Executive Summary
 This repository has a solid foundation for live `/v1/documents/parse` regression and a credible companion lane for `/v1/documents/batch`, but it is not yet a professional-grade API automation suite at repository scale.
 
-The strongest areas are regression discipline around the protected `/parse` baseline, fixture and registry management, raw and structured artifact generation, offline coverage for runner and reporting utilities, and a checked-in non-live CI lane. The largest remaining gaps are endpoint breadth, systematic contract validation, incomplete runner parity for batch and matrix targeting, and the live-environment coupling that is still inherent to endpoint suites.
+The strongest areas are regression discipline around the protected `/parse` baseline, fixture and registry management, raw and structured artifact generation, offline coverage for runner and reporting utilities, canonical-runner parity for the current protected/smoke/full/matrix/batch mappings, and checked-in CI lanes. The largest remaining gaps are endpoint breadth, systematic contract validation, reporting parity beyond parse, and the live-environment coupling that is still inherent to endpoint suites.
 
-Superseded audit findings: offline tooling/reporting/skills suites no longer depend on eager live client bootstrap at pytest import time, `docs/operations/endpoint-coverage-inventory.md` now exists, and `.github/workflows/non-live-validation.yml` now runs the non-live validation lane. The most important next steps are to keep those guardrails current, run the planned `/parse` OpenAPI drift pilot, finish canonical-runner parity or narrow the command story until parity exists, and define the missing endpoint onboarding standard.
+Superseded audit findings: offline tooling/reporting/skills suites no longer depend on eager live client bootstrap at pytest import time, `docs/operations/endpoint-coverage-inventory.md` now exists, `.github/workflows/non-live-validation.yml` now runs the non-live validation lane, current parse-matrix and batch mappings are live-runnable through the canonical runner, protected CI artifact upload is available behind an explicit repository-variable gate, and the endpoint onboarding standard now exists. The most important next steps are to keep those guardrails current, run the planned `/parse` OpenAPI drift pilot, finish structured-reporting parity, and avoid wrapper deprecation until the documented criteria are met.
 
 ## Overall Assessment
 Maturity rating: **Solid foundation**
 
-That rating is appropriate because the repository already has a disciplined protected baseline, useful negative and validation coverage, deterministic fixture selection, opt-in matrix breadth, reporting artifacts, secret-aware live CI, and non-live CI for tooling/reporting infrastructure. It is not yet **Professional-grade** because automation still covers a narrow subset of the OpenAPI surface, contract validation is still manual and selective, the canonical runner is only partially implemented, and live endpoint suites remain dependent on live environment configuration by design.
+That rating is appropriate because the repository already has a disciplined protected baseline, useful negative and validation coverage, deterministic fixture selection, opt-in matrix breadth, reporting artifacts, secret-aware live CI, non-live CI for tooling/reporting infrastructure, and a canonical runner for the current useful live selections. It is not yet **Professional-grade** because automation still covers a narrow subset of the OpenAPI surface, contract validation is still manual and selective, structured reporting is not fully consolidated under the runner, and live endpoint suites remain dependent on live environment configuration by design.
 
 ### Maturity Scorecard
 
 | Dimension | Score | Reason |
 | --- | --- | --- |
 | Test strategy | 3/5 | `/parse` has a clear protected baseline and matrix/full layers, and the repo now has an opt-in cross-group GET smoke lane, but the per-endpoint minimum category bar is still incomplete. |
-| Runner ergonomics | 3/5 | `tools/run_regression.py` now supports `--list`, `--dry-run`, live protected execution, live opt-in GET smoke, and live `--suite full`, but batch and other targeted execution parity are still incomplete. |
+| Runner ergonomics | 4/5 | `tools/run_regression.py` now supports `--list`, `--dry-run`, live protected execution, live opt-in GET smoke, live `--suite full`, live parse matrix delegation, direct batch delegation, and selected-fixture batch delegation; structured-reporting parity is the main remaining runner gap. |
 | Regression discipline | 4/5 | The default gate stays narrow, the matrix uses one canonical fixture per file type, and `/documents/batch` caps default live request size at four items. |
 | Endpoint coverage | 2/5 | Live endpoint coverage is still narrow relative to 218 OpenAPI paths, but it now includes `/v1/documents/parse`, `/v1/documents/batch`, and an opt-in cross-group GET smoke lane. |
 | Contract/schema validation | 2/5 | Shared assertions are useful, but success-response validation is selective and there is no systematic OpenAPI drift workflow in operation yet. |
 | Fixture/test data management | 4/5 | The generated registry, canonical fixture policy, JSON normalization, and batch chunking logic are strong and deliberate. |
 | Reporting/artifacts | 4/5 | Raw response capture, structured reports, redaction, and matrix summary rendering are materially better than a typical early-stage regression repo. |
-| CI integration | 3/5 | The protected live baseline workflow is conservative and correct, and a non-live tooling/reporting/skills lane exists; protected live artifact publishing is still missing. |
+| CI integration | 3/5 | The protected live baseline workflow is conservative and correct, a non-live tooling/reporting/skills lane exists, and protected raw artifact publishing is available behind an explicit opt-in variable; broader live lanes remain intentionally absent. |
 | Reliability/flake control | 2/5 | Session-scoped live calls and safe request limits help, but the suite is still fully live and auth-negative timeout acceptance highlights upstream instability. |
 | Documentation/contributor experience | 3/5 | The repo has substantial documentation, but the command story is still mixed and there is no concise guide for adding a new endpoint under a defined taxonomy. |
 | Repo hygiene | 3/5 | Naming and structure are mostly consistent, but there are still overlapping wrappers, partial migration state, and a few command-surface inconsistencies. |
-| Scalability for endpoint expansion | 2/5 | The roadmap anticipates expansion and the repo now has a coverage inventory plus non-live harness, but it still lacks an endpoint onboarding template and enforced category bar. |
+| Scalability for endpoint expansion | 3/5 | The roadmap anticipates expansion and the repo now has a coverage inventory, onboarding checklist, and non-live harness; enforcement is still mostly documentation-driven. |
 
 ## What The Repo Already Does Well
 - Keeps the default live gate intentionally narrow. The protected baseline remains the repo's default signal in `README.md`, `AGENTS.md`, `docs/operations/workflow.md`, and `.github/workflows/protected-baseline.yml`.
-- Separates broader `/parse` breadth from the default gate. `tests/endpoints/parse/conftest.py` hard-gates matrix collection behind `RUN_PARSE_MATRIX=1`, and `tools/reporting/run_parse_matrix_with_summary.py` is the normal opt-in path.
+- Separates broader `/parse` breadth from the default gate. `tests/endpoints/parse/conftest.py` hard-gates matrix collection behind `RUN_PARSE_MATRIX=1`, and `tools/run_regression.py --endpoint parse --category matrix` is the normal opt-in path.
 - Uses deterministic fixture selection instead of uncontrolled matrix sprawl. `tests/endpoints/parse/registry.py` selects one canonical enabled fixture per distinct registry `file_type`, and the current registry resolves to 26 canonical fixtures out of 1,813 enabled records.
 - Treats fixture data as curated source material. `tools/generate_fixture_registry.py`, `tools/onboard_fixture_json.py`, and `tests/endpoints/parse/fixture_json.py` enforce provenance, normalization, and unsupported-format filtering.
 - Reuses live responses to reduce redundant API calls. `tests/endpoints/parse/test_parse.py` and `tests/endpoints/batch/test_batch.py` rely on session-scoped happy-path responses.
@@ -45,12 +45,12 @@ That rating is appropriate because the repository already has a disciplined prot
 - Live endpoint automation still covers only a small subset of the OpenAPI inventory, but it now extends beyond `/v1/documents/parse` and `/v1/documents/batch` through the opt-in GET smoke lane.
 - The suite now has an explicit opt-in cross-endpoint GET smoke lane. `protected` remains the real default gate, while `smoke` is implemented as a bounded GET suite with 200 assertions for covered current endpoints plus exact-status checks for a small set of known non-200 surfaces.
 - Contract and schema validation are still manual and selective. There is no checked-in OpenAPI validator, drift register, or observed-schema comparison workflow in operation.
-- The canonical runner is still only partially real. `tools/run_regression.py` can list and dry-run multiple mappings and now executes live for `--suite protected`, `--suite smoke`, and `--suite full`, but batch and other targeted execution paths remain incomplete.
+- The canonical runner is now real for current protected, smoke, full, parse matrix, direct batch, and selected-fixture batch mappings. Structured reporting is still not fully consolidated under the runner.
 - Offline tooling, reporting, skills, and runner tests are now isolated from eager live client bootstrap when run with `VERIFYIQ_SKIP_DOTENV=1`; live endpoint suites still require live environment configuration by design.
 - Auth coverage is still shallow. `/parse` only checks missing and invalid tenant-token behavior; `/documents/batch` still has only an opt-in auth blocker characterization rather than a closed auth lane, and there is no deeper authz/permission model anywhere.
-- The repo now has a maintained endpoint coverage inventory, but owner-area mapping and an explicit onboarding standard are still thin.
-- CI now covers the live protected baseline and the non-live tooling/reporting/skills lane. The protected live workflow still does not publish artifacts.
-- The command story is still mixed across direct pytest, wrappers, and the partial canonical runner, which increases operator ambiguity.
+- The repo now has a maintained endpoint coverage inventory and onboarding checklist, but owner-area mapping and enforcement are still thin.
+- CI now covers the live protected baseline and the non-live tooling/reporting/skills lane. The protected live workflow can publish raw parse artifacts only when `UPLOAD_PROTECTED_PARSE_ARTIFACTS=true`.
+- The command story is improved, but direct pytest and wrapper surfaces still need compatibility/debug labels until the documented deprecation criteria are met.
 - There is no explicit repo-level decision yet on whether this repository remains parse/batch-focused or becomes the broader multi-endpoint automation hub implied by the roadmap's endpoint-expansion phase.
 
 ## Detailed Assessment By Dimension
@@ -58,7 +58,7 @@ That rating is appropriate because the repository already has a disciplined prot
 ### 1. Test Strategy and Scope
 - Current state: The live strategy is strong for `/parse` and decent for `/documents/batch`, and the repo now has an opt-in cross-group GET smoke lane under `tests/endpoints/get_smoke/`. `/parse` has happy-path, auth-negative, validation, and opt-in matrix coverage in `tests/endpoints/parse/test_parse.py` and `tests/endpoints/parse/test_parse_matrix.py`. `/documents/batch` has happy-path, validation, limit handling, and partial-failure coverage in `tests/endpoints/batch/test_batch.py`. The smoke lane now covers status-200 checks for safely testable current GET endpoints plus exact checks for the known `401`/`403`/`502` surfaces, while the remaining setup-backed, query-backed, and unstable GET routes are still deferred.
 - Professional expectation: A professional API automation repo has a deliberately defined test model that distinguishes protected smoke, regression, contract/schema, auth/authz, negative, and extended lanes across the covered endpoint set.
-- Gap: The current taxonomy exists mostly in docs and roadmap text, not as an enforced runnable model beyond `protected`, `full`, and the parse matrix.
+- Gap: The current taxonomy exists mostly in docs and roadmap text, not as an enforced runnable model beyond the implemented protected, smoke, full, parse matrix, and batch selections.
 - Recommended improvement: Define the minimum required category set per endpoint group and decide whether `protected` remains parse-only or evolves into a curated cross-endpoint smoke lane.
 - Priority: P1
 - Effort: Medium
@@ -74,10 +74,10 @@ That rating is appropriate because the repository already has a disciplined prot
 - Risk if ignored: Regression scope will become harder to reason about as more tests accumulate, and default-suite trust will erode.
 
 ### 3. Runner and Command Ergonomics
-- Current state: `tools/run_regression.py` is a meaningful first step. It supports inventory-backed `--list`, `--dry-run`, default protected execution, and delegated `--suite full` execution. The wrapper surfaces are still heavily used and still documented.
+- Current state: `tools/run_regression.py` supports inventory-backed `--list`, `--dry-run`, default protected execution, opt-in GET smoke, delegated full execution, delegated parse matrix execution, direct batch execution, and selected-fixture batch execution. The wrapper surfaces are still kept as delegated engines or compatibility/debug paths.
 - Professional expectation: One clear operator command should front the suite, with precise list and dry-run behavior, predictable suite/endpoint/category targeting, and minimal overlap.
-- Gap: Live parse matrix and batch execution are still dry-run only from the canonical runner, and broader smoke semantics beyond the current GET 200 lane are still evolving. `README.md` and `docs/operations/workflow.md` are closer to the runner story now, but batch and other targeted parity paths remain incomplete.
-- Recommended improvement: Either complete runner parity for the current useful surfaces or narrow the docs so the repo no longer presents multiple "primary" operator stories.
+- Gap: Current useful live surfaces are callable from the canonical runner, but structured reporting remains split across `tools/run_parse_with_report.py` and delegated wrappers. Broader smoke semantics beyond the current GET 200 lane are still evolving.
+- Recommended improvement: Finish structured-reporting parity and keep wrapper/direct pytest surfaces labeled as delegated, compatibility/debug, or advanced/internal until deprecation criteria are met.
 - Priority: P1
 - Effort: Medium
 - Risk if ignored: Operator confusion remains, and future endpoint onboarding will duplicate command surfaces instead of simplifying them.
@@ -85,7 +85,7 @@ That rating is appropriate because the repository already has a disciplined prot
 ### 4. Test Architecture and Maintainability
 - Current state: The package layout is small and understandable. Shared helpers like `tests/diagnostics.py`, `tests/endpoints/document_contracts.py`, and the artifact modules keep endpoint tests readable. Session-scoped fixtures reduce repeated live requests.
 - Professional expectation: Adding a new endpoint should require a small number of obvious extension points and should not force duplicated client, fixture, artifact, and contract logic.
-- Gap: The current architecture is proven for two endpoints, but categories are not encoded as test metadata, endpoint onboarding is undocumented, and live endpoint suites remain tied to live env loading.
+- Gap: The current architecture is proven for parse, batch, and GET smoke, but categories are not encoded as test metadata and live endpoint suites remain tied to live env loading.
 - Recommended improvement: Preserve the current small-module approach, but define a lightweight onboarding template for new endpoint groups and move live-client setup behind fixtures that only load when needed.
 - Priority: P1
 - Effort: Medium
@@ -121,8 +121,8 @@ That rating is appropriate because the repository already has a disciplined prot
 ### 8. Reporting, Observability, and Artifacts
 - Current state: Reporting is ahead of most repos at this stage. Raw parse and batch response artifacts are captured. The parse matrix wrapper saves terminal output, renders a Markdown summary, and can emit structured JSON and Markdown regression reports. Redaction is centralized.
 - Professional expectation: Reports should help diagnose failures quickly, avoid leaking secrets, and support comparison between runs locally and in CI.
-- Gap: Reporting depth is much stronger for parse than batch. There is no checked-in historical comparison workflow, and CI does not upload artifacts. The current checkout also does not contain generated `reports/`, so recent real-run output quality was not assessable here.
-- Recommended improvement: Keep the existing artifact model, add CI artifact publishing for protected runs, and decide whether batch needs a parallel post-run summary surface.
+- Gap: Reporting depth is much stronger for parse than batch. There is no checked-in historical comparison workflow, and protected CI artifact upload is intentionally disabled unless a repository variable opts in. The current checkout also does not contain generated `reports/`, so recent real-run output quality was not assessable here.
+- Recommended improvement: Keep the existing artifact model, treat protected artifact upload as sensitive and opt-in, and decide whether batch needs a parallel post-run summary surface.
 - Priority: P1
 - Effort: Medium
 - Risk if ignored: Failures stay diagnosable locally but less useful in CI and across time.
@@ -130,8 +130,8 @@ That rating is appropriate because the repository already has a disciplined prot
 ### 9. CI/CD Integration
 - Current state: There is one checked-in live workflow, `.github/workflows/protected-baseline.yml`, and it is appropriately conservative.
 - Professional expectation: CI should run fast non-live validation on every change and reserve live suites for the right gated lanes, with artifact publishing where live evidence matters.
-- Gap: The repo now runs the offline tooling, reporting, skills, and runner discovery checks in CI. The protected live lane still does not publish artifacts.
-- Recommended improvement: Keep the non-live lane current as runner mappings expand, and add protected-run artifact publishing before broadening live CI coverage.
+- Gap: The repo now runs the offline tooling, reporting, skills, and runner discovery checks in CI. The protected live lane can publish raw artifacts only behind an explicit variable gate, so artifact access policy remains an operational decision.
+- Recommended improvement: Keep the non-live lane current as runner mappings expand, and keep protected-run artifact publishing opt-in before considering any broader live CI coverage.
 - Priority: P1
 - Effort: Small
 - Risk if ignored: Regressions in wrappers, reporters, and command mapping can land undetected until someone runs them manually.
@@ -148,8 +148,8 @@ That rating is appropriate because the repository already has a disciplined prot
 ### 11. Coverage Visibility and Endpoint Expansion
 - Current state: The roadmap acknowledges expansion, and `docs/operations/endpoint-coverage-inventory.md` now maps endpoint groups to current automation status and blockers.
 - Professional expectation: A professional suite has a living inventory that shows what is covered, what is not, and what the minimum onboarding bar is for a new endpoint.
-- Gap: The repo can answer endpoint-group status from one inventory, but it still cannot fully answer "which required categories must exist before a new endpoint is promoted" without reading multiple docs and test files.
-- Recommended improvement: Keep the compact endpoint coverage inventory current and add a minimum endpoint onboarding bar.
+- Gap: The repo can answer endpoint-group status and onboarding requirements from one inventory, but the checklist is not enforced by tooling.
+- Recommended improvement: Keep the compact endpoint coverage inventory and onboarding checklist current as smoke and endpoint coverage evolve.
 - Priority: P0
 - Effort: Medium
 - Risk if ignored: Expansion will be ad hoc, and regression scope will become harder to rationalize.
@@ -166,8 +166,8 @@ That rating is appropriate because the repository already has a disciplined prot
 ### 13. Documentation and Contributor Experience
 - Current state: The repo has more documentation than most automation repos at this stage. `README.md`, `AGENTS.md`, `docs/operations/*`, and the roadmap give contributors useful context.
 - Professional expectation: A new engineer should be able to answer three questions quickly: what is the default suite, how do I run non-live checks, and how do I add a new endpoint under the current strategy.
-- Gap: The default command story is still mixed across direct pytest, wrappers, and the canonical runner. There is also no concise contributor guide for adding a new endpoint with the required categories, fixtures, and reporting hooks.
-- Recommended improvement: After runner parity decisions are made, simplify the docs around one normal path and add a short endpoint-onboarding guide.
+- Gap: Direct pytest and wrapper surfaces still exist for valid compatibility/debug reasons, so docs must keep labels sharp. Endpoint onboarding is now documented, but enforcement remains manual.
+- Recommended improvement: Keep one normal runner path in docs, preserve wrapper labels, and turn the onboarding checklist into enforced review expectations as endpoint coverage grows.
 - Priority: P1
 - Effort: Small
 - Risk if ignored: New contributors will continue to learn the suite by reverse-engineering the repo rather than following one clean path.
@@ -175,8 +175,8 @@ That rating is appropriate because the repository already has a disciplined prot
 ### 14. Professional Repo Hygiene
 - Current state: Naming is mostly consistent, repo scope is documented, and obsolete `.codex` reporting entry points are largely called out as removed.
 - Professional expectation: A professional repo keeps the user-facing command surface clean, clearly distinguishes legacy paths, and minimizes stale references.
-- Gap: Parse currently has multiple overlapping entry points (`pytest`, matrix wrapper, full wrapper, targeted report wrapper, and partial canonical runner). Some migration-state inconsistencies remain in code and docs.
-- Recommended improvement: Keep legacy wrappers until parity exists, but tighten the migration boundaries so the repo stops presenting multiple semi-canonical stories.
+- Gap: Parse still has multiple overlapping entry points (`pytest`, matrix wrapper, full wrapper, targeted report wrapper, and canonical runner). They are now labeled more clearly, but deprecation is not complete.
+- Recommended improvement: Keep legacy wrappers until deprecation criteria are met, and continue tightening docs so the runner remains the normal operator story.
 - Priority: P2
 - Effort: Medium
 - Risk if ignored: Surface-area duplication will continue to grow faster than the test suite itself.
@@ -293,23 +293,21 @@ Why:
 ## Runner and CI Assessment
 `tools/run_regression.py` current state:
 
-- Good first slice.
-- It supports inventory-backed `--list` and `--dry-run` for protected, full, parse matrix, batch, and batch-with-fixtures mappings.
-- It supports live execution for `--suite protected`, `--suite smoke`, and `--suite full`.
-- Planned suites and categories are still visible, but most targeted mappings are not yet runnable.
+- Good current canonical runner for the supported suite and endpoint selections.
+- It supports inventory-backed `--list` and `--dry-run` for protected, smoke, full, parse matrix, batch, and batch-with-fixtures mappings.
+- It supports live execution for `--suite protected`, `--suite smoke`, `--suite full`, `--endpoint parse --category matrix`, `--endpoint batch`, and `--endpoint batch --fixtures-json ...`.
+- Planned suites and categories are still visible, but category-level mappings such as `contract`, `auth`, and `negative` are not yet runnable.
 
 Remaining runner gaps:
 
-- parse matrix is not live-runnable from the canonical runner
-- batch is not yet live-runnable from the canonical runner
+- structured reporting remains split across delegated wrappers and `tools/run_parse_with_report.py`
 - categories such as `contract`, `auth`, and `negative` are planned but not mapped
-- legacy direct pytest and wrapper commands remain documented as implementation/debug paths, so deprecation boundaries still need active maintenance
-- a few migration-state inconsistencies remain inside the runner itself
+- legacy direct pytest and wrapper commands remain documented as delegated engines, compatibility/debug paths, or advanced/internal paths, so deprecation boundaries still need active maintenance
 
 Legacy wrapper status:
 
-- `tools/run_parse_full_regression.py` remains useful and should stay until runner parity exists.
-- `tools/reporting/run_parse_matrix_with_summary.py` is still the real parse matrix engine.
+- `tools/run_parse_full_regression.py` remains useful as the delegated full-regression engine.
+- `tools/reporting/run_parse_matrix_with_summary.py` is still the delegated parse matrix engine.
 - `tools/run_batch_with_fixtures.py` contains meaningful chunking and warning logic worth preserving.
 - `tools/run_parse_with_report.py` is the clearest over-duplicated surface and best deprecation candidate once reporting parity exists in the runner.
 
@@ -318,12 +316,12 @@ Protected CI status:
 - Correctly narrow.
 - Secret-aware.
 - Still aligned with the protected baseline philosophy.
-- Missing artifact publishing.
+- Raw artifact publishing exists, but only behind the explicit repository variable `UPLOAD_PROTECTED_PARSE_ARTIFACTS=true`.
 
 What should go into CI next:
 
-- protected live artifact publishing
-- deliberate additions to non-live runner discovery checks as mappings become safely dry-runnable
+- keep non-live runner discovery checks aligned as mappings evolve
+- use protected live artifact publishing only when artifact access and sensitivity are acceptable
 - broader live lanes only after runtime, stability, and ownership are understood
 
 What should not go into CI next:
@@ -340,16 +338,16 @@ What should not go into CI next:
 | Item | Reason | Expected Value | Suggested Owner Area | Validation Criteria |
 | --- | --- | --- | --- | --- |
 | Preserve non-live pytest isolation | The former eager live-bootstrap gap is resolved for tooling/reporting/skills validation; keep it from regressing. | Protects fast local and CI feedback without secrets. | Test infrastructure | `VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting/ tests/skills/ -v` runs in a clean env. |
-| Maintain the endpoint coverage inventory | The repo now has `docs/operations/endpoint-coverage-inventory.md`; it still needs to stay aligned as smoke and endpoint coverage evolve. | Keeps expansion and regression scope decisions evidence-based. | QA architecture / docs | The checked-in inventory maps covered groups, categories, priority, and gaps. |
+| Maintain the endpoint coverage inventory and onboarding checklist | The repo now has `docs/operations/endpoint-coverage-inventory.md`; it still needs to stay aligned as smoke and endpoint coverage evolve. | Keeps expansion and regression scope decisions evidence-based. | QA architecture / docs | The checked-in inventory maps covered groups, categories, priority, gaps, onboarding requirements, and CI eligibility. |
 | Execute the `/parse` contract-drift pilot | Contract validation is the biggest quality-system gap in current coverage claims. | Creates a repeatable way to reconcile spec, tests, and live behavior. | Contract/schema | One checked-in drift artifact exists for `/v1/documents/parse` with explicit decisions. |
-| Resolve the command-surface story | Docs and commands still present multiple semi-primary paths. | Reduces contributor confusion and supports future expansion. | Runner / operations docs | README, workflow, and command registry all tell the same primary-runner story. |
+| Finish structured-reporting parity | Current live runner parity is stronger, but targeted report behavior still lives outside the runner. | Reduces contributor confusion and supports future wrapper deprecation. | Runner / operations docs | README, workflow, and command registry all tell the same primary-runner story, with report-specific exceptions labeled advanced/internal. |
 
 ### Near-Term Improvements
 
 | Item | Reason | Expected Value | Suggested Owner Area | Validation Criteria |
 | --- | --- | --- | --- | --- |
 | Extend non-live CI discovery as runner mappings grow | The non-live workflow exists; future runner mappings should be added deliberately. | Protects the non-live infrastructure that operators depend on. | CI / tooling | The non-live workflow runs successfully without secrets and covers current safe discovery surfaces. |
-| Define the minimum endpoint onboarding bar | New endpoints currently have no enforced category checklist. | Prevents uneven or low-value endpoint expansion. | QA architecture | A short onboarding standard exists and is referenced by the roadmap. |
+| Enforce the minimum endpoint onboarding bar | New endpoints have a checklist but no tooling or review gate. | Prevents uneven or low-value endpoint expansion. | QA architecture | New endpoint proposals include safety class, suite lane, required categories, fixtures/prereqs, artifacts, runner mapping, CI eligibility, and owner/blocker notes. |
 | Add auth-negative coverage for `/documents/batch` | Batch has no auth lane today. | Brings batch closer to parse coverage maturity. | Endpoint tests | `/documents/batch` has at least one supported auth-negative scenario. |
 | Decide whether `protected` stays parse-only or becomes cross-endpoint smoke | The roadmap and docs still mix these ideas. | Stabilizes regression selection discipline. | QA strategy / roadmap | The roadmap and runner taxonomy use one explicit default-suite definition. |
 
@@ -357,8 +355,8 @@ What should not go into CI next:
 
 | Item | Reason | Expected Value | Suggested Owner Area | Validation Criteria |
 | --- | --- | --- | --- | --- |
-| Bring batch and parse-matrix live execution under `tools/run_regression.py` | The canonical runner is still only partial. | Simplifies operator execution and deprecation planning. | Runner / tooling | Batch and parse matrix are callable through the runner with parity to current wrappers. |
-| Add CI artifact publishing for protected live runs | Live failures currently lose some value in CI. | Improves remote triage and historical evidence quality. | CI / reporting | CI uploads protected-run artifacts and exposes them in job output. |
+| Keep batch and parse-matrix runner parity covered | The canonical runner now delegates these paths, so regressions need to stay caught offline. | Simplifies operator execution and deprecation planning. | Runner / tooling | Batch and parse matrix remain callable through the runner with parity to current wrappers. |
+| Govern protected live artifact publishing | Live failures need triage value, but raw artifacts can be sensitive. | Improves remote triage only when explicitly enabled. | CI / reporting | CI uploads protected-run artifacts only when `UPLOAD_PROTECTED_PARSE_ARTIFACTS=true`, with short retention and no arbitrary `reports/` upload. |
 | Add a lightweight fixture health view | The repo relies heavily on curated remote fixtures. | Helps distinguish fixture drift from service regressions. | Fixtures / reporting | A non-live command or doc summarizes fixture counts, statuses, and notable warnings. |
 | Extend contract-drift workflow to `/documents/batch` | Batch should follow parse once the parse pilot is stable. | Makes contract discipline consistent across in-scope endpoints. | Contract/schema | `/documents/batch` has a checked-in drift note or schema assessment. |
 
@@ -372,7 +370,7 @@ What should not go into CI next:
 
 ## What Not To Do Yet
 - Do not make parse matrix, full regression, or batch live coverage part of the default no-argument regression until runtime and failure ownership are better characterized.
-- Do not deprecate `tools/run_parse_full_regression.py`, `tools/reporting/run_parse_matrix_with_summary.py`, or `tools/run_batch_with_fixtures.py` before canonical-runner parity exists.
+- Do not deprecate `tools/run_parse_full_regression.py`, `tools/reporting/run_parse_matrix_with_summary.py`, or `tools/run_batch_with_fixtures.py` before the direct-use and compatibility/debug criteria in `docs/operations/regression-runner-plan.md` are met.
 - Do not trust `official-openapi.json` blindly for success-schema validation while the current spec still uses generic object responses for parse and batch.
 - Do not expand CI to broad live suites just because offline infrastructure tests now run in CI; broad live lanes still need explicit runtime, stability, and ownership decisions.
 - Do not chase exhaustive endpoint or fixture permutations; keep selection risk-based and representative.
@@ -387,23 +385,23 @@ What should not go into CI next:
 - Reporting and artifacts: raw response artifacts, per-run summaries, structured reports, redaction, and CI artifact publishing for the live lanes that matter.
 - CI model: offline infrastructure tests on every change, protected live parse coverage on gated conditions, and broader live lanes only as explicit opt-in or scheduled jobs.
 - Schema validation model: OpenAPI is the intended contract source, observed safe behavior is captured separately, and drift decisions are recorded explicitly instead of guessed.
-- Deprecation model: legacy wrappers stay until the runner has real parity, then they are marked secondary and removed deliberately instead of drifting indefinitely.
+- Deprecation model: legacy wrappers stay until runner parity, docs, CI, direct-use, and compatibility/debug criteria are met, then direct use is reduced deliberately instead of drifting indefinitely.
 
 ## Prioritized Action Plan
 
 | Priority | Action | Why it matters | Effort | Risk | Validation signal | Roadmap phase or doc to update |
 | --- | --- | --- | --- | --- | --- | --- |
 | Guardrail | Keep offline pytest suites decoupled from live env imports | Preserves fast non-live validation and CI without secrets. | Small | Medium | Offline pytest suites run cleanly with `VERIFYIQ_SKIP_DOTENV=1`. | `docs/operations/workflow.md`, `.github/workflows/non-live-validation.yml` |
-| Guardrail | Keep the checked-in endpoint coverage inventory current | Keeps scope, gaps, and next additions explicit. | Small | Medium | One document maps covered and uncovered endpoint groups plus required categories. | Phase 0 / Phase 6 |
+| Guardrail | Keep the checked-in endpoint coverage inventory and onboarding checklist current | Keeps scope, gaps, and next additions explicit. | Small | Medium | One document maps covered and uncovered endpoint groups plus required categories, safety class, artifacts, runner mapping, CI eligibility, and owner/blocker notes. | Phase 0 / Phase 6 |
 | P0 | Run the `/parse` contract-drift pilot | Creates a real contract reconciliation workflow. | Medium | High | Parse drift decisions are documented against safe artifacts. | Phase 3 |
 | P1 | Extend non-live CI only as safe discovery surfaces grow | Protects the runner and reporting infrastructure continuously. | Small | Medium | CI passes without live secrets and fails on wrapper regressions. | Phase 5, `.github/workflows/non-live-validation.yml` |
 | P1 | Decide whether `protected` remains parse-only or evolves into curated smoke | Stabilizes default-suite identity. | Small | High | Roadmap, workflow docs, and runner all define the same default suite. | Phase 1 |
-| P1 | Define the minimum endpoint onboarding standard | Prevents uneven coverage as endpoints are added. | Medium | Medium | New endpoint proposals include categories, safety class, fixture plan, and runner mapping. | Phase 1 / Phase 6 |
+| P1 | Enforce the minimum endpoint onboarding standard | Prevents uneven coverage as endpoints are added. | Medium | Medium | New endpoint proposals include categories, safety class, fixture plan, artifact expectations, runner mapping, CI eligibility, and owner/blocker notes. | Phase 1 / Phase 6 |
 | P1 | Add `/documents/batch` auth-negative coverage | Closes a basic category gap on an in-scope endpoint. | Small | Medium | Batch endpoint has at least one reliable auth-negative check. | Phase 1 |
 | P1 | Converge docs around the real operator path | Reduces confusion between direct pytest, wrappers, and runner usage. | Small | Medium | README, workflow, and command registry no longer disagree on the normal path. | `README.md`, `docs/operations/*` |
-| P1 | Add CI artifact publishing for protected runs | Improves remote diagnosis of live failures. | Medium | Medium | Protected CI exposes downloadable artifacts. | Phase 5, `.github/workflows/protected-baseline.yml` |
-| P2 | Bring parse matrix live execution under `tools/run_regression.py` | Moves the runner closer to real parity. | Medium | Medium | Runner can execute parse matrix with current wrapper behavior preserved. | Phase 4 |
-| P2 | Bring batch live execution under `tools/run_regression.py` | Simplifies operator execution and future deprecation. | Medium | Medium | Runner executes batch and batch-with-fixtures parity paths. | Phase 4 |
+| P1 | Govern CI artifact publishing for protected runs | Improves remote diagnosis only when artifact sensitivity is acceptable. | Small | Medium | Protected CI exposes downloadable raw artifacts only when `UPLOAD_PROTECTED_PARSE_ARTIFACTS=true` and retains them briefly. | Phase 5, `.github/workflows/protected-baseline.yml` |
+| P2 | Keep parse matrix runner parity covered | Prevents regression in delegated matrix execution. | Small | Medium | Runner can execute parse matrix with current wrapper behavior preserved. | Phase 4 |
+| P2 | Keep batch runner parity covered | Prevents regression in delegated batch execution. | Small | Medium | Runner executes batch and batch-with-fixtures parity paths. | Phase 4 |
 | P2 | Add a fixture health or inventory view | Makes fixture drift easier to separate from service regressions. | Medium | Low | Non-live output summarizes registry size, canonical coverage, and warnings. | Phase 0 / docs |
 | P2 | Add batch-oriented summary reporting comparable to parse matrix summaries | Reporting quality is currently uneven across in-scope endpoints. | Medium | Low | Batch runs can emit a concise structured summary and failure classification. | Phase 5 / reporting docs |
 | P3 | Add the next safe document-processing endpoint only after scope is explicit | Prevents expansion by accident. | Medium | Medium | New endpoint onboarding follows the defined template and stays out of default regression initially. | Phase 6 |

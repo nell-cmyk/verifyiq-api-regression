@@ -72,6 +72,79 @@ def get_smoke_json(client: httpx.Client, case: GetSmokeCase, *, context: str | N
     )
 
 
+def _skip_missing_setup_prerequisite(*, case: GetSmokeCase, prerequisite: str, detail: str) -> None:
+    pytest.skip(
+        "Skipping setup-backed detail GET smoke: "
+        f"missing prerequisite {prerequisite}; {case.path} {detail}."
+    )
+
+
+def require_setup_list(
+    body: Any,
+    case: GetSmokeCase,
+    *,
+    fields: tuple[str, ...],
+    prerequisite: str,
+    item_label: str,
+) -> list[Any]:
+    if not isinstance(body, dict):
+        pytest.fail(f"{case.path} response was not a JSON object; cannot derive {prerequisite}.")
+
+    empty_fields: list[str] = []
+    for field in fields:
+        if field not in body:
+            continue
+        value = body[field]
+        if not isinstance(value, list):
+            pytest.fail(
+                f"{case.path} field {field!r} was not a list; cannot derive {prerequisite}."
+            )
+        if value:
+            return value
+        empty_fields.append(field)
+
+    if empty_fields:
+        _skip_missing_setup_prerequisite(
+            case=case,
+            prerequisite=prerequisite,
+            detail=f"returned no {item_label} items in field(s) {', '.join(empty_fields)}",
+        )
+    pytest.fail(
+        f"{case.path} response did not contain expected list field(s) {fields!r}; "
+        f"cannot derive {prerequisite}."
+    )
+
+
+def first_mapping_value(
+    items: list[Any],
+    *,
+    keys: tuple[str, ...],
+    source_case: GetSmokeCase,
+    prerequisite: str,
+    item_label: str,
+) -> str:
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            pytest.fail(
+                f"{source_case.path} {item_label} entry #{index} was not an object; "
+                f"cannot derive {prerequisite}."
+            )
+        for key in keys:
+            raw_value = item.get(key)
+            if raw_value is None:
+                continue
+            value = str(raw_value).strip()
+            if value:
+                return value
+
+    _skip_missing_setup_prerequisite(
+        case=source_case,
+        prerequisite=prerequisite,
+        detail=f"returned no usable {item_label} items with key(s) {', '.join(keys)}",
+    )
+    raise AssertionError("unreachable")
+
+
 def assert_get_smoke_200(client: httpx.Client, case: GetSmokeCase) -> None:
     get_smoke_response(client, case)
 

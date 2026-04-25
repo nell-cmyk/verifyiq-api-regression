@@ -72,3 +72,12 @@ jobs:
           PARSE_FIXTURE_FILE: ${{ secrets.PARSE_FIXTURE_FILE }}
           PARSE_FIXTURE_FILE_TYPE: ${{ secrets.PARSE_FIXTURE_FILE_TYPE }}
         run: python tools/run_regression.py --suite protected
+
+      - name: Upload protected parse response artifacts
+        if: ${{ always() && steps.secrets.outputs.ready == 'true' && vars.UPLOAD_PROTECTED_PARSE_ARTIFACTS == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: protected-parse-response-artifacts
+          path: reports/parse/responses/
+          if-no-files-found: ignore
+          retention-days: 7

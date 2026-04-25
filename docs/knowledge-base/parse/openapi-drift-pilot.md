@@ -11,6 +11,7 @@ It intentionally separates three things:
 ## Evidence Used In This Pass
 - `official-openapi.json`
 - `tests/endpoints/parse/test_parse.py`
+- `tests/endpoints/batch/test_batch.py`
 - `tests/endpoints/document_contracts.py`
 - `tests/diagnostics.py`
 - `tools/reporting/render_regression_summary.py`
@@ -18,6 +19,13 @@ It intentionally separates three things:
 
 Current blocker:
 - No checked-in `reports/` artifacts were present in the working tree during this pass, so the runtime-observed 200 and 422 payload shapes could not be re-compared from saved evidence.
+
+## Current Non-Live Facts
+- `official-openapi.json` documents `/v1/documents/parse` and `/v1/documents/batch` `200` responses as generic JSON objects with `additionalProperties: true`.
+- Current parse tests assert stronger success behavior than the spec by requiring stable fields such as `fileType`, `documentQuality`, `summaryOCR`, `summaryResult`, and `calculatedFields`.
+- Current batch tests assert stronger success behavior than the spec by requiring top-level keys such as `summary`, `results`, `cacheStatistics`, `crosscheckResults`, and `aggregated_gshare_fields`, plus per-item document-result expectations for successful items.
+- Safe observed artifacts must come from approved protected, matrix, or batch runs. Do not create new live probes just for this pilot without explicit validation intent.
+- Raw artifacts may contain sensitive response data, so drift notes should summarize field shapes and decisions rather than paste raw payloads.
 
 ## Intended Contract From OpenAPI
 
@@ -129,6 +137,13 @@ Then compare:
 - `official-openapi.json`
 - fresh raw artifacts under `reports/parse/responses/`
 - any structured output under `reports/regression/` when `--report` is enabled intentionally
+
+## Pilot Next-Step Checklist
+1. Artifact source: choose an approved protected run or matrix run and record the command, run date, and artifact directory. Use batch artifacts only for the later `/documents/batch` extension.
+2. Sensitivity handling: inspect raw artifacts locally, summarize only field presence, type shape, and decision evidence, and avoid storing raw payloads, secrets, credentials, or full response bodies in docs or Mind.
+3. Spec-vs-observed comparison: compare `ParseRequest`, `HTTPValidationError`, and the generic parse success schema against current request payloads, validation responses, and representative `200` artifacts.
+4. Decision category: classify each mismatch as `spec stale`, `implementation bug`, `test stale`, or `unresolved owner question`.
+5. Follow-up action: for accepted drift, update the spec or tests in a separate reviewed pass; for unresolved drift, leave a blocker note with the needed owner/evidence.
 
 ## Decision Boundary
 - Do not update `official-openapi.json` until fresh safe evidence confirms whether `pipeline` belongs in the intended request contract and what the documented success schema should contain.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 import yaml
 
@@ -55,3 +57,10 @@ def test_shared_registry_loader_rejects_missing_required_fixture_keys(tmp_path):
     with pytest.raises(RuntimeError, match="missing required keys"):
         load_registry(registry_path)
 
+
+def test_checked_in_shared_and_parse_compat_registries_are_identical():
+    repo_root = Path(__file__).resolve().parents[2]
+    shared_registry = repo_root / "tests" / "fixtures" / "fixture_registry.yaml"
+    parse_compat_registry = repo_root / "tests" / "endpoints" / "parse" / "fixture_registry.yaml"
+
+    assert shared_registry.read_bytes() == parse_compat_registry.read_bytes()

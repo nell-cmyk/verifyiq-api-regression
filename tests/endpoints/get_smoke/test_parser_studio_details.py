@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from tests.endpoints.get_smoke.helpers import GetSmokeCase, assert_get_smoke_200, get_smoke_json
+from tests.endpoints.get_smoke.helpers import (
+    GetSmokeCase,
+    assert_get_smoke_200,
+    first_mapping_value,
+    get_smoke_json,
+    require_setup_list,
+)
 
 
 _DOC_TYPES_CASE = GetSmokeCase("parser-doc-types-v1", "/parser_studio/api/v1/document-types")
@@ -12,35 +18,52 @@ _TENANTS_CASE = GetSmokeCase("parser-tenants-v1", "/parser_studio/api/v1/tenants
 @pytest.fixture(scope="module")
 def parser_document_type(client) -> str:
     body = get_smoke_json(client, _DOC_TYPES_CASE)
-    document_types = body.get("document_types")
-    assert isinstance(document_types, list) and document_types, (
-        "Parser Studio document-types response did not contain any document_types entries."
+    document_types = require_setup_list(
+        body,
+        _DOC_TYPES_CASE,
+        fields=("document_types",),
+        prerequisite="Parser Studio active document_type",
+        item_label="document-type",
     )
 
-    for entry in document_types:
+    for index, entry in enumerate(document_types, start=1):
         if not isinstance(entry, dict):
-            continue
+            pytest.fail(
+                "Parser Studio document-types entry "
+                f"#{index} was not an object; cannot derive active document_type."
+            )
         doc_type = str(entry.get("document_type", "")).strip()
         if doc_type and str(entry.get("status", "")).strip().lower() == "active":
             return doc_type
 
-    pytest.fail("Parser Studio document-types response did not contain an active document_type.")
+    pytest.skip(
+        "Skipping setup-backed detail GET smoke: missing prerequisite Parser Studio active document_type; "
+        f"{_DOC_TYPES_CASE.path} returned no active document-type items."
+    )
 
 
 @pytest.fixture(scope="module")
 def parser_prompt_version_ref(client) -> tuple[str, str]:
     body = get_smoke_json(client, _DOC_TYPES_CASE)
-    document_types = body.get("document_types")
-    assert isinstance(document_types, list) and document_types, (
-        "Parser Studio document-types response did not contain any document_types entries."
+    document_types = require_setup_list(
+        body,
+        _DOC_TYPES_CASE,
+        fields=("document_types",),
+        prerequisite="Parser Studio prompt version reference",
+        item_label="document-type",
     )
 
-    for entry in document_types:
+    saw_document_type = False
+    for index, entry in enumerate(document_types, start=1):
         if not isinstance(entry, dict):
-            continue
+            pytest.fail(
+                "Parser Studio document-types entry "
+                f"#{index} was not an object; cannot derive prompt version reference."
+            )
         doc_type = str(entry.get("document_type", "")).strip()
         if not doc_type:
             continue
+        saw_document_type = True
         versions_body = get_smoke_json(
             client,
             GetSmokeCase(
@@ -48,28 +71,57 @@ def parser_prompt_version_ref(client) -> tuple[str, str]:
                 f"/parser_studio/api/v1/document-types/{doc_type}/prompt/versions",
             ),
         )
+        if not isinstance(versions_body, dict):
+            pytest.fail(
+                "Parser Studio prompt-version inventory response was not an object "
+                f"for document_type {doc_type!r}."
+            )
         versions = versions_body.get("versions")
-        if not isinstance(versions, list) or not versions:
+        if not isinstance(versions, list):
+            pytest.fail(
+                "Parser Studio prompt-version inventory response did not contain a versions list "
+                f"for document_type {doc_type!r}."
+            )
+        if not versions:
             continue
-        first = versions[0]
-        if not isinstance(first, dict):
-            continue
-        version_id = str(first.get("version_id", "")).strip()
-        if version_id:
-            return doc_type, version_id
+        for version_index, entry in enumerate(versions, start=1):
+            if not isinstance(entry, dict):
+                pytest.fail(
+                    "Parser Studio prompt-version entry "
+                    f"#{version_index} for document_type {doc_type!r} was not an object."
+                )
+            version_id = str(entry.get("version_id", "")).strip()
+            if version_id:
+                return doc_type, version_id
 
-    pytest.fail("Parser Studio prompt-version inventory did not contain any version_id entries.")
+    if not saw_document_type:
+        pytest.skip(
+            "Skipping setup-backed detail GET smoke: missing prerequisite Parser Studio prompt version reference; "
+            f"{_DOC_TYPES_CASE.path} returned no usable document_type values."
+        )
+    pytest.skip(
+        "Skipping setup-backed detail GET smoke: missing prerequisite Parser Studio prompt version reference; "
+        "prompt-version list endpoints returned no usable version_id entries."
+    )
 
 
 @pytest.fixture(scope="module")
 def parser_tenant_api_key(client) -> str:
     body = get_smoke_json(client, _TENANTS_CASE)
-    tenants = body.get("tenants")
-    assert isinstance(tenants, list) and tenants, "Parser Studio tenants response did not contain any tenants."
-
-    api_key = str(tenants[0].get("api_key", "")).strip() if isinstance(tenants[0], dict) else ""
-    assert api_key, "Parser Studio tenants response did not include api_key for the first tenant."
-    return api_key
+    tenants = require_setup_list(
+        body,
+        _TENANTS_CASE,
+        fields=("tenants",),
+        prerequisite="Parser Studio tenant api_key",
+        item_label="tenant",
+    )
+    return first_mapping_value(
+        tenants,
+        keys=("api_key",),
+        source_case=_TENANTS_CASE,
+        prerequisite="Parser Studio tenant api_key",
+        item_label="tenant",
+    )
 
 
 @pytest.mark.parametrize(

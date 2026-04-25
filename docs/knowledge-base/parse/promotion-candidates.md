@@ -5,12 +5,15 @@ Use this file to record reviewed promotion candidates for canonical fixtures tha
 See also: [Fixtures and Promotion](fixtures-and-promotion.md), [Triage Patterns](triage-patterns.md)
 
 Rules:
-- This file is the reviewed candidate ledger only.
+- This file is a reviewed candidate ledger, not generated truth.
 - The spreadsheet remains the human source of truth.
 - Generated YAML remains derived data.
 - Pytest execution must stay side-effect free.
 - Candidate status does not mean promoted status.
 - Use the generated run summary under `reports/parse/matrix/` as draft source material, not as repo truth.
+- Pending entries with sparse evidence require human review before promotion, rejection, compaction, or archive.
+- Generated reports must not blindly overwrite durable review decisions in this file.
+- Compaction or archive of pending entries requires explicit maintainer approval.
 - Do not turn this page into a run-by-run session log.
 
 ## Entry Template

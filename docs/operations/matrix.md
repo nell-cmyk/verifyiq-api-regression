@@ -12,14 +12,15 @@ without `RUN_PARSE_MATRIX=1` raises a collection error.
 ## Post-Run Summary
 Use these commands in this order:
 
-1. Canonical matrix wrapper and summary:
+1. Canonical runner matrix selection and summary:
 
 ```bash
-./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
+./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix
 ```
 
 This canonical operator path:
 - runs the opt-in `/parse` matrix
+- delegates to `tools/reporting/run_parse_matrix_with_summary.py`
 - saves terminal output to `reports/parse/matrix/latest-terminal.txt`
 - generates `reports/parse/matrix/latest-summary.md`
 - accepts `--report` to also emit structured per-run artifacts under `reports/regression/<timestamp>/`
@@ -37,7 +38,7 @@ Use `--mode apply` only after reviewing the generated draft summary.
 3. Full regression wrapper when you want the stronger gate:
 
 ```bash
-./.venv/bin/python tools/run_parse_full_regression.py
+./.venv/bin/python tools/run_regression.py --suite full
 ```
 
 This runs:
@@ -54,8 +55,9 @@ RUN_PARSE_MATRIX=1 ./.venv/bin/python -m pytest tests/endpoints/parse/test_parse
 ./.venv/bin/python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt
 ```
 
-5. `tools/reporting/` is the only supported reporting surface:
-- Use `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` for matrix runs and saved summaries.
+5. Reporting surfaces:
+- Use `./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix` for normal matrix runs and saved summaries.
+- Use `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` as the delegated engine and compatibility/debug path.
 - Use `./.venv/bin/python tools/reporting/render_regression_summary.py ...` for rerendering from saved terminal output.
 - Do not document or rely on `.codex/.../scripts/...` reporting entrypoints.
 

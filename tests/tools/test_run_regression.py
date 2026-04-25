@@ -204,6 +204,106 @@ def test_parse_matrix_dry_run_prints_matrix_wrapper_command():
     assert "tools/reporting/run_parse_matrix_with_summary.py" in stdout
 
 
+def test_parse_matrix_executes_matrix_wrapper_and_returns_subprocess_code():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 11
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(module, ["--endpoint", "parse", "--category", "matrix"])
+
+    assert rc == 11
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        str(module.PARSE_MATRIX_WRAPPER),
+    )
+    assert "Executing command:" in stdout
+
+
+def test_parse_matrix_executes_wrapper_with_supported_forwarded_flags():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 0
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(
+        module,
+        [
+            "--endpoint",
+            "parse",
+            "--category",
+            "matrix",
+            "--report",
+            "--file-types",
+            "Payslip,TIN",
+            "--k",
+            "contract",
+        ],
+    )
+
+    assert rc == 0
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        str(module.PARSE_MATRIX_WRAPPER),
+        "--report",
+        "--file-types",
+        "Payslip,TIN",
+        "--k",
+        "contract",
+    )
+    assert "Executing command:" in stdout
+
+
+def test_parse_matrix_executes_wrapper_with_fixtures_json():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 0
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(
+        module,
+        [
+            "--endpoint",
+            "parse",
+            "--category",
+            "matrix",
+            "--fixtures-json",
+            "fixtures.json",
+            "--k",
+            "focus",
+        ],
+    )
+
+    assert rc == 0
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        str(module.PARSE_MATRIX_WRAPPER),
+        "--fixtures-json",
+        "fixtures.json",
+        "--k",
+        "focus",
+    )
+    assert "Executing command:" in stdout
+
+
 def test_batch_dry_run_prints_batch_pytest_command():
     module = _load_module()
     module._run_command = _no_call_runner
@@ -213,6 +313,58 @@ def test_batch_dry_run_prints_batch_pytest_command():
     assert rc == 0
     assert "Selection: endpoint=batch" in stdout
     assert "-m pytest tests/endpoints/batch/ -v" in stdout
+
+
+def test_batch_executes_batch_pytest_command_and_returns_subprocess_code():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 13
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(module, ["--endpoint", "batch"])
+
+    assert rc == 13
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        "-m",
+        "pytest",
+        "tests/endpoints/batch/",
+        "-v",
+    )
+    assert "Executing command:" in stdout
+
+
+def test_batch_executes_batch_pytest_command_with_supported_k_flag():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 0
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(module, ["--endpoint", "batch", "--k", "happy"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        "-m",
+        "pytest",
+        "tests/endpoints/batch/",
+        "-v",
+        "-k",
+        "happy",
+    )
+    assert "Executing command:" in stdout
 
 
 def test_batch_fixtures_json_dry_run_prints_batch_wrapper_command():
@@ -228,6 +380,35 @@ def test_batch_fixtures_json_dry_run_prints_batch_wrapper_command():
     assert "Selection: endpoint=batch --fixtures-json" in stdout
     assert "tools/run_batch_with_fixtures.py" in stdout
     assert "--fixtures-json some.json" in stdout
+
+
+def test_batch_fixtures_json_executes_batch_wrapper_and_returns_subprocess_code():
+    module = _load_module()
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run_command(command: tuple[str, ...]) -> int:
+        calls.append(command)
+        return 17
+
+    module._run_command = fake_run_command
+
+    rc, stdout, stderr = _invoke(
+        module,
+        ["--endpoint", "batch", "--fixtures-json", "some.json", "--k", "happy"],
+    )
+
+    assert rc == 17
+    assert stderr == ""
+    assert len(calls) == 1
+    assert calls[0] == (
+        sys.executable,
+        str(module.BATCH_WRAPPER),
+        "--fixtures-json",
+        "some.json",
+        "--k",
+        "happy",
+    )
+    assert "Executing command:" in stdout
 
 
 def test_no_argument_invocation_executes_protected_live_path():
@@ -384,7 +565,7 @@ def test_planned_suite_reports_not_yet_mapped():
 
     assert rc != 0
     assert stdout == ""
-    assert "planned but not mapped in this first slice" in stderr
+    assert "planned but not mapped in the current runner" in stderr
 
 
 def test_suite_full_dry_run_does_not_call_subprocess():
@@ -398,26 +579,38 @@ def test_suite_full_dry_run_does_not_call_subprocess():
     assert "Executing command:" not in stdout
 
 
-def test_parse_matrix_without_dry_run_exits_nonzero_without_execution():
+def test_parse_matrix_rejects_mutually_exclusive_fixture_targeting():
     module = _load_module()
     module._run_command = _no_call_runner
 
-    rc, stdout, stderr = _invoke(module, ["--endpoint", "parse", "--category", "matrix"])
+    rc, stdout, stderr = _invoke(
+        module,
+        [
+            "--endpoint",
+            "parse",
+            "--category",
+            "matrix",
+            "--fixtures-json",
+            "fixtures.json",
+            "--file-types",
+            "Payslip",
+        ],
+    )
 
     assert rc != 0
     assert stdout == ""
-    assert "Only protected, smoke, and full live execution are implemented so far" in stderr
+    assert "--fixtures-json and --file-types are mutually exclusive for parse matrix" in stderr
 
 
-def test_batch_without_dry_run_exits_nonzero_without_execution():
+def test_batch_rejects_unsupported_report_flag():
     module = _load_module()
     module._run_command = _no_call_runner
 
-    rc, stdout, stderr = _invoke(module, ["--endpoint", "batch"])
+    rc, stdout, stderr = _invoke(module, ["--endpoint", "batch", "--report"])
 
     assert rc != 0
     assert stdout == ""
-    assert "Only protected, smoke, and full live execution are implemented so far" in stderr
+    assert "--report is not supported for --endpoint batch" in stderr
 
 
 def test_suite_extended_without_dry_run_exits_nonzero_without_execution():
@@ -428,4 +621,4 @@ def test_suite_extended_without_dry_run_exits_nonzero_without_execution():
 
     assert rc != 0
     assert stdout == ""
-    assert "Only protected, smoke, and full live execution are implemented so far" in stderr
+    assert "Live execution is not implemented for this selection" in stderr

@@ -115,10 +115,10 @@ VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting
 ./.venv/bin/python tools/run_regression.py
 ```
 
-9. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical matrix wrapper:
+9. If the change touches broader `/parse` coverage, reporting, fixture mapping, or matrix triage, run the canonical runner matrix selection:
 
 ```bash
-./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
+./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix
 ```
 
 10. If you want the stronger explicit gate, run full regression:
@@ -133,16 +133,23 @@ VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting
 ./.venv/bin/python tools/run_regression.py --suite smoke
 ```
 
-12. Review generated artifacts from the validation surface you used.
-13. If the task produced durable repo truth, promote it automatically in the same pass instead of leaving it only in Mind. Update `docs/knowledge-base/repo-roadmap.md` for project status and sequencing, `docs/operations/*` for command/workflow changes, `docs/knowledge-base/*` for durable findings, and `AGENTS.md` only for stable repo-wide rules.
-14. Before handoff or commit, the agent should save an explicit durable Mind summary when needed and run the repo-local finish step. In Codex this remains explicit, but it should not be left for the user to remember:
+12. If the change touches `/documents/batch` tests, fixtures, or selected-fixture wrapper behavior, use the canonical batch selection:
+
+```bash
+./.venv/bin/python tools/run_regression.py --endpoint batch
+./.venv/bin/python tools/run_regression.py --endpoint batch --fixtures-json /path/to/fixtures.json
+```
+
+13. Review generated artifacts from the validation surface you used.
+14. If the task produced durable repo truth, promote it automatically in the same pass instead of leaving it only in Mind. Update `docs/knowledge-base/repo-roadmap.md` for project status and sequencing, `docs/operations/*` for command/workflow changes, `docs/knowledge-base/*` for durable findings, and `AGENTS.md` only for stable repo-wide rules.
+15. Before handoff or commit, the agent should save an explicit durable Mind summary when needed and run the repo-local finish step. In Codex this remains explicit, but it should not be left for the user to remember:
 
 ```bash
 ./.venv/bin/python tools/mind_session.py save-summary --title "short-title" --body "Durable summary"
 ./.venv/bin/python tools/mind_session.py finish
 ```
 
-15. Review the diff, stage the intended files, and use the guarded Git flow:
+16. Review the diff, stage the intended files, and use the guarded Git flow:
 
 ```bash
 ./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"
@@ -198,12 +205,13 @@ Current suite rule:
 - `smoke` is opt-in.
 - no-argument `tools/run_regression.py` still maps to the parse-only protected suite.
 - setup-dependent, query-dependent, auth-blocked, and otherwise deferred GET endpoints stay out of this suite until they have a legitimate 200 path.
+- Setup-backed detail tests may skip only when their prerequisite list endpoint succeeds but returns no usable identifier data. Bad list status, malformed list payloads, and no-path list endpoints still fail/assert normally.
 
 ## Matrix Flow
 Canonical opt-in matrix surface:
 
 ```bash
-./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
+./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix
 ```
 
 Use it:
@@ -214,7 +222,13 @@ Use it:
 Optional structured reporting:
 
 ```bash
-./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py --report
+./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix --report
+```
+
+Delegated engine and compatibility/debug path:
+
+```bash
+./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py
 ```
 
 Use [Matrix Triage](matrix.md) for deeper matrix-specific debugging guidance.
@@ -239,8 +253,30 @@ Use it:
 Optional structured reporting:
 
 ```bash
-./.venv/bin/python tools/run_parse_full_regression.py --report
+./.venv/bin/python tools/run_regression.py --suite full --report
 ```
+
+## Batch Validation Flow
+Canonical opt-in batch surface:
+
+```bash
+./.venv/bin/python tools/run_regression.py --endpoint batch
+```
+
+Selected-fixture batch surface:
+
+```bash
+./.venv/bin/python tools/run_regression.py --endpoint batch --fixtures-json /path/to/fixtures.json
+```
+
+Delegated engines and compatibility/debug paths:
+
+```bash
+./.venv/bin/python -m pytest tests/endpoints/batch/ -v
+./.venv/bin/python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json
+```
+
+Keep batch opt-in. Do not add `/documents/batch` to the default no-argument runner unless the roadmap explicitly changes the protected suite definition.
 
 ## Batch Auth Characterization
 The default `/documents/batch` suite stays green by excluding the currently
@@ -312,8 +348,13 @@ Optional structured report artifacts when `--report` is enabled:
 - `reports/regression/LATEST.txt`
 
 Default operator expectation:
-- normal matrix runs should use `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py`
+- normal matrix runs should use `./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix`
 - deeper rerendering and targeted reporting commands are secondary; see the [Command Registry](command-registry.md)
+
+Protected CI artifact upload:
+- `.github/workflows/protected-baseline.yml` uploads raw `reports/parse/responses/` artifacts only when repository variable `UPLOAD_PROTECTED_PARSE_ARTIFACTS` is exactly `true`.
+- Uploaded artifacts are raw and unredacted, so leave upload disabled unless the run environment and artifact access are appropriate.
+- Retention is 7 days, and protected suite selection remains unchanged.
 
 ## Registry Refresh Rules
 Run fixture-registry generation only when the curated source data has intentionally changed:
@@ -346,7 +387,7 @@ Do not use it:
 ## Triage Flow
 - Start from the latest terminal output, not from assumptions.
 - Use the protected baseline first unless the issue is clearly matrix-scoped.
-- If the issue is matrix-scoped, use the canonical matrix wrapper and review the saved artifacts.
+- If the issue is matrix-scoped, use the canonical runner matrix selection and review the saved artifacts.
 - For matrix-specific evidence rules and fileType triage, use [Matrix Triage](matrix.md).
 
 ## Safe Git Flow

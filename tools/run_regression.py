@@ -7,8 +7,7 @@ This slice supports:
 - live execution for the protected suite
 - live execution for the opt-in GET smoke suite
 - live execution for `--suite full` via delegation
-
-All other live execution paths remain intentionally disabled.
+- live execution for the opt-in parse matrix and batch mappings via delegation
 """
 from __future__ import annotations
 
@@ -91,7 +90,7 @@ INVENTORY: tuple[InventoryItem, ...] = (
         notes=(
             "Runs the dedicated GET smoke pytest package.",
             "Keeps the default no-argument runner path unchanged; smoke remains opt-in.",
-            "This is the third live execution path implemented so far.",
+            "Live execution delegates to the existing GET smoke pytest surface.",
         ),
     ),
     InventoryItem(
@@ -102,7 +101,7 @@ INVENTORY: tuple[InventoryItem, ...] = (
         notes=(
             "Delegates to the existing full-regression wrapper.",
             "Preserves current wrapper sequencing rather than expanding it inline.",
-            "This is the second live execution path implemented so far.",
+            "Live execution delegates to the existing full-regression wrapper.",
         ),
     ),
     InventoryItem(
@@ -113,6 +112,7 @@ INVENTORY: tuple[InventoryItem, ...] = (
         notes=(
             "Wrapper manages RUN_PARSE_MATRIX=1 internally.",
             "--file-types and --fixtures-json are mutually exclusive, matching current wrapper behavior.",
+            "Live execution delegates to the existing matrix wrapper; wrapper behavior stays the source of truth.",
         ),
     ),
     InventoryItem(
@@ -123,6 +123,7 @@ INVENTORY: tuple[InventoryItem, ...] = (
         notes=(
             "Uses direct pytest for the default batch mapping.",
             "Keeps the existing direct batch suite available for debugging.",
+            "Live execution delegates to the existing batch pytest surface.",
         ),
     ),
     InventoryItem(
@@ -133,6 +134,7 @@ INVENTORY: tuple[InventoryItem, ...] = (
         notes=(
             "Delegates to the existing batch wrapper so chunking and warning semantics stay intact.",
             "Fixture JSON paths are not validated in dry-run mode.",
+            "Live execution leaves selected-fixture validation to the delegated wrapper.",
         ),
     ),
 )
@@ -246,7 +248,7 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
             return _usage_error(parser, f"Unknown suite: {suite!r}.")
         if suite in PLANNED_SUITES:
             if args.dry_run:
-                return _usage_error(parser, f"Suite {suite!r} is planned but not mapped in this first slice.")
+                return _usage_error(parser, f"Suite {suite!r} is planned but not mapped in the current runner.")
             return ResolvedPlan(
                 selector=f"suite={suite}",
                 description=f"Planned suite {suite!r} is not yet available for live execution.",
@@ -329,10 +331,10 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
         if category in PLANNED_CATEGORIES:
             return _usage_error(
                 parser,
-                f"Category {category!r} is planned for --endpoint parse but not yet mapped in this first slice.",
+                f"Category {category!r} is planned for --endpoint parse but not yet mapped in the current runner.",
             )
         if args.fixtures_json and args.file_types:
-            return _usage_error(parser, "--fixtures-json and --file-types are mutually exclusive for parse matrix dry-runs.")
+            return _usage_error(parser, "--fixtures-json and --file-types are mutually exclusive for parse matrix.")
         return ResolvedPlan(
             selector="endpoint=parse category=matrix",
             description="Opt-in /parse matrix wrapper with saved summary output.",
@@ -346,8 +348,8 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
             ),
             required_env=PROTECTED_ENV_VARS,
             notes=(
-                "Live execution remains disabled in this first slice.",
-                "The wrapper manages RUN_PARSE_MATRIX=1 internally when execution is added.",
+                "Live execution delegates to the existing matrix wrapper.",
+                "The wrapper manages RUN_PARSE_MATRIX=1 internally.",
             ),
         )
 
@@ -356,12 +358,12 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
             return _usage_error(parser, f"Unknown category: {category!r}.")
         return _usage_error(
             parser,
-            f"Category {category!r} is not mapped for --endpoint batch in this first slice.",
+            f"Category {category!r} is not mapped for --endpoint batch in the current runner.",
         )
     if args.file_types:
         return _usage_error(parser, "--file-types is not supported for --endpoint batch.")
     if args.report:
-        return _usage_error(parser, "--report is not yet supported for --endpoint batch dry-runs.")
+        return _usage_error(parser, "--report is not supported for --endpoint batch.")
 
     if args.fixtures_json:
         return ResolvedPlan(
@@ -370,8 +372,8 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
             commands=(_batch_wrapper_command(fixtures_json=args.fixtures_json, k_expr=args.k_expr),),
             required_env=BATCH_ENV_VARS,
             notes=(
-                "Live execution remains disabled in this first slice.",
-                "The batch wrapper would manage BATCH_FIXTURES_JSON and chunking when execution is added.",
+                "Live execution delegates to the existing batch wrapper.",
+                "The batch wrapper manages BATCH_FIXTURES_JSON and chunking.",
                 "Fixture JSON paths are not validated in dry-run mode.",
             ),
         )
@@ -382,15 +384,15 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
         commands=(_batch_command(k_expr=args.k_expr),),
         required_env=BATCH_ENV_VARS,
         notes=(
-            "Live execution remains disabled in this first slice.",
-            "This keeps the existing direct batch pytest mapping visible without executing it.",
+            "Live execution delegates to the existing direct batch pytest mapping.",
+            "The existing direct batch pytest surface remains available for debugging.",
         ),
     )
 
 
 def render_list() -> str:
     lines: list[str] = []
-    lines.append("Canonical regression runner inventory (first slice)")
+    lines.append("Canonical regression runner inventory")
     lines.append("")
     lines.append("Implemented suites:")
     for suite in IMPLEMENTED_SUITES:
@@ -412,7 +414,7 @@ def render_list() -> str:
     for category in PLANNED_CATEGORIES:
         lines.append(f"- {category}")
     lines.append("")
-    lines.append("Planned command mappings:")
+    lines.append("Command mappings:")
     for item in INVENTORY:
         lines.append(f"- {item.selector}")
         lines.append(f"  description: {item.description}")
@@ -440,8 +442,8 @@ def render_list() -> str:
                 lines.append(f"    - {note}")
     lines.append("")
     lines.append(
-        "Only the protected, smoke, and full suites support live execution in this slice. "
-        "Use --dry-run to inspect every other mapping."
+        "Live execution is implemented for protected, smoke, full, parse matrix, and batch mappings. "
+        "Use --dry-run to inspect commands without executing them."
     )
     return "\n".join(lines) + "\n"
 
@@ -474,10 +476,18 @@ def _run_command(command: tuple[str, ...]) -> int:
 
 
 def execute_live(args: argparse.Namespace, plan: ResolvedPlan) -> int:
-    if plan.selector not in {"suite=protected", "suite=smoke", "suite=full"}:
+    live_selectors = {
+        "suite=protected",
+        "suite=smoke",
+        "suite=full",
+        "endpoint=parse category=matrix",
+        "endpoint=batch",
+        "endpoint=batch --fixtures-json",
+    }
+    if plan.selector not in live_selectors:
         print(
-            "Only protected, smoke, and full live execution are implemented so far. "
-            "Use --dry-run for parse matrix, batch, extended, and other pending selections where supported.",
+            "Live execution is not implemented for this selection. "
+            "Use --dry-run for pending selections where supported.",
             file=sys.stderr,
         )
         return 2

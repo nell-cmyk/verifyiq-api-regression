@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import pytest
 
-from tests.endpoints.get_smoke.helpers import GetSmokeCase, assert_get_smoke_200, get_smoke_json
+from tests.endpoints.get_smoke.helpers import (
+    GetSmokeCase,
+    assert_get_smoke_200,
+    first_mapping_value,
+    get_smoke_json,
+    require_setup_list,
+)
 
 
 _REQUESTS_CASE = GetSmokeCase("monitoring-requests", "/monitoring/api/v1/requests")
@@ -16,94 +22,167 @@ _GCS_TYPES_CASE = GetSmokeCase("monitoring-gcs-types", "/monitoring/api/v1/golde
 @pytest.fixture(scope="module")
 def monitoring_correlation_id(client) -> str:
     body = get_smoke_json(client, _REQUESTS_CASE)
-    items = body.get("items")
-    assert isinstance(items, list) and items, "Monitoring requests response did not contain any items."
-    correlation_id = str(items[0].get("correlation_id", "")).strip() if isinstance(items[0], dict) else ""
-    assert correlation_id, "Monitoring requests response did not include correlation_id for the first item."
-    return correlation_id
+    items = require_setup_list(
+        body,
+        _REQUESTS_CASE,
+        fields=("items",),
+        prerequisite="monitoring correlation_id",
+        item_label="request",
+    )
+    return first_mapping_value(
+        items,
+        keys=("correlation_id",),
+        source_case=_REQUESTS_CASE,
+        prerequisite="monitoring correlation_id",
+        item_label="request",
+    )
 
 
 @pytest.fixture(scope="module")
 def monitoring_golden_doc_id(client) -> str:
     body = get_smoke_json(client, _GOLDEN_DATASET_CASE)
-    docs = body.get("items") or body.get("documents") or body.get("data")
-    assert isinstance(docs, list) and docs, "Monitoring golden-dataset response did not contain any documents."
-    first = docs[0]
-    assert isinstance(first, dict), "Monitoring golden-dataset first document was not an object."
-    for key in ("doc_id", "document_id", "id"):
-        value = str(first.get(key, "")).strip()
-        if value:
-            return value
-    pytest.fail("Monitoring golden-dataset response did not include a document id for the first document.")
+    docs = require_setup_list(
+        body,
+        _GOLDEN_DATASET_CASE,
+        fields=("items", "documents", "data"),
+        prerequisite="monitoring golden-dataset document id",
+        item_label="golden-dataset document",
+    )
+    return first_mapping_value(
+        docs,
+        keys=("doc_id", "document_id", "id"),
+        source_case=_GOLDEN_DATASET_CASE,
+        prerequisite="monitoring golden-dataset document id",
+        item_label="golden-dataset document",
+    )
 
 
 @pytest.fixture(scope="module")
 def monitoring_document_type(client) -> str:
     body = get_smoke_json(client, _GROUND_TRUTH_DOC_TYPES_CASE)
-    assert isinstance(body, dict) and body, "Ground-truth document-types response did not contain any categories."
+    if not isinstance(body, dict):
+        pytest.fail("Ground-truth document-types response was not an object.")
+    if not body:
+        pytest.skip(
+            "Skipping setup-backed detail GET smoke: missing prerequisite monitoring document type; "
+            f"{_GROUND_TRUTH_DOC_TYPES_CASE.path} returned no categories."
+        )
 
-    for values in body.values():
-        if not isinstance(values, list) or not values:
+    saw_category_values = False
+    for category, values in body.items():
+        if not isinstance(values, list):
+            pytest.fail(
+                "Ground-truth document-types response category "
+                f"{category!r} was not a list; cannot derive monitoring document type."
+            )
+        if not values:
             continue
-        first = values[0]
-        if isinstance(first, dict):
-            for key in ("name", "document_type", "doc_type"):
-                value = str(first.get(key, "")).strip()
-                if value:
-                    return value
-        elif isinstance(first, str) and first.strip():
-            return first.strip()
+        saw_category_values = True
+        for entry in values:
+            if isinstance(entry, dict):
+                for key in ("name", "document_type", "doc_type"):
+                    value = str(entry.get(key, "")).strip()
+                    if value:
+                        return value
+                continue
+            if isinstance(entry, str) and entry.strip():
+                return entry.strip()
+            pytest.fail(
+                "Ground-truth document-types response contained a non-object, non-string "
+                f"entry in category {category!r}; cannot derive monitoring document type."
+            )
 
-    pytest.fail("Ground-truth document-types response did not contain any usable document type names.")
+    if not saw_category_values:
+        pytest.skip(
+            "Skipping setup-backed detail GET smoke: missing prerequisite monitoring document type; "
+            f"{_GROUND_TRUTH_DOC_TYPES_CASE.path} returned empty category lists."
+        )
+    pytest.skip(
+        "Skipping setup-backed detail GET smoke: missing prerequisite monitoring document type; "
+        f"{_GROUND_TRUTH_DOC_TYPES_CASE.path} returned no usable document type names."
+    )
+
+
+def _first_string_item(items: list[object], *, source_case: GetSmokeCase, prerequisite: str, item_label: str) -> str:
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, str):
+            pytest.fail(
+                f"{source_case.path} {item_label} entry #{index} was not a string; "
+                f"cannot derive {prerequisite}."
+            )
+        value = item.strip()
+        if value:
+            return value
+    pytest.skip(
+        "Skipping setup-backed detail GET smoke: "
+        f"missing prerequisite {prerequisite}; {source_case.path} returned no usable {item_label} values."
+    )
 
 
 @pytest.fixture(scope="module")
 def monitoring_gcs_category(client) -> str:
     body = get_smoke_json(client, _GCS_TYPES_CASE)
-    categories = body.get("types")
-    assert isinstance(categories, list) and categories, "Monitoring GCS types response did not contain any types."
-    category = str(categories[0]).strip()
-    assert category, "Monitoring GCS types response returned an empty category value."
-    return category
+    categories = require_setup_list(
+        body,
+        _GCS_TYPES_CASE,
+        fields=("types",),
+        prerequisite="monitoring GCS category",
+        item_label="GCS category",
+    )
+    return _first_string_item(
+        categories,
+        source_case=_GCS_TYPES_CASE,
+        prerequisite="monitoring GCS category",
+        item_label="GCS category",
+    )
 
 
 @pytest.fixture(scope="module")
 def monitoring_gcs_variant(client, monitoring_gcs_category: str) -> str:
-    body = get_smoke_json(
-        client,
-        GetSmokeCase(
-            "monitoring-gcs-variants",
-            f"/monitoring/api/v1/golden-dataset/gcs/types/{monitoring_gcs_category}/variants",
-        ),
+    variants_case = GetSmokeCase(
+        "monitoring-gcs-variants",
+        f"/monitoring/api/v1/golden-dataset/gcs/types/{monitoring_gcs_category}/variants",
     )
-    variants = body.get("variants")
-    assert isinstance(variants, list) and variants, "Monitoring GCS variants response did not contain any variants."
-    variant = str(variants[0]).strip()
-    assert variant, "Monitoring GCS variants response returned an empty variant value."
-    return variant
+    body = get_smoke_json(client, variants_case)
+    variants = require_setup_list(
+        body,
+        variants_case,
+        fields=("variants",),
+        prerequisite="monitoring GCS variant",
+        item_label="GCS variant",
+    )
+    return _first_string_item(
+        variants,
+        source_case=variants_case,
+        prerequisite="monitoring GCS variant",
+        item_label="GCS variant",
+    )
 
 
 @pytest.fixture(scope="module")
 def monitoring_gcs_document_id(client, monitoring_gcs_category: str, monitoring_gcs_variant: str) -> str:
-    body = get_smoke_json(
-        client,
-        GetSmokeCase(
-            "monitoring-gcs-variant-documents",
-            (
-                f"/monitoring/api/v1/golden-dataset/gcs/types/{monitoring_gcs_category}"
-                f"/variants/{monitoring_gcs_variant}/documents"
-            ),
+    documents_case = GetSmokeCase(
+        "monitoring-gcs-variant-documents",
+        (
+            f"/monitoring/api/v1/golden-dataset/gcs/types/{monitoring_gcs_category}"
+            f"/variants/{monitoring_gcs_variant}/documents"
         ),
     )
-    documents = body.get("documents")
-    assert isinstance(documents, list) and documents, "Monitoring GCS documents response did not contain any documents."
-    first = documents[0]
-    assert isinstance(first, dict), "Monitoring GCS documents response first entry was not an object."
-    for key in ("document_id", "id", "name"):
-        value = str(first.get(key, "")).strip()
-        if value:
-            return value
-    pytest.fail("Monitoring GCS documents response did not include a document id for the first document.")
+    body = get_smoke_json(client, documents_case)
+    documents = require_setup_list(
+        body,
+        documents_case,
+        fields=("documents",),
+        prerequisite="monitoring GCS document id",
+        item_label="GCS document",
+    )
+    return first_mapping_value(
+        documents,
+        keys=("document_id", "id", "name"),
+        source_case=documents_case,
+        prerequisite="monitoring GCS document id",
+        item_label="GCS document",
+    )
 
 
 @pytest.mark.parametrize(

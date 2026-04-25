@@ -10,6 +10,7 @@ This is intentionally not a path-by-path busywork matrix. The current repo cover
 - Current default live suite: parse-only `protected`
 - Current stronger live gate: `./.venv/bin/python tools/run_regression.py --suite full`
 - Current opt-in live GET smoke suite: `./.venv/bin/python tools/run_regression.py --suite smoke`
+- Current opt-in live batch selection: `./.venv/bin/python tools/run_regression.py --endpoint batch`
 - `smoke` is now real, but it is not a broader current default
 
 ## Group Inventory
@@ -38,6 +39,7 @@ This is intentionally not a path-by-path busywork matrix. The current repo cover
 - Current active GET inclusion therefore relies on the repo-native evidence that does exist: maintained smoke tests, the shared authenticated client in `tests/client.py`, current runner/doc command surfaces, live 200 characterization, and current v1 route structure in `official-openapi.json`.
 - `official-openapi.json` is a supporting input, not sole truth.
 - When a current v1 route and an unversioned or alias route coexist, only the current explicit route is counted in smoke; legacy/duplicate aliases are excluded and documented rather than padded into coverage totals.
+- Setup-backed detail tests should skip when their prerequisite list endpoint returns `200` but no usable identifier data. The skip reason must name the missing prerequisite. Do not skip list endpoint failures, bad statuses, malformed payloads, or list/no-path endpoint assertions.
 
 ## GET Smoke Coverage Implemented Now
 Canonical runner path:
@@ -98,14 +100,18 @@ Codified now with exact expected-status assertions:
 3. Preserve the exact-status smoke codification for `/api/v1/health/database-pools` (`401`), `/api/v1/health/database-pools/metrics` (`401`), `/v1/admin/cache/health` (`403`), and `/monitoring/api/v1/golden-dataset/gcs/structure` (`502`) so they do not regress back into the unresolved 200 bucket.
 4. Decide whether UI/debug and explicit admin/storage surfaces such as `/parser_studio`, `/parser_studio/auth/login`, `/qa`, `/sentry-debug`, `/api/v1/sentry-debug`, and the AI Gateway file routes belong in API automation at all.
 
-## Onboarding Rule For New Endpoint Groups
-Before a new endpoint group is added here as "in progress" or "covered", define:
+## Endpoint Group Onboarding Checklist
+Before a new endpoint group is added here as "in progress" or "covered", keep the decision endpoint-group based and record:
 
-1. Why the endpoint belongs in this repo's scope.
-2. Whether the endpoint is safe for live automation.
-3. The minimum categories required for first onboarding.
-4. Whether the endpoint belongs in the default `protected` suite, a future `smoke` suite, or an opt-in lane only.
-5. Which fixtures or live prerequisites the endpoint needs.
+1. Repo scope fit: why the endpoint group belongs in VerifyIQ API regression automation.
+2. Live automation safety class: safe read-only, setup-backed read-only, guarded negative, high-risk/admin, or out of scope.
+3. Required suite lane: `protected`, `smoke`, `full`, endpoint-specific opt-in, or deferred.
+4. Minimum categories before "covered": at least the group's agreed smoke/status signal plus the relevant contract, auth/validation, and negative expectations.
+5. Fixture or prerequisite needs: `gs://` fixtures, selected fixture JSON, list-derived identifiers, query parameters, tenant/admin prerequisites, or explicit blockers.
+6. Artifact expectations: whether the group writes raw artifacts, summary artifacts, structured reports, or no artifacts.
+7. Runner mapping requirement: the canonical `tools/run_regression.py` selection or the reason runner mapping is deferred.
+8. CI eligibility: whether the group is eligible for non-live CI, protected live CI, opt-in/scheduled live CI, or local-only validation.
+9. Owner and blocker notes: the current owner area, known upstream blocker, and evidence needed before promotion.
 
 ## Immediate Follow-ups
 - Re-run the opt-in `batch` auth characterization after any auth-layer or staging change; the blocker remains open until both missing and invalid tenant-token requests return confirmed 401/403 rejection.

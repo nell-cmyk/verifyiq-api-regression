@@ -26,10 +26,14 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 - Checked-in CI workflows live under `.github/workflows/`.
 - `.github/workflows/non-live-validation.yml` runs the non-live tooling, reporting, and skills suites plus runner discovery checks with `VERIFYIQ_SKIP_DOTENV=1` and no secrets.
 - `.github/workflows/protected-baseline.yml` calls `python tools/run_regression.py --suite protected` for the protected live baseline using the `setup-python` interpreter it already bootstraps and installs dependencies into. When these GitHub secrets are configured: `BASE_URL`, `TENANT_TOKEN`, `API_KEY`, `IAP_CLIENT_ID`, `GOOGLE_APPLICATION_CREDENTIALS_JSON`, `PARSE_FIXTURE_FILE`, `PARSE_FIXTURE_FILE_TYPE`, the workflow runs the live baseline. When any are missing, the workflow skips the live baseline with a clear summary.
+- Protected CI can upload raw `/parse` response artifacts from `reports/parse/responses/` only when the repository variable `UPLOAD_PROTECTED_PARSE_ARTIFACTS` is exactly `true`. These artifacts are raw and unredacted, use a 7-day retention period, and do not change protected suite selection.
 
 ## Classification Legend
 - `Canonical`: normal operator-facing command surface
+- `Delegated Engine`: wrapper or direct pytest path called by the canonical runner
+- `Compatibility/Debug`: still valid for focused debugging while the runner migration settles
 - `Advanced/Internal`: supported, but narrower or more specialized than the default flow
+- `Do Not Delete Yet`: retained until runner parity, docs, CI, and direct-use criteria are proven
 - `Mutating`: changes tracked files, Git state, or external local state
 
 ## Canonical Commands
@@ -39,7 +43,9 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 | `./.venv/bin/python tools/run_regression.py` | Canonical live runner entry point; the no-arg default is the parse-only protected suite | Live `/parse` env | `reports/parse/responses/parse_<timestamp>/...` | generated artifacts only |
 | `./.venv/bin/python tools/run_regression.py --suite smoke` | Canonical opt-in live GET smoke suite across safely testable VerifyIQ API GET endpoints | Live API env | none | no repo mutation |
 | `./.venv/bin/python tools/run_regression.py --suite full` | Stronger live gate: protected parse suite followed by delegated full wrapper execution | Live `/parse` env | `reports/parse/responses/parse_<timestamp>/...`, plus the existing matrix/report artifacts when delegation reaches the full wrapper | generated artifacts only |
-| `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` | Default opt-in `/parse` matrix run plus saved summary | Live `/parse` env | `reports/parse/matrix/latest-terminal.txt`, `reports/parse/matrix/latest-summary.md` | generated artifacts only in draft mode |
+| `./.venv/bin/python tools/run_regression.py --endpoint parse --category matrix` | Canonical opt-in `/parse` matrix selection; delegates to the matrix wrapper | Live `/parse` env | `reports/parse/matrix/latest-terminal.txt`, `reports/parse/matrix/latest-summary.md`, `reports/parse/responses/parse_<timestamp>/...` | generated artifacts only in draft mode |
+| `./.venv/bin/python tools/run_regression.py --endpoint batch` | Canonical opt-in live `/documents/batch` suite selection; delegates to direct batch pytest | Live `/documents/batch` env | `reports/batch/batch_<timestamp>/...` | generated artifacts only |
+| `./.venv/bin/python tools/run_regression.py --endpoint batch --fixtures-json /path/to/fixtures.json` | Canonical selected-fixture `/documents/batch` selection; delegates to the batch wrapper | Live `/documents/batch` env plus fixture-selection JSON | `reports/batch/batch_<timestamp>/...` | generated artifacts only |
 | `./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"` | Guarded commit flow after review | Reviewed diff, staged changes, clean worktree | none | Git state only |
 | `mind setup opencode` | One-time OpenCode memory/MCP setup | Mind installed locally | `~/.config/opencode/opencode.json`, managed instructions, managed plugin | external/local state |
 | `./.venv/bin/python tools/mind_session.py doctor` | Validate the repo-controlled Mind automation surface | Mind installed locally | none | reads local Mind and repo automation state |
@@ -50,14 +56,15 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 | --- | --- | --- | --- |
 | `./.venv/bin/python -m pytest tests/endpoints/parse/ -v` | Exact protected `/parse` implementation and debug surface; the canonical operator path is now `tools/run_regression.py` | `reports/parse/responses/parse_<timestamp>/...` | generated artifacts only |
 | `./.venv/bin/python -m pytest tests/endpoints/get_smoke/ -v` | Exact GET smoke implementation/debug surface; the canonical operator path is `tools/run_regression.py --suite smoke` | none | no repo mutation |
-| `./.venv/bin/python -m pytest tests/endpoints/batch/ -v` | Direct live `/documents/batch` validation when batch-specific coverage is needed | `reports/batch/batch_<timestamp>/...` | generated artifacts only |
-| `./.venv/bin/python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` | Selected-fixture `/documents/batch` run | `reports/batch/batch_<timestamp>/...` | generated artifacts only |
+| `./.venv/bin/python -m pytest tests/endpoints/batch/ -v` | Delegated engine and compatibility/debug path behind `tools/run_regression.py --endpoint batch`; do not delete yet | `reports/batch/batch_<timestamp>/...` | generated artifacts only |
+| `./.venv/bin/python tools/run_batch_with_fixtures.py --fixtures-json /path/to/fixtures.json` | Delegated engine and compatibility/debug path behind `tools/run_regression.py --endpoint batch --fixtures-json ...`; do not delete yet | `reports/batch/batch_<timestamp>/...` | generated artifacts only |
 | `./.venv/bin/python tools/reporting/export_batch_ground_truth.py --reference-workbook /absolute/path/to/reference.xlsx [--fixture-registry tests/fixtures/fixture_registry.yaml] [--file-type ...] [--max-concurrent-file-types N] [--max-concurrent-chunks N] [--token-expiry-retries N] [--transient-chunk-retries N]` | Live batch export workflow for ground-truth comparison workbooks keyed by fileType from the shared generated fixture registry; fileType and per-fileType chunk execution stay sequential by default and can be opt-in bounded, with `--max-concurrent-file-types 2 --max-concurrent-chunks 2` recommended as the initial full-run setting; token-expiry and transient chunk retries default to one same-chunk retry | `reports/batch_ground_truth/batch_ground_truth_<timestamp>/workbooks/*.xlsx`, `manifest.json`, plus raw batch artifacts under `reports/batch/batch_<timestamp>/...` | generated artifacts only |
 | `./.venv/bin/python tools/run_regression.py --list|--dry-run ...` | Non-executing canonical-runner discovery surface for inventory preview and command mapping | none | no repo mutation |
 | `RUN_PARSE_MATRIX=1 ./.venv/bin/python -m pytest tests/endpoints/parse/test_parse_matrix.py -v` | Valid direct matrix surface for debugging, but the wrapper is the normal path | none unless you capture output separately | no repo mutation by default |
+| `./.venv/bin/python tools/reporting/run_parse_matrix_with_summary.py` | Delegated matrix engine and compatibility/debug path behind `tools/run_regression.py --endpoint parse --category matrix`; do not delete yet | `reports/parse/matrix/latest-terminal.txt`, `reports/parse/matrix/latest-summary.md` | generated artifacts only in draft mode |
 | `./.venv/bin/python tools/reporting/render_regression_summary.py --endpoint parse --input reports/parse/matrix/latest-terminal.txt` | Re-renders from saved terminal output; not the primary run surface | `reports/parse/matrix/latest-summary.md` by default | generated summary only in draft mode |
-| `./.venv/bin/python tools/run_parse_with_report.py --tier baseline|matrix|full ...` | Focused structured-report iteration, not the default operator flow | `reports/regression/<timestamp>/...` | generated artifacts only |
-| `./.venv/bin/python tools/run_parse_full_regression.py` | Compatibility/debug wrapper behind `tools/run_regression.py --suite full` | same matrix artifacts; optional `reports/regression/<timestamp>/...` with `--report` | generated artifacts only |
+| `./.venv/bin/python tools/run_parse_with_report.py --tier baseline|matrix|full ...` | Advanced/internal focused structured-report iteration, not the default operator flow; do not delete yet | `reports/regression/<timestamp>/...` | generated artifacts only |
+| `./.venv/bin/python tools/run_parse_full_regression.py` | Delegated full-regression engine and compatibility/debug wrapper behind `tools/run_regression.py --suite full`; do not delete yet | same matrix artifacts; optional `reports/regression/<timestamp>/...` with `--report` | generated artifacts only |
 | `./.venv/bin/python tools/mind_session.py checkpoint` | Fallback explicit checkpoint refresh outside the automatic plugin flow | local Mind checkpoint update | external/local state |
 | `./.venv/bin/python tools/mind_session.py save-summary --title "..." --body "..."` | Save a durable project memory before handoff or commit | local Mind memory entry | external/local state |
 | `./.venv/bin/python tools/mind_session.py finish` | Fallback explicit checkpoint completion outside the automatic plugin flow | completed checkpoint entry in Mind history | external/local state |
@@ -85,8 +92,8 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 ## Notes
 - The matrix wrapper sets `RUN_PARSE_MATRIX=1` for you.
 - Structured reporting under `reports/regression/<timestamp>/` is opt-in via `--report`.
-- `tools/run_regression.py` is the canonical operator path for the default protected live suite, the opt-in `--suite smoke` GET smoke lane, and the current delegated `--suite full` path.
-- `tools/run_regression.py` currently supports live execution for the protected baseline, `--suite smoke`, and `--suite full` only. Direct live parse-matrix, batch, extended, and other selections remain dry-run only.
+- `tools/run_regression.py` is the canonical operator path for the default protected live suite, the opt-in `--suite smoke` GET smoke lane, the delegated `--suite full` path, direct parse matrix selection, direct batch selection, and selected-fixture batch selection.
+- Wrapper and direct pytest surfaces remain valid delegated engines or compatibility/debug paths. Do not delete them until the deprecation criteria in `docs/operations/regression-runner-plan.md` are met.
 - `smoke` is now a real opt-in suite, not the broader default suite.
 - `tools/generate_fixture_registry.py` and `tools/onboard_fixture_json.py` are maintenance surfaces, not ordinary validation steps.
 - `tools/reporting/export_batch_ground_truth.py` is a reusable reporting/export surface for local ground-truth comparison work and reads the shared generated registry by default. `--max-concurrent-file-types` bounds fileTypes at once, `--max-concurrent-chunks` bounds chunks within each fileType, and the approximate configured in-flight batch request ceiling is their product; see `docs/operations/batch-ground-truth-export.md`.
