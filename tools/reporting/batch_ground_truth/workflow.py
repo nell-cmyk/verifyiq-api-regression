@@ -1001,6 +1001,7 @@ def run_batch_ground_truth_export(
             rows=export_rows,
             layout=template_layout,
             output_path=workbook_path,
+            include_gt_status_columns=True,
         )
 
         clean_rows = [row for row in export_rows if is_clean_candidate(row)]

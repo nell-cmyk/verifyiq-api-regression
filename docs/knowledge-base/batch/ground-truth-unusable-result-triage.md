@@ -24,5 +24,6 @@
 - Do not bulk-mark these fixtures invalid from the exporter result alone.
 - Treat these rows as quality-gated no-extraction responses, not as recoverable alternate success shapes.
 - A safe exporter success-mapping change is not available unless a future raw response includes reliable parsed fields outside `summaryResult[0]`.
-- The exporter now preserves these rows in the full/audit workbook and triages them as `http_200_no_payload_quality_gate` when the HTTP `200` / `ok=true` response has empty parsed containers, `extractionStatus=not_attempted`, and a quality-gate failure in `documentQuality` or `qualityCheck.issueDescription`.
-- These rows remain excluded from clean ground-truth candidate workbooks until a fixture correction, replacement, API/model change, or targeted rerun produces a usable parsed payload.
+- The exporter preserves these rows in the primary GT workbook and triages them as `http_200_no_payload_quality_gate` when the HTTP `200` / `ok=true` response has empty parsed containers, `extractionStatus=not_attempted`, and a quality-gate failure in `documentQuality` or `qualityCheck.issueDescription`.
+- These rows are GT-relevant negative/model-behavior evidence in the primary workbook with blank mapped fields, `parse_success=false`, `gt_outcome_class=quality_gated_no_extraction`, and `gt_candidate_status=gt_included_negative_model_behavior`.
+- They remain excluded only from the legacy strict parsed-field-only workbook until a fixture correction, replacement, API/model change, or targeted rerun produces a usable parsed payload.

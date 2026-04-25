@@ -10,6 +10,7 @@ from openpyxl.utils import get_column_letter
 
 from .models import ExportRow, TemplateLayout
 from .schema import FIXED_METADATA_HEADERS, build_main_sheet_header_order
+from .triage import build_main_workbook_status_values
 
 JSON_WIDTH_HEADERS = {
     "summary_json",
@@ -116,17 +117,24 @@ def write_workbook(
     rows: list[ExportRow],
     layout: TemplateLayout,
     output_path: Path,
+    include_gt_status_columns: bool = False,
 ) -> list[str]:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = _safe_sheet_title(file_type)
     sheet.freeze_panes = layout.freeze_panes
 
-    headers = build_main_sheet_header_order(layout, rows)
+    headers = build_main_sheet_header_order(
+        layout,
+        rows,
+        include_gt_status_columns=include_gt_status_columns,
+    )
     analyst_rows: list[dict[str, Any]] = []
     for export_row in rows:
         values: dict[str, Any] = {}
         values.update(export_row.template_values)
+        if include_gt_status_columns:
+            values.update(build_main_workbook_status_values(export_row))
         values.update(export_row.extra_values)
         analyst_rows.append(values)
     _write_sheet(sheet=sheet, headers=headers, row_values=analyst_rows, layout=layout)

@@ -13,8 +13,8 @@ reports/batch_ground_truth/batch_ground_truth_<timestamp>/
 ```
 
 Each run writes:
-- `workbooks/<fileType>__batch_ground_truth.xlsx` with the full/audit workbook for every exported source row, including clean successes, row-level API failures, unsupported fixtures, and other non-clean rows
-- `clean_workbooks/<fileType>__clean_ground_truth.xlsx` with only clean ground-truth candidate rows
+- `workbooks/<fileType>__batch_ground_truth.xlsx` with the primary GT evidence workbook for every exported source row, including parsed successes, parsed partial/null-field outcomes, fraud/quality-negative parsed outcomes, completed HTTP `200` quality-gated no-extraction outcomes, row-level API failures, unsupported fixtures, and execution failures
+- `clean_workbooks/<fileType>__clean_ground_truth.xlsx` with the legacy strict parsed-field-only compatibility subset
 - `manifest.json`
 - `clean_manifest.json`
 - `recovery_triage.json`
@@ -125,12 +125,12 @@ Optional retry overrides:
 - HTTP `429` means rate limiting or service pressure. The exporter retries the same chunk once by default, respects `Retry-After` when the response provides it, and otherwise uses bounded fallback backoff.
 - Retry counts are configurable with `--token-expiry-retries`, `--transient-chunk-retries`, and `--rate-limit-retries`; all default to `1`, and `0` disables that retry class.
 - `--rate-limit-backoff-secs` controls the fallback backoff for `429` retries when `Retry-After` is absent. It defaults to `2` seconds.
-- Application-level row failures from a completed `200` batch response are not retried. Expected fixture/API failures such as `DocumentSizeGuardError` or `MultiAccountDocumentError` and row-level `unusable_result` findings remain row failures for review.
+- Application-level row failures from a completed `200` batch response are not retried. Expected fixture/API failures such as `DocumentSizeGuardError` or `MultiAccountDocumentError` remain row failures for review. HTTP `200` quality-gated no-extraction results remain completed model-behavior evidence in the primary GT workbook even though they are not strict parsed-field successes.
 - When token expiry retries are exhausted, rows are recorded with `failure_tag=persistent_token_expired` rather than a generic HTTP/request failure.
 - When rate-limit retries are exhausted, rows are recorded with `failure_tag=http_429`, remain excluded from clean GT workbooks, and are triaged as rerun candidates rather than malformed responses.
 
 ## Retry Observability
-- The analyst-facing main sheet remains focused on `filename`, `parse_success`, `error`, and mapped fields.
+- The analyst-facing main sheet keeps `filename`, `parse_success`, `error`, and mapped fields, and also includes compact GT outcome/status columns such as `gt_outcome_class`, `gt_candidate_status`, source identity, request/response fileType, correlation id, extraction status, and quality-gate evidence.
 - The `_meta` sheet includes `batch_attempt_count`, `batch_retry_reason`, and `batch_final_attempt_error_type` for retry tracing.
 - `manifest.json` records the configured retry counts, rate-limit backoff setting, and a per-fileType `retry_summary` with rows retried, max attempt count, retry reasons, and final retry error types.
 
@@ -142,49 +142,49 @@ Optional retry overrides:
 - Fixtures tagged with `gt_extraction_eligible: false` are skipped before live `/documents/batch` execution for GT export planning, counted as skipped/non-executable, and written as failed audit rows with explicit GT metadata.
 - Skipping GT-ineligible fixtures only affects this GT extraction workflow. It does not delete fixtures, disable registry traceability, or make them unavailable for future negative/audit coverage.
 
-## Failed Rows
+## Failed And Negative Rows
 - Workbook generation continues even when some fixtures fail.
-- Failed rows still appear in the full/audit workbook main sheet.
-- Main-sheet extracted value columns stay empty for failed rows in the full/audit workbook.
-- Main-sheet failure visibility is kept concise through `filename`, `parse_success`, and `error`.
+- Failed and negative/model-behavior rows still appear in the primary GT workbook main sheet.
+- Main-sheet extracted value columns stay empty when the API did not produce mapped parsed fields.
+- Main-sheet failure and negative-outcome visibility is kept concise through `filename`, `parse_success`, `error`, and the GT outcome/status columns.
 - Full traceability and debug context remain available in the workbook `_meta` sheet, `manifest.json`, `recovery_triage.*`, and the raw batch response artifacts.
 - If an entire fileType fails, that fileType workbook is still generated.
 
-## Clean Ground-Truth Candidate Workbooks
-- Clean workbooks are generated under `clean_workbooks/` and include only rows that already mapped a reliable successful parsed payload.
-- A row is included in a clean workbook only when the exporter has `ok=true`, no `failure_tag`, no `error_type`, no `error`, `parse_success=true`, and a usable `summaryResult[0]` payload.
-- Null or blank extracted fields do not remove a row from the clean workbook when the row otherwise has a usable successful parse. Blank values can be genuine extracted empty values.
-- Clean workbooks exclude unsupported fixtures, row-level API errors, retry-exhausted chunk failures, exhausted HTTP `429` rate-limit rows, expected warning results, quality-gated no-payload results, and malformed or unexpected successful response shapes.
-- Excluding a row from the clean workbook only means it is not a clean ground-truth candidate right now. It does not mean the fixture should be deleted from the registry or removed from other automation.
-- `clean_manifest.json` records total selected source rows, clean included rows, triaged rows, GT-extraction-excluded rows, counts by fileType, counts by recovery class, counts by ground-truth candidate status, and the paired full/audit and clean workbook paths.
+## Legacy Strict Parsed-Only Workbooks
+- Strict parsed-only workbooks are generated under `clean_workbooks/` for compatibility and include only rows that already mapped a reliable successful parsed payload.
+- A row is included in a strict parsed-only workbook only when the exporter has `ok=true`, no `failure_tag`, no `error_type`, no `error`, `parse_success=true`, and a usable `summaryResult[0]` payload.
+- Null or blank extracted fields do not remove a row from this legacy subset when the row otherwise has a usable successful parse. Blank values can be genuine extracted empty values.
+- Strict parsed-only workbooks exclude unsupported fixtures, row-level API errors, retry-exhausted chunk failures, exhausted HTTP `429` rate-limit rows, expected warning results, quality-gated no-payload results, and malformed or unexpected successful response shapes.
+- Excluding a row from the strict parsed-only workbook does not mean it is excluded from the primary GT workbook. Completed quality-gated no-extraction outcomes remain GT-relevant negative/model-behavior evidence in `workbooks/<fileType>__batch_ground_truth.xlsx`.
+- `clean_manifest.json` records total selected source rows, strict parsed-only included rows, triaged rows, GT-extraction-excluded rows, counts by fileType, counts by recovery class, counts by ground-truth candidate status, and the paired primary and strict parsed-only workbook paths.
 
 ## Recovery Triage Artifacts
 - `recovery_triage.json` and `recovery_triage.csv` contain every non-clean exported row.
 - Triage rows include source identity, request and response fileType, HTTP and row status, parse success, failure details, retry metadata, GT extraction metadata, parsed-container counts, quality-gate details when available, `recovery_class`, `recovery_action`, and `gt_candidate_status`.
-- Use recovery triage to decide whether a row should be targeted for rerun, reviewed for fixture quality, reviewed for fileType/source metadata, replaced, excluded from clean GT as-is, or retained as negative API guard coverage.
+- Use recovery triage to decide whether a row should be targeted for rerun, reviewed for fixture quality, reviewed for fileType/source metadata, replaced, excluded from strict parsed-only compatibility output as-is, or retained as negative API/model-behavior evidence in the primary GT workbook.
 - The exporter does not mutate the source registry, does not bulk-tag fixtures invalid, and does not convert non-clean rows into successful GT rows. Durable exclusions require fixture-registry source metadata followed by registry regeneration.
 
 Common recovery classes:
-- `rate_limited`: HTTP `429` rate limiting or service pressure after bounded retry exhaustion. Action: targeted rerun with lower concurrency or explicit backoff.
-- `transient_or_auth_failure`: token expiry, timeout, request transport failure, selected auth failures, or likely transient 5xx chunk failure. Action: targeted rerun after retry/token/service recovery.
+- `rate_limited`: HTTP `429` rate limiting or service pressure after bounded retry exhaustion. Status: excluded from GT evidence for this run. Action: targeted rerun with lower concurrency or explicit backoff.
+- `transient_or_auth_failure`: token expiry, timeout, request transport failure, selected auth failures, or likely transient 5xx chunk failure. Status: excluded from GT evidence for this run. Action: targeted rerun after retry/token/service recovery.
 - `document_size_guard`: `DocumentSizeGuardError`. Action: exclude from clean GT as-is, or replace/reduce the fixture if clean GT coverage is still needed.
-- `unsupported_fixture`: unsupported extension, missing GCS URI, or malformed GCS URI. Action: replace or correct the source artifact.
+- `unsupported_fixture`: unsupported extension, missing GCS URI, or malformed GCS URI. Status: excluded from GT evidence because it was not executable as a reliable API input. Action: replace or correct the source artifact.
 - `multi_account_document`: `MultiAccountDocumentError`. Action: split or replace if single-account clean GT is needed, otherwise keep outside clean GT as negative coverage.
-- `http_200_no_payload_quality_gate`: HTTP `200` and row `ok=true`, but parsed containers are empty and extraction was not attempted because a quality gate failed. Action: inspect fixture quality and replace if needed.
+- `http_200_no_payload_quality_gate`: HTTP `200` and row `ok=true`, but parsed containers are empty and extraction was not attempted because a quality gate failed. Status: included in the primary GT workbook as negative/model-behavior evidence. Action: inspect fixture quality if replacement or remediation is desired.
 - `http_200_no_payload_unknown`: HTTP `200` and row `ok=true`, but no usable payload and no clear quality-gate reason. Action: API behavior review before GT use.
 - `malformed_or_unexpected_response_shape`: response cannot be mapped and does not match a known no-payload quality-gate pattern. Action: API/exporter schema review.
 
 ## HTTP 429 Rate-Limited Rows
 - HTTP `429` rows are rate-limit or service-pressure rows, not clean GT candidates and not invalid fixtures.
 - If a later same-chunk retry returns a valid HTTP `200` payload, the exporter records the final successful rows normally with `batch_retry_reason=rate_limited`.
-- If rate-limit retries are exhausted, the affected rows stay in the full/audit workbook with `failure_tag=http_429`, are excluded from clean workbooks, and appear in `recovery_triage.*` with `recovery_class=rate_limited`, `gt_candidate_status=rerun_candidate`, and `recovery_action=targeted_rerun_with_lower_concurrency_or_backoff`.
+- If rate-limit retries are exhausted, the affected rows stay in the primary GT workbook with `failure_tag=http_429`, are excluded from GT evidence for this run, and appear in `recovery_triage.*` with `recovery_class=rate_limited`, `gt_candidate_status=gt_excluded_execution_failure`, and `recovery_action=targeted_rerun_with_lower_concurrency_or_backoff`.
 - When a full run has a high `rate_limited` count, do not immediately repeat the same concurrency. Prefer targeted reruns for the affected fileTypes with lower pressure, such as `--max-concurrent-file-types 1 --max-concurrent-chunks 1`, then increase cautiously only after the 429 rate is acceptable.
 
 ## HTTP 200 No-Payload Rows
-- HTTP `200` and row `ok=true` are not enough for clean GT.
-- Rows with empty `summaryOCR`, `summaryResult`, `calculatedFields`, and `transactionsOCR`, plus `extractionStatus=not_attempted`, are not clean GT candidates.
+- HTTP `200` and row `ok=true` are completed API outcomes even when they do not contain parsed fields.
+- Rows with empty `summaryOCR`, `summaryResult`, `calculatedFields`, and `transactionsOCR`, plus `extractionStatus=not_attempted`, are not strict parsed-field successes, but quality-gated no-extraction outcomes remain useful GT evidence for model and fixture behavior.
 - When `documentQuality` or `qualityCheck.issueDescription` shows a quality-gate failure, the row is classified as `http_200_no_payload_quality_gate`.
-- These rows are completed row-level API results, so the exporter does not retry them automatically. They may still become clean GT candidates later if fixture quality is corrected, the fixture is replaced, or API behavior changes and a targeted rerun produces a usable parsed payload.
+- These rows are completed row-level API results, so the exporter does not retry them automatically. They remain in the same primary GT workbook with `parse_success=false`, blank mapped field columns, `gt_outcome_class=quality_gated_no_extraction`, and `gt_candidate_status=gt_included_negative_model_behavior`. They may also become strict parsed-field rows later if fixture quality is corrected, the fixture is replaced, or API behavior changes and a targeted rerun produces a usable parsed payload.
 - A no-payload quality-gate row is not automatically skipped from future live GT extraction just because it appeared in recovery triage once. Future skipping requires explicit evidence-backed `quality_gate_no_payload` metadata in `tools/fixture_registry_source/gt_extraction_fixture_overrides.yaml`.
 
 ## Document Size Guard Rows

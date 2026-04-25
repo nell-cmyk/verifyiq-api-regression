@@ -40,7 +40,23 @@ TRIAGE_HEADERS = (
     "gt_recovery_action",
     "recovery_class",
     "recovery_action",
+    "gt_outcome_class",
     "gt_candidate_status",
+)
+
+MAIN_WORKBOOK_GT_STATUS_HEADERS = (
+    "gt_outcome_class",
+    "gt_candidate_status",
+    "extractionStatus",
+    "documentQuality",
+    "quality_gate_reason",
+    "request_file_type",
+    "response_fileType",
+    "source_row",
+    "source_gcs_uri",
+    "batch_result_correlation_id",
+    "failure_tag",
+    "error_type",
 )
 
 TRANSIENT_OR_AUTH_FAILURE_TAGS = {
@@ -163,8 +179,9 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
     if is_clean_candidate(row):
         return {
             "recovery_class": "clean_success",
-            "recovery_action": "include_in_clean_gt",
-            "gt_candidate_status": "clean_candidate",
+            "recovery_action": "include_in_gt_workbook",
+            "gt_outcome_class": "parsed_response",
+            "gt_candidate_status": "gt_included_parsed",
         }
 
     failure_tag = str(row.metadata.get("failure_tag") or "")
@@ -178,6 +195,7 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
         return {
             "recovery_class": "document_size_guard",
             "recovery_action": "exclude_from_clean_gt_or_replace_fixture",
+            "gt_outcome_class": "api_guard_rejection",
             "gt_candidate_status": "not_gt_candidate_currently",
         }
 
@@ -185,6 +203,7 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
         return {
             "recovery_class": "multi_account_document",
             "recovery_action": "split_or_replace_fixture_or_keep_as_negative_coverage",
+            "gt_outcome_class": "api_guard_rejection",
             "gt_candidate_status": "fixture_review_required",
         }
 
@@ -192,16 +211,25 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
         failure_tag == "http_200_no_payload_quality_gate"
         or gt_extraction_skip_reason == "quality_gate_no_payload"
     ):
+        if row.metadata.get("gt_extraction_excluded") is True:
+            return {
+                "recovery_class": "http_200_no_payload_quality_gate",
+                "recovery_action": "registry_metadata_excluded_from_live_gt_extraction",
+                "gt_outcome_class": "registry_excluded",
+                "gt_candidate_status": "gt_excluded_by_registry_metadata",
+            }
         return {
             "recovery_class": "http_200_no_payload_quality_gate",
-            "recovery_action": "review_fixture_quality_or_replace_fixture",
-            "gt_candidate_status": "not_gt_candidate_currently",
+            "recovery_action": "include_as_negative_model_behavior_gt",
+            "gt_outcome_class": "quality_gated_no_extraction",
+            "gt_candidate_status": "gt_included_negative_model_behavior",
         }
 
     if error_type == "DocumentSizeGuardError" or "DocumentSizeGuardError" in error:
         return {
             "recovery_class": "document_size_guard",
             "recovery_action": "exclude_from_clean_gt_or_replace_fixture",
+            "gt_outcome_class": "api_guard_rejection",
             "gt_candidate_status": "not_gt_candidate_currently",
         }
 
@@ -209,6 +237,7 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
         return {
             "recovery_class": "multi_account_document",
             "recovery_action": "split_or_replace_fixture_or_keep_as_negative_coverage",
+            "gt_outcome_class": "api_guard_rejection",
             "gt_candidate_status": "fixture_review_required",
         }
 
@@ -216,21 +245,24 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
         return {
             "recovery_class": "unsupported_fixture",
             "recovery_action": "replace_fixture_or_correct_source_artifact",
-            "gt_candidate_status": "fixture_review_required",
+            "gt_outcome_class": "unexecutable_fixture",
+            "gt_candidate_status": "gt_excluded_unexecutable_fixture",
         }
 
     if failure_tag in TRANSIENT_OR_AUTH_FAILURE_TAGS:
         return {
             "recovery_class": "transient_or_auth_failure",
             "recovery_action": "targeted_rerun_after_retry_or_token_fix",
-            "gt_candidate_status": "rerun_candidate",
+            "gt_outcome_class": "execution_failure",
+            "gt_candidate_status": "gt_excluded_execution_failure",
         }
 
     if failure_tag == "http_429" or batch_http_status == 429:
         return {
             "recovery_class": "rate_limited",
             "recovery_action": "targeted_rerun_with_lower_concurrency_or_backoff",
-            "gt_candidate_status": "rerun_candidate",
+            "gt_outcome_class": "execution_failure",
+            "gt_candidate_status": "gt_excluded_execution_failure",
         }
 
     if failure_tag.startswith("http_"):
@@ -242,7 +274,8 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
             return {
                 "recovery_class": "transient_or_auth_failure",
                 "recovery_action": "targeted_rerun_after_retry_or_token_fix",
-                "gt_candidate_status": "rerun_candidate",
+                "gt_outcome_class": "execution_failure",
+                "gt_candidate_status": "gt_excluded_execution_failure",
             }
 
     if (
@@ -256,12 +289,14 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
         if _quality_check_has_failure(data):
             return {
                 "recovery_class": "http_200_no_payload_quality_gate",
-                "recovery_action": "review_fixture_quality_or_replace_fixture",
-                "gt_candidate_status": "not_gt_candidate_currently",
+                "recovery_action": "include_as_negative_model_behavior_gt",
+                "gt_outcome_class": "quality_gated_no_extraction",
+                "gt_candidate_status": "gt_included_negative_model_behavior",
             }
         return {
             "recovery_class": "http_200_no_payload_unknown",
             "recovery_action": "review_api_behavior_before_gt",
+            "gt_outcome_class": "no_payload_unknown",
             "gt_candidate_status": "api_behavior_review_required",
         }
 
@@ -269,13 +304,15 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
         return {
             "recovery_class": "transient_or_auth_failure",
             "recovery_action": "targeted_rerun_after_retry_or_token_fix",
-            "gt_candidate_status": "rerun_candidate",
+            "gt_outcome_class": "execution_failure",
+            "gt_candidate_status": "gt_excluded_execution_failure",
         }
 
     if failure_tag in MALFORMED_RESPONSE_TAGS or failure_tag == "unusable_result":
         return {
             "recovery_class": "malformed_or_unexpected_response_shape",
             "recovery_action": "review_api_or_exporter_schema",
+            "gt_outcome_class": "unreliable_response_shape",
             "gt_candidate_status": "api_behavior_review_required",
         }
 
@@ -283,13 +320,34 @@ def classify_export_row(row: ExportRow) -> dict[str, str]:
         return {
             "recovery_class": "malformed_or_unexpected_response_shape",
             "recovery_action": "manual_api_or_fixture_review",
+            "gt_outcome_class": "api_or_fixture_review",
             "gt_candidate_status": "inconclusive",
         }
 
     return {
         "recovery_class": "malformed_or_unexpected_response_shape",
         "recovery_action": "manual_api_or_fixture_review",
+        "gt_outcome_class": "api_or_fixture_review",
         "gt_candidate_status": "inconclusive",
+    }
+
+
+def build_main_workbook_status_values(row: ExportRow) -> dict[str, Any]:
+    data = _data(row)
+    classification = classify_export_row(row)
+    return {
+        "gt_outcome_class": classification["gt_outcome_class"],
+        "gt_candidate_status": classification["gt_candidate_status"],
+        "extractionStatus": data.get("extractionStatus") if isinstance(data, dict) else None,
+        "documentQuality": data.get("documentQuality") if isinstance(data, dict) else None,
+        "quality_gate_reason": _dig(data, "qualityCheck", "issueDescription"),
+        "request_file_type": row.metadata.get("request_file_type"),
+        "response_fileType": data.get("fileType") if isinstance(data, dict) else None,
+        "source_row": row.metadata.get("source_row"),
+        "source_gcs_uri": row.metadata.get("source_gcs_uri"),
+        "batch_result_correlation_id": row.metadata.get("batch_result_correlation_id"),
+        "failure_tag": row.metadata.get("failure_tag"),
+        "error_type": row.metadata.get("error_type"),
     }
 
 

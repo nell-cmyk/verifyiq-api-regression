@@ -1385,7 +1385,8 @@ def test_rate_limit_retry_exhaustion_is_triaged_as_rate_limited(monkeypatch):
 
     triage_row = build_recovery_triage_row(rows[0])
     assert triage_row["recovery_class"] == "rate_limited"
-    assert triage_row["gt_candidate_status"] == "rerun_candidate"
+    assert triage_row["gt_outcome_class"] == "execution_failure"
+    assert triage_row["gt_candidate_status"] == "gt_excluded_execution_failure"
     assert triage_row["recovery_action"] == "targeted_rerun_with_lower_concurrency_or_backoff"
 
 
@@ -1516,8 +1517,9 @@ def test_clean_candidate_classification_accepts_usable_success_with_null_fields(
     assert is_clean_candidate(rows[0]) is True
     assert classify_export_row(rows[0]) == {
         "recovery_class": "clean_success",
-        "recovery_action": "include_in_clean_gt",
-        "gt_candidate_status": "clean_candidate",
+        "recovery_action": "include_in_gt_workbook",
+        "gt_outcome_class": "parsed_response",
+        "gt_candidate_status": "gt_included_parsed",
     }
 
 
@@ -1558,7 +1560,8 @@ def test_recovery_triage_classifies_transient_or_auth_failures(
 
     triage_row = build_recovery_triage_row(rows[0])
     assert triage_row["recovery_class"] == "transient_or_auth_failure"
-    assert triage_row["gt_candidate_status"] == "rerun_candidate"
+    assert triage_row["gt_outcome_class"] == "execution_failure"
+    assert triage_row["gt_candidate_status"] == "gt_excluded_execution_failure"
     assert triage_row["recovery_action"] == "targeted_rerun_after_retry_or_token_fix"
 
 
@@ -1614,7 +1617,8 @@ def test_recovery_triage_classifies_unsupported_fixture():
 
     triage_row = build_recovery_triage_row(row)
     assert triage_row["recovery_class"] == "unsupported_fixture"
-    assert triage_row["gt_candidate_status"] == "fixture_review_required"
+    assert triage_row["gt_outcome_class"] == "unexecutable_fixture"
+    assert triage_row["gt_candidate_status"] == "gt_excluded_unexecutable_fixture"
 
 
 def test_recovery_triage_classifies_multi_account_document(monkeypatch):
@@ -1667,7 +1671,8 @@ def test_recovery_triage_classifies_http_200_no_payload_quality_gate(monkeypatch
     triage_row = build_recovery_triage_row(rows[0])
     assert rows[0].metadata["failure_tag"] == "unusable_result"
     assert triage_row["recovery_class"] == "http_200_no_payload_quality_gate"
-    assert triage_row["gt_candidate_status"] == "not_gt_candidate_currently"
+    assert triage_row["gt_outcome_class"] == "quality_gated_no_extraction"
+    assert triage_row["gt_candidate_status"] == "gt_included_negative_model_behavior"
     assert triage_row["extractionStatus"] == "not_attempted"
     assert triage_row["documentQuality"] == "Failed: failed document_classification"
     assert triage_row["qualityCheck.issueDescription"] == "Failed: failed document_classification"
@@ -1698,6 +1703,7 @@ def test_recovery_triage_classifies_http_200_no_payload_unknown(monkeypatch):
     triage_row = build_recovery_triage_row(rows[0])
     assert rows[0].metadata["failure_tag"] == "unusable_result"
     assert triage_row["recovery_class"] == "http_200_no_payload_unknown"
+    assert triage_row["gt_outcome_class"] == "no_payload_unknown"
     assert triage_row["gt_candidate_status"] == "api_behavior_review_required"
 
 
@@ -1721,6 +1727,7 @@ def test_recovery_triage_keeps_generic_unusable_shape_separate(monkeypatch):
     triage_row = build_recovery_triage_row(rows[0])
     assert rows[0].metadata["failure_tag"] == "unusable_result"
     assert triage_row["recovery_class"] == "malformed_or_unexpected_response_shape"
+    assert triage_row["gt_outcome_class"] == "unreliable_response_shape"
     assert triage_row["gt_candidate_status"] == "api_behavior_review_required"
 
 
@@ -2019,8 +2026,9 @@ def test_run_export_writes_clean_workbook_manifest_and_recovery_triage(monkeypat
         "unsupported_fixture": 1,
     }
     assert clean_manifest["triaged_rows_by_gt_candidate_status"] == {
-        "not_gt_candidate_currently": 2,
-        "fixture_review_required": 1,
+        "gt_included_negative_model_behavior": 1,
+        "gt_excluded_unexecutable_fixture": 1,
+        "not_gt_candidate_currently": 1,
     }
 
     file_type_result = result.file_type_results[0]
@@ -2033,7 +2041,49 @@ def test_run_export_writes_clean_workbook_manifest_and_recovery_triage(monkeypat
     assert manifest["file_types"]["Payslip"]["clean_workbook_path"] == str(file_type_result.clean_workbook_path)
 
     audit_workbook = load_workbook(file_type_result.workbook_path, data_only=True)
+    audit_sheet = audit_workbook["Payslip"]
     audit_meta_sheet = audit_workbook["_meta"]
+    audit_headers = [
+        audit_sheet.cell(1, column).value
+        for column in range(1, audit_sheet.max_column + 1)
+    ]
+    for header in (
+        "gt_outcome_class",
+        "gt_candidate_status",
+        "extractionStatus",
+        "documentQuality",
+        "quality_gate_reason",
+        "request_file_type",
+        "response_fileType",
+        "source_row",
+        "source_gcs_uri",
+        "batch_result_correlation_id",
+        "failure_tag",
+        "error_type",
+    ):
+        assert header in audit_headers
+
+    audit_rows = [
+        {
+            header: audit_sheet.cell(row, column).value
+            for column, header in enumerate(audit_headers, start=1)
+        }
+        for row in range(2, audit_sheet.max_row + 1)
+    ]
+    quality_row = next(row for row in audit_rows if row["filename"] == "quality-gated")
+    assert quality_row["parse_success"] is False
+    assert quality_row["gt_outcome_class"] == "quality_gated_no_extraction"
+    assert quality_row["gt_candidate_status"] == "gt_included_negative_model_behavior"
+    assert quality_row["extractionStatus"] == "not_attempted"
+    assert quality_row["documentQuality"] == "Failed: failed document_classification"
+    assert quality_row["quality_gate_reason"] == "Failed: failed document_classification"
+    assert quality_row["request_file_type"] == "Payslip"
+    assert quality_row["response_fileType"] == "Payslip"
+    assert quality_row["source_row"] == 11
+    assert quality_row["source_gcs_uri"] == "gs://bucket/quality-gated.pdf"
+    assert quality_row["batch_result_correlation_id"] == "corr-quality-gated-1"
+    assert quality_row["failure_tag"] == "unusable_result"
+    assert quality_row["error_type"] == "ValueError"
     assert audit_meta_sheet.max_row == 5
 
     clean_workbook = load_workbook(file_type_result.clean_workbook_path, data_only=True)
@@ -2044,6 +2094,7 @@ def test_run_export_writes_clean_workbook_manifest_and_recovery_triage(monkeypat
     ]
     parse_success_column = clean_headers.index("parse_success") + 1
     error_column = clean_headers.index("error") + 1
+    assert "gt_outcome_class" not in clean_headers
     assert clean_sheet.max_row == 2
     assert clean_sheet.cell(2, parse_success_column).value is True
     assert clean_sheet.cell(2, error_column).value is None
@@ -2244,8 +2295,12 @@ def test_quality_gate_rows_are_future_skipped_only_when_explicitly_tagged(monkey
         "http_200_no_payload_quality_gate",
     ]
     assert recovery_rows[0]["gt_extraction_excluded"] is True
+    assert recovery_rows[0]["gt_outcome_class"] == "registry_excluded"
+    assert recovery_rows[0]["gt_candidate_status"] == "gt_excluded_by_registry_metadata"
     assert recovery_rows[0]["batch_http_status"] is None
     assert recovery_rows[1]["gt_extraction_excluded"] is False
+    assert recovery_rows[1]["gt_outcome_class"] == "quality_gated_no_extraction"
+    assert recovery_rows[1]["gt_candidate_status"] == "gt_included_negative_model_behavior"
     assert recovery_rows[1]["batch_http_status"] == 200
     assert result.file_type_results[0].clean_rows == 0
 
@@ -2292,12 +2347,13 @@ def test_run_export_excludes_rate_limited_rows_from_clean_and_triages_them(monke
     assert recovery_rows[0]["failure_tag"] == "http_429"
     assert recovery_rows[0]["batch_http_status"] == 429
     assert recovery_rows[0]["recovery_class"] == "rate_limited"
-    assert recovery_rows[0]["gt_candidate_status"] == "rerun_candidate"
+    assert recovery_rows[0]["gt_outcome_class"] == "execution_failure"
+    assert recovery_rows[0]["gt_candidate_status"] == "gt_excluded_execution_failure"
     assert recovery_rows[0]["recovery_action"] == "targeted_rerun_with_lower_concurrency_or_backoff"
     assert clean_manifest["clean_included_rows"] == 4
     assert clean_manifest["triaged_rejected_rows"] == 1
     assert clean_manifest["triaged_rows_by_recovery_class"] == {"rate_limited": 1}
-    assert clean_manifest["triaged_rows_by_gt_candidate_status"] == {"rerun_candidate": 1}
+    assert clean_manifest["triaged_rows_by_gt_candidate_status"] == {"gt_excluded_execution_failure": 1}
     assert manifest["rate_limit_retries"] == 0
     assert manifest["file_types"]["ACR"]["retry_summary"] == {
         "rows_with_retries": 0,

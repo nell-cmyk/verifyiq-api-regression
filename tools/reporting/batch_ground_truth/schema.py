@@ -8,6 +8,7 @@ from typing import Any
 from openpyxl import load_workbook
 
 from .models import ExportRow, TemplateLayout
+from .triage import MAIN_WORKBOOK_GT_STATUS_HEADERS
 
 FIXED_METADATA_HEADERS = (
     "source_row",
@@ -285,7 +286,12 @@ def build_failure_template_values(*, source_basename: str, error: str | None) ->
     }
 
 
-def build_main_sheet_header_order(layout: TemplateLayout, rows: list[ExportRow]) -> list[str]:
+def build_main_sheet_header_order(
+    layout: TemplateLayout,
+    rows: list[ExportRow],
+    *,
+    include_gt_status_columns: bool = False,
+) -> list[str]:
     template_headers = [
         header
         for header in layout.headers
@@ -295,12 +301,17 @@ def build_main_sheet_header_order(layout: TemplateLayout, rows: list[ExportRow])
             or any(_has_visible_value(row.template_values.get(header)) for row in rows)
         )
     ]
+    gt_status_headers = [
+        header
+        for header in MAIN_WORKBOOK_GT_STATUS_HEADERS
+        if include_gt_status_columns and header not in template_headers
+    ]
     dynamic_headers = sorted(
         {
             header
             for row in rows
             for header, value in row.extra_values.items()
-            if _has_visible_value(value)
+            if _has_visible_value(value) and header not in gt_status_headers
         }
     )
-    return [*template_headers, *dynamic_headers]
+    return [*template_headers, *gt_status_headers, *dynamic_headers]
