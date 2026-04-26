@@ -156,14 +156,16 @@ the schema does not forbid additional validation-item properties.
 ## Recommendations
 
 ### Later `official-openapi.json` update
-Recommended in a separate implementation pass:
+Completed in the follow-up spec-alignment pass:
 - Add a conservative optional `pipeline` object to `ParseRequest`, including `use_cache` as a boolean.
 - Strengthen the `/v1/documents/parse` `200` response beyond generic object.
-- At minimum, document the stable top-level success fields currently asserted by tests: `fileType`, `documentQuality`, `summaryOCR`, `summaryResult`, and `calculatedFields`.
-- Prefer conservative type shapes over overfitting to the full protected fixture payload, because the pilot used one protected fixture and not the full matrix.
-- Optionally document the extra validation-item `input` field only if API owners confirm it is stable/public.
+- Document the stable top-level success fields currently asserted by tests: `fileType`, `documentQuality`, `summaryOCR`, `summaryResult`, and `calculatedFields`.
+- Keep nested parsed-document structures generic with `additionalProperties: true`, because the pilot used one protected fixture and not the full matrix.
 
-Do not update `official-openapi.json` in this audit tranche.
+Not changed:
+- `pipeline` remains optional.
+- `HTTPValidationError` remains unchanged.
+- The extra validation-item `input` field remains undocumented until API owners confirm it is stable/public.
 
 ### Test update recommendation
 Leave current parse tests unchanged in this audit tranche:
@@ -172,12 +174,11 @@ Leave current parse tests unchanged in this audit tranche:
 - In a later implementation tranche, consider focused type-shape assertions for the already-required success fields after the OpenAPI success schema is updated.
 
 ### Follow-up implementation candidates
-1. Update `official-openapi.json` for optional `pipeline.use_cache` and a conservative parse success schema.
-2. Add or adjust non-live contract tests around the edited OpenAPI shape if the repo has a suitable static validation surface.
-3. Consider one focused parse contract validation pass after the spec update, using the canonical runner category mapping rather than matrix/full coverage unless broader live coverage is explicitly approved.
+1. Add or adjust non-live contract tests around the edited OpenAPI shape if the repo gains a suitable static validation surface.
+2. Consider one focused parse contract validation pass after the spec update, using the canonical runner category mapping rather than matrix/full coverage unless broader live coverage is explicitly approved.
 
 ## Pilot Status
-Status: fresh `/parse` OpenAPI drift pilot completed for the protected baseline fixture on 2026-04-26.
+Status: fresh `/parse` OpenAPI drift pilot completed for the protected baseline fixture on 2026-04-26, and the conservative `official-openapi.json` spec-alignment follow-up is complete.
 
 Remaining unresolved owner questions:
 - Is `pipeline.use_cache` an intended public request field or a tolerated internal override?
