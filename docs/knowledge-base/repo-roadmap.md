@@ -15,7 +15,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 - Requests are live, not mocked. `tests/client.py` builds an `httpx.Client` from live environment settings and Google IAP credentials.
 - `/parse` and `/documents/batch` use GCS-backed fixtures. `PARSE_FIXTURE_FILE` must remain a `gs://` URI, and batch selection reuses the generated fixture registry.
 - The OpenAPI source is `official-openapi.json`. Treat it as the intended contract source and endpoint inventory input, not as automatic ground truth.
-- Current contract coverage is manual and selective through `tests/endpoints/document_contracts.py`; no generated OpenAPI validator or whole-response schema validation workflow is active yet.
+- Current contract coverage is manual and selective through `tests/endpoints/document_contracts.py`, with a narrow static `/parse` OpenAPI alignment guard in `tests/tools/test_official_openapi_parse_contract.py`. No generated OpenAPI validator or whole-response schema validation workflow is active yet.
 - Checked-in CI has two lanes: `.github/workflows/protected-baseline.yml` for the secret-aware protected live baseline, and `.github/workflows/non-live-validation.yml` for offline tooling/reporting/skills validation plus safe runner discovery.
 - Offline tooling, reporting, skills, and runner tests are expected to run with `VERIFYIQ_SKIP_DOTENV=1` so they do not require live env bootstrap.
 - Repo-local Mind continuity is active for OpenCode and Codex. Active task state belongs in Mind, not repo docs; durable repo truth belongs in tracked docs by scope.
@@ -32,7 +32,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 ## Current Validation Surface
 | Surface | Canonical entry point | Current role | Status |
 | --- | --- | --- | --- |
-| Non-live tooling/reporting/skills | `VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting/ tests/skills/ -v` | Safe offline validation for runner, reporting, skills, and tooling changes | Current CI lane |
+| Non-live tooling/reporting/skills | `VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python -m pytest tests/tools/ tests/reporting/ tests/skills/ -v` | Safe offline validation for runner, reporting, skills, tooling, and the narrow `/parse` OpenAPI alignment guard | Current CI lane |
 | Protected `/parse` baseline | `./.venv/bin/python tools/run_regression.py` | Default live gate; maps to `pytest tests/endpoints/parse/ -v` | Current default |
 | Protected structured report | `./.venv/bin/python tools/run_regression.py --report` | Default suite plus structured `reports/regression/` artifacts | Opt-in |
 | GET smoke | `./.venv/bin/python tools/run_regression.py --suite smoke` | Cross-group safe GET status coverage plus exact-status guards | Opt-in |
@@ -60,23 +60,22 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 | Phase 0: Inventory and guardrails | Largely complete; keep current | Command registry, endpoint inventory, non-live CI, safe discovery, fixture registry visibility | Docs and CI stay aligned as commands and coverage change |
 | Phase 1: Suite taxonomy and onboarding rules | In progress | Define suite/category/risk rules for current and future endpoints | New endpoint proposals include safety class, suite lane, categories, fixtures/prereqs, artifacts, runner mapping, CI eligibility, and owner/blocker notes |
 | Phase 2: Canonical runner parity | Implemented for current main paths | Preserve protected, smoke, full, matrix, focused parse categories, direct batch, focused batch categories, selected batch, list, dry-run, and non-targeted report mappings | Non-live tests prove command, flag, dry-run, env, and return-code behavior for each supported mapping |
-| Phase 3: Contract and schema modernization | `/parse` pilot and conservative spec follow-up completed | Compare OpenAPI, tests, and safe observed artifacts for in-scope endpoints | Static OpenAPI contract checks are considered; `/batch` follows after the pattern is stable |
+| Phase 3: Contract and schema modernization | `/parse` pilot, conservative spec follow-up, and static guard completed | Compare OpenAPI, tests, and safe observed artifacts for in-scope endpoints | `/batch` follows after the pattern is stable |
 | Phase 4: Legacy deprecation | Not started | Reduce direct wrapper/operator duplication only after parity and approval | Docs, CI, tests, direct imports, shell-outs, and compatibility expectations no longer require direct wrapper use |
 | Phase 5: Reporting and CI maturity | In progress | Keep non-live CI current, govern artifact publishing, improve report parity | CI and local docs tell the same runner story; sensitive live artifacts remain opt-in |
 | Phase 6: Endpoint expansion | Deliberately constrained | Add endpoint groups through risk-based taxonomy and coverage inventory | New groups enter with explicit scope, safety, category depth, runner mapping, and default-suite decision |
 
 ## Prioritized Next Work
-1. Consider a narrow non-live OpenAPI contract check for the completed `/parse` spec alignment if a maintainable static validation surface emerges. Keep tests from being weakened to match older generic schemas.
-2. Keep offline validation isolated from live env imports. Any shared fixture, root conftest, or runner change should preserve the `VERIFYIQ_SKIP_DOTENV=1` non-live lane.
-3. Use the focused `/parse` and `/documents/batch` category mappings for opt-in validation only when live category coverage is intentionally approved; keep the default protected suite parse-only.
-4. Keep non-targeted structured-report runner behavior covered as wrappers evolve, and decide separately whether batch needs a concise summary surface comparable to parse matrix summaries.
-5. Re-run the opt-in `/documents/batch` tenant-token auth characterization only after auth-layer or staging behavior changes. Keep it out of the default suite and out of mapped batch `auth` until missing and invalid tenant-token requests return confirmed `401` or `403`.
-6. Keep `docs/operations/endpoint-coverage-inventory.md` current as GET smoke expands, but keep sequencing decisions here.
-7. Decide whether this repository should remain parse/batch-centered with selective GET smoke, or become a broader multi-endpoint automation hub. Until that decision is explicit, expansion should stay near safe document-processing surfaces.
+1. Keep offline validation isolated from live env imports. Any shared fixture, root conftest, runner change, or static OpenAPI guard should preserve the `VERIFYIQ_SKIP_DOTENV=1` non-live lane.
+2. Use the focused `/parse` and `/documents/batch` category mappings for opt-in validation only when live category coverage is intentionally approved; keep the default protected suite parse-only.
+3. Keep non-targeted structured-report runner behavior covered as wrappers evolve, and decide separately whether batch needs a concise summary surface comparable to parse matrix summaries.
+4. Re-run the opt-in `/documents/batch` tenant-token auth characterization only after auth-layer or staging behavior changes. Keep it out of the default suite and out of mapped batch `auth` until missing and invalid tenant-token requests return confirmed `401` or `403`.
+5. Keep `docs/operations/endpoint-coverage-inventory.md` current as GET smoke expands, but keep sequencing decisions here.
+6. Decide whether this repository should remain parse/batch-centered with selective GET smoke, or become a broader multi-endpoint automation hub. Until that decision is explicit, expansion should stay near safe document-processing surfaces.
 
 ## Blockers And Deferred Items
 - `/documents/batch` auth-negative coverage and `--endpoint batch --category auth` mapping are blocked by live behavior: missing tenant-token requests have timed out, and invalid tenant-token requests have returned `200` and timed out in observed opt-in runs. See `docs/knowledge-base/batch/auth-negative-blocker.md`.
-- `/parse` OpenAPI drift pilot evidence is documented from a fresh protected report run, and `official-openapi.json` now includes optional `pipeline.use_cache` plus a conservative parse success schema. Remaining work is optional static contract-test hardening and future `/batch` drift work.
+- `/parse` OpenAPI drift pilot evidence is documented from a fresh protected report run, `official-openapi.json` now includes optional `pipeline.use_cache` plus a conservative parse success schema, and the aligned shape is guarded by a narrow non-live JSON inspection test. Remaining contract-modernization work is future `/batch` drift work.
 - Remaining true GET 200-smoke backlog is limited to four still-blocked endpoints: `/v1/admin/cache/stats`, `/monitoring/api/v1/providers`, `/ai-gateway/s3/s3/list`, and `/v1/documents/fraud-status/{job_id}`. Keep exact-status guards for known `401`, `403`, and `502` surfaces. See `docs/operations/endpoint-coverage-inventory.md`.
 - Default batch inclusion is deferred until batch auth, runtime, fixture stability, and failure ownership are better characterized.
 - Broader live CI lanes are deferred until runtime, stability, ownership, and artifact sensitivity are understood.
