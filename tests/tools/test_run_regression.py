@@ -315,6 +315,65 @@ def test_parse_matrix_report_dry_run_forwards_report_to_matrix_wrapper():
     assert "Executing command:" not in stdout
 
 
+@pytest.mark.parametrize(
+    ("argv", "expected_command_fragment", "unexpected_fragments"),
+    [
+        (
+            ["--report", "--dry-run"],
+            "tools/run_parse_with_report.py --tier baseline",
+            (
+                "tools/run_parse_full_regression.py",
+                "tools/reporting/run_parse_matrix_with_summary.py",
+                "-m pytest tests/endpoints/parse/ -v",
+            ),
+        ),
+        (
+            ["--suite", "protected", "--report", "--dry-run"],
+            "tools/run_parse_with_report.py --tier baseline",
+            (
+                "tools/run_parse_full_regression.py",
+                "tools/reporting/run_parse_matrix_with_summary.py",
+                "-m pytest tests/endpoints/parse/ -v",
+            ),
+        ),
+        (
+            ["--suite", "full", "--report", "--dry-run"],
+            "tools/run_parse_full_regression.py --report",
+            (
+                "tools/run_parse_with_report.py",
+                "tools/reporting/run_parse_matrix_with_summary.py",
+                "-m pytest tests/endpoints/parse/ -v",
+            ),
+        ),
+        (
+            ["--endpoint", "parse", "--category", "matrix", "--report", "--dry-run"],
+            "tools/reporting/run_parse_matrix_with_summary.py --report",
+            (
+                "tools/run_parse_with_report.py",
+                "tools/run_parse_full_regression.py",
+                "-m pytest tests/endpoints/parse/ -v",
+            ),
+        ),
+    ],
+)
+def test_structured_report_dry_runs_delegate_to_supported_wrappers_only(
+    argv: list[str],
+    expected_command_fragment: str,
+    unexpected_fragments: tuple[str, ...],
+):
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, argv)
+
+    assert rc == 0
+    assert stderr == ""
+    assert expected_command_fragment in stdout
+    for fragment in unexpected_fragments:
+        assert fragment not in stdout
+    assert "Executing command:" not in stdout
+
+
 def test_parse_matrix_executes_matrix_wrapper_and_returns_subprocess_code():
     module = _load_module()
     calls: list[tuple[str, ...]] = []

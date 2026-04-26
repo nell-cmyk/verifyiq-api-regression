@@ -11,6 +11,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 - The canonical operator runner is `tools/run_regression.py`. Current safe discovery output confirms implemented suites `protected`, `smoke`, and `full`; implemented endpoint groups `parse` and `batch`; implemented category selections `matrix`, `contract`, `auth`, and `negative`; and planned-but-unmapped category `legacy`.
 - Current category mappings are endpoint-specific, opt-in, backed by existing tests, and guarded by non-live runner tests: `/parse` maps `contract`, `auth`, `negative`, and `matrix`; `/documents/batch` maps `contract` and `negative`. `/documents/batch auth` remains deferred by the known auth-negative blocker.
 - The no-argument runner maps to the parse-only protected suite. This is still the default live gate and must not silently broaden.
+- Structured-report runner mappings are non-targeted and guarded by non-live runner tests: no-arg `--report` and `--suite protected --report` delegate to the baseline report helper, `--suite full --report` delegates to the full wrapper, and `--endpoint parse --category matrix --report` delegates to the matrix wrapper.
 - Current automated live coverage includes `/v1/documents/parse`, `/v1/documents/batch`, and the opt-in cross-group GET smoke lane under `tests/endpoints/get_smoke/`.
 - Requests are live, not mocked. `tests/client.py` builds an `httpx.Client` from live environment settings and Google IAP credentials.
 - `/parse` and `/documents/batch` use GCS-backed fixtures. `PARSE_FIXTURE_FILE` must remain a `gs://` URI, and batch selection reuses the generated fixture registry.
@@ -63,11 +64,11 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 | Phase 2: Canonical runner parity | Implemented for current main paths; focused category policy audited | Preserve protected, smoke, full, matrix, focused parse categories, direct batch, focused batch categories, selected batch, list, dry-run, and non-targeted report mappings | Non-live tests prove command, flag, dry-run, env, and return-code behavior for each supported mapping |
 | Phase 3: Contract and schema modernization | `/parse` pilot, conservative spec follow-up, static guard, and non-live isolation guard completed | Compare OpenAPI, tests, and safe observed artifacts for in-scope endpoints | `/batch` follows after the pattern is stable |
 | Phase 4: Legacy deprecation | Not started | Reduce direct wrapper/operator duplication only after parity and approval | Docs, CI, tests, direct imports, shell-outs, and compatibility expectations no longer require direct wrapper use |
-| Phase 5: Reporting and CI maturity | In progress | Keep non-live CI current, govern artifact publishing, improve report parity | CI and local docs tell the same runner story; sensitive live artifacts remain opt-in |
+| Phase 5: Reporting and CI maturity | In progress; non-targeted report mappings guarded | Keep non-live CI current, govern artifact publishing, improve report parity | CI and local docs tell the same runner story; sensitive live artifacts remain opt-in |
 | Phase 6: Endpoint expansion | Deliberately constrained | Add endpoint groups through risk-based taxonomy and coverage inventory | New groups enter with explicit scope, safety, category depth, runner mapping, and default-suite decision |
 
 ## Prioritized Next Work
-1. Keep non-targeted structured-report runner behavior covered as wrappers evolve, and decide separately whether batch needs a concise summary surface comparable to parse matrix summaries.
+1. Decide whether `/documents/batch` needs a concise summary surface comparable to parse matrix summaries; keep raw batch artifacts sensitive and opt-in either way.
 2. Re-run the opt-in `/documents/batch` tenant-token auth characterization only after auth-layer or staging behavior changes. Keep it out of the default suite and out of mapped batch `auth` until missing and invalid tenant-token requests return confirmed `401` or `403`.
 3. Keep `docs/operations/endpoint-coverage-inventory.md` current as GET smoke expands, but keep sequencing decisions here.
 4. Decide whether this repository should remain parse/batch-centered with selective GET smoke, or become a broader multi-endpoint automation hub. Until that decision is explicit, expansion should stay near safe document-processing surfaces.
