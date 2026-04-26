@@ -6,6 +6,8 @@ import sys
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT_PATH = (
     Path(__file__).resolve().parents[2]
@@ -427,6 +429,52 @@ def test_parse_contract_dry_run_prints_existing_test_nodeids():
     assert "RUN_PARSE_MATRIX=1" not in stdout
 
 
+@pytest.mark.parametrize(
+    ("argv", "expected_targets", "unexpected_fragments"),
+    [
+        (
+            ["--endpoint", "parse", "--category", "auth", "--dry-run"],
+            ("tests/endpoints/parse/test_parse.py::TestParseAuth",),
+            ("tests/endpoints/batch/", "tools/reporting/run_parse_matrix_with_summary.py"),
+        ),
+        (
+            ["--endpoint", "parse", "--category", "negative", "--dry-run"],
+            ("tests/endpoints/parse/test_parse.py::TestParseValidation",),
+            ("tests/endpoints/batch/", "tools/reporting/run_parse_matrix_with_summary.py"),
+        ),
+        (
+            ["--endpoint", "batch", "--category", "contract", "--dry-run"],
+            (
+                "tests/endpoints/batch/test_batch.py::TestBatchHappyPath::test_response_has_expected_batch_structure",
+                "tests/endpoints/batch/test_batch.py::TestBatchHappyPath::test_results_preserve_request_order_and_item_contract",
+            ),
+            ("tests/endpoints/parse/", "tools/reporting/run_parse_matrix_with_summary.py"),
+        ),
+        (
+            ["--endpoint", "batch", "--category", "negative", "--dry-run"],
+            ("tests/endpoints/batch/test_batch.py::TestBatchValidation",),
+            ("tests/endpoints/parse/", "tools/reporting/run_parse_matrix_with_summary.py"),
+        ),
+    ],
+)
+def test_focused_category_dry_runs_stay_endpoint_scoped(
+    argv: list[str],
+    expected_targets: tuple[str, ...],
+    unexpected_fragments: tuple[str, ...],
+):
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, argv)
+
+    assert rc == 0
+    assert stderr == ""
+    for target in expected_targets:
+        assert target in stdout
+    for fragment in unexpected_fragments:
+        assert fragment not in stdout
+
+
 def test_parse_auth_executes_existing_auth_class():
     module = _load_module()
     calls: list[tuple[str, ...]] = []
@@ -633,6 +681,49 @@ def test_batch_auth_remains_deferred():
     assert rc != 0
     assert stdout == ""
     assert "Category 'auth' is not mapped for --endpoint batch" in stderr
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected_error"),
+    [
+        (
+            ["--endpoint", "parse", "--category", "contract", "--report"],
+            "--report is not supported for --endpoint parse --category contract",
+        ),
+        (
+            ["--endpoint", "parse", "--category", "auth", "--file-types", "Payslip"],
+            "--file-types is not supported for --endpoint parse --category auth",
+        ),
+        (
+            ["--endpoint", "parse", "--category", "negative", "--fixtures-json", "fixtures.json"],
+            "--fixtures-json is not supported for --endpoint parse --category negative",
+        ),
+        (
+            ["--endpoint", "batch", "--category", "contract", "--report"],
+            "--report is not supported for --endpoint batch --category contract",
+        ),
+        (
+            ["--endpoint", "batch", "--category", "negative", "--file-types", "Payslip"],
+            "--file-types is not supported for --endpoint batch --category negative",
+        ),
+        (
+            ["--endpoint", "batch", "--category", "contract", "--fixtures-json", "fixtures.json"],
+            "--fixtures-json is not supported for --endpoint batch --category contract",
+        ),
+    ],
+)
+def test_focused_categories_reject_unsupported_targeting_and_report_flags(
+    argv: list[str],
+    expected_error: str,
+):
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, argv)
+
+    assert rc == 2
+    assert stdout == ""
+    assert expected_error in stderr
 
 
 def test_no_argument_invocation_executes_protected_live_path():
