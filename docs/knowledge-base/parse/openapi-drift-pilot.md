@@ -1,150 +1,186 @@
 # /parse OpenAPI Drift Pilot
 
 ## Purpose
-This document is the current safe contract-drift pilot for `/v1/documents/parse`.
+This document records the safe contract-drift pilot for `POST /v1/documents/parse`.
 
-It intentionally separates three things:
+It separates:
 - what `official-openapi.json` says
-- what the current tests assert
-- what remains unresolved until fresh safe run artifacts are available
+- what current regression tests assert
+- what fresh protected-run artifacts show
+- which follow-up changes belong in a later implementation pass
 
-## Evidence Used In This Pass
-- `official-openapi.json`
-- `tests/endpoints/parse/test_parse.py`
-- `tests/endpoints/batch/test_batch.py`
-- `tests/endpoints/document_contracts.py`
-- `tests/diagnostics.py`
-- `tools/reporting/render_regression_summary.py`
-- `docs/knowledge-base/parse/triage-patterns.md`
+Raw response artifacts may contain sensitive parsed document data. This page stores
+only sanitized field names, type shapes, run metadata, and evidence-backed
+decisions.
 
-Current blocker:
-- No checked-in `reports/` artifacts were present in the working tree during this pass, so the runtime-observed 200 and 422 payload shapes could not be re-compared from saved evidence.
+## Fresh Pilot Run
+- Run date: 2026-04-26
+- Command: `./.venv/bin/python tools/run_regression.py --report`
+- Runner mapping: protected `/parse` report, delegated by the canonical runner to `tools/run_parse_with_report.py --tier baseline`
+- Exit status: `0`
+- Result: `17 passed`, `0 failed`, `0 skipped`, `0 error`
+- Duration: `71.69s`
+- Endpoint: `/v1/documents/parse`
+- fileType exercised: `BankStatement`
+- Auth-negative note: missing and invalid tenant-token checks passed through the existing accepted timeout behavior.
 
-## Current Non-Live Facts
-- `official-openapi.json` documents `/v1/documents/parse` and `/v1/documents/batch` `200` responses as generic JSON objects with `additionalProperties: true`.
-- Current parse tests assert stronger success behavior than the spec by requiring stable fields such as `fileType`, `documentQuality`, `summaryOCR`, `summaryResult`, and `calculatedFields`.
-- Current batch tests assert stronger success behavior than the spec by requiring top-level keys such as `summary`, `results`, `cacheStatistics`, `crosscheckResults`, and `aggregated_gshare_fields`, plus per-item document-result expectations for successful items.
-- Safe observed artifacts must come from approved protected, matrix, or batch runs. Do not create new live probes just for this pilot without explicit validation intent.
-- Raw artifacts may contain sensitive response data, so drift notes should summarize field shapes and decisions rather than paste raw payloads.
+Fresh generated artifacts inspected locally:
+- Response artifact directory: `reports/parse/responses/parse_2026-04-26-T101220_053927Z/`
+- Success artifact: `reports/parse/responses/parse_2026-04-26-T101220_053927Z/test_parse__TestParseHappyPath__test_returns_200__2026-04-26-T101220_055224Z_0001.json`
+- Validation artifacts:
+  - `reports/parse/responses/parse_2026-04-26-T101220_053927Z/test_parse__TestParseValidation__test_missing_file_returns_422__2026-04-26-T101240_677594Z_0002.json`
+  - `reports/parse/responses/parse_2026-04-26-T101220_053927Z/test_parse__TestParseValidation__test_missing_file_type_returns_422__2026-04-26-T101241_023967Z_0003.json`
+  - `reports/parse/responses/parse_2026-04-26-T101220_053927Z/test_parse__TestParseValidation__test_empty_body_returns_422__2026-04-26-T101241_364961Z_0004.json`
+  - `reports/parse/responses/parse_2026-04-26-T101220_053927Z/test_parse__TestParseValidation__test_422_conforms_to_openapi_schema__2026-04-26-T101241_697550Z_0005.json`
+- Structured report metadata: `reports/regression/20260426T101132Z/report.json`
+- Structured report markdown: `reports/regression/20260426T101132Z/report.md`
 
-## Intended Contract From OpenAPI
+Sensitivity note:
+- The generated structured report markdown and raw JSON artifacts are local generated evidence only and must not be committed.
+- `report.md` includes request/response details and parsed response content. Use it only for local inspection; do not copy raw bodies or fixture URIs into tracked docs or Mind.
 
-### Request
-`ParseRequest` currently declares:
+## OpenAPI Contract Snapshot
+
+### Request: `ParseRequest`
+`official-openapi.json` declares:
 - required: `file`, `fileType`
 - `file`: string
 - `fileType`: string
 
-### Validation Error
-`HTTPValidationError` currently declares:
-- top-level `detail`
-- `detail` items reference `ValidationError`
+It does not declare `pipeline` or `pipeline.use_cache`.
 
-### Success Response
-The `200` response currently declares only:
+### Success Response: `200`
+`official-openapi.json` declares only:
 - `type: object`
 - `additionalProperties: true`
 
-That means the success contract is effectively undocumented beyond "some JSON object".
+That means the success response is effectively documented as a generic object.
 
-## Current Test-Backed Behavior Expectations
+### Validation Error: `HTTPValidationError`
+`official-openapi.json` declares:
+- top-level `detail`
+- `detail` items reference `ValidationError`
+- `ValidationError` requires `loc`, `msg`, and `type`
 
-### Request shape currently exercised by the repo
-`tests/endpoints/parse/test_parse.py` and `tests/endpoints/parse/test_parse_matrix.py` send:
+The validation schema does not set `additionalProperties: false`.
+
+## Current Test-Backed Expectations
+
+### Request
+`tests/endpoints/parse/test_parse.py` and related parse fixtures send:
 - `file`
 - `fileType`
 - `pipeline.use_cache = false`
 
-### Validation behavior currently asserted
-The repo asserts:
-- missing `file` -> `422`
-- missing `fileType` -> `422`
-- empty body -> `422`
-- validation body shape includes `detail: [{loc, msg, type}]`
-
-### Success behavior currently asserted
-The repo treats the following as required parse success fields:
+### Success
+Current happy-path tests require:
 - `fileType`
 - `documentQuality`
 - `summaryOCR`
 - `summaryResult`
 - `calculatedFields`
 
-The repo also treats these as meaningful contract signals:
-- response `fileType` should echo the mapped request `fileType`
-- `calculatedFields == {"pageNumber": 1}` is a config-missing stub and not valid success output
+They also require:
+- response `fileType` echoes the mapped request `fileType`
+- `calculatedFields` is not the known config-missing stub object `{"pageNumber": 1}`
 
-## Confirmed Drift Or Underspecification
+### Validation
+Current validation tests require:
+- missing `file` returns `422`
+- missing `fileType` returns `422`
+- empty body returns `422`
+- validation body includes `detail` as a list, with `loc`, `msg`, and `type` on entries
 
-### 1. Request schema is underspecified for current repo-backed usage
-Status: confirmed from repo evidence
+## Fresh Observed Shapes
 
-Reason:
-- current tests send `pipeline.use_cache = false`
-- `ParseRequest` in `official-openapi.json` only documents `file` and `fileType`
+### Success `200` Top-Level Fields
+The fresh success artifact had these top-level fields:
 
-Interpretation:
-- either the spec is incomplete for accepted request behavior
-- or the repo is depending on an undocumented request field that needs product/spec review
+`_field_availability`, `_gshare_metadata`, `aggregateSummary`, `aggregatedFields`,
+`authenticityScore`, `cacheDetails`, `cacheKey`, `calculatedFields`,
+`completenessBreakdown`, `completenessScore`, `documentData`, `documentQuality`,
+`extractionStatus`, `fileType`, `fraudCheckFindings`, `fraudReport`, `fraudScore`,
+`fraudStatus`, `fromCache`, `gshare_fields`, `mathematicalFraudReport`,
+`metadataFraudReport`, `qualityCheck`, `qualityScore`, `summaryOCR`,
+`summaryResult`, `timings`, `transactionsOCR`.
 
-Current action:
-- documented here only; no spec edit was made in this pass
+Observed shape summary:
 
-### 2. Success schema is too generic for meaningful contract validation
-Status: confirmed from repo evidence
+| Field | Fresh observed shape |
+| --- | --- |
+| `fileType` | string |
+| `documentQuality` | string |
+| `summaryOCR` | array of objects |
+| `summaryResult` | array of objects |
+| `calculatedFields` | array of objects |
+| `transactionsOCR` | array of transaction-like objects |
+| `documentData` | object with summary and transaction arrays |
+| `qualityCheck` | object |
+| `qualityScore` | number |
+| `completenessScore` | number |
+| `fraudScore` | number |
+| `fraudStatus` | string |
+| `fromCache` | boolean |
+| `cacheDetails` | object |
+| `timings` | object |
 
-Reason:
-- current tests and docs assume a stable success shape with several named fields
-- the OpenAPI `200` schema is only a generic object with `additionalProperties: true`
+Fresh assertions relevant to the pilot:
+- All current test-required success fields were present.
+- Response `fileType` echoed the request fileType used by the protected fixture.
+- `calculatedFields` was an array of objects with `pageNumber` plus calculated debit/credit fields.
+- `calculatedFields` was not the known config-missing stub object.
+- `calculatedFields` was not a singleton list containing only the known stub object.
 
-Interpretation:
-- the spec is currently too weak to support systematic success-schema validation
-- the repo's current tests are stronger than the published success contract in some ways and looser in others
+### Validation `422` Shape
+All four fresh validation artifacts had:
+- top-level keys: `detail`
+- `detail`: array of objects
+- first detail entry keys: `input`, `loc`, `msg`, `type`
+- `loc`: array
+- `msg`: string
+- `type`: string
 
-Current action:
-- documented here only; no spec edit was made in this pass
+The extra `input` key is compatible with the current OpenAPI validation schema because
+the schema does not forbid additional validation-item properties.
 
-## Currently Matching Areas
+## Drift Findings And Decisions
 
-### 1. Required request fields
-Status: matches current tests
+| Area | Evidence | Classification | Decision |
+| --- | --- | --- | --- |
+| `ParseRequest` omits `pipeline.use_cache` | Current tests always send `pipeline.use_cache=false`; the fresh protected report passed with that request member present. | `spec stale` plus `unresolved owner question` for exact optionality/schema breadth | Treat `pipeline.use_cache` as accepted request behavior that should be documented in a later spec pass. Owner/product review should confirm whether `pipeline` is optional, whether only `use_cache` is public, and what default applies when omitted. |
+| `/parse` `200` schema is generic | OpenAPI says generic object; fresh success artifact and current tests show stable named fields. | `spec stale` | Strengthen the OpenAPI success schema in a later implementation pass instead of weakening tests. Start with the stable top-level fields current tests assert, then add conservative type shapes for consistently observed fields. |
+| Current success tests are stronger than OpenAPI | Tests require named fields, fileType echo, and calculatedFields non-stub behavior. Fresh artifact satisfied those expectations. | No `test stale` finding | Leave tests unchanged for this audit pass. In a later implementation pass, consider adding narrow type-shape assertions only for fields the repo already treats as contract signals. |
+| `HTTPValidationError` envelope | OpenAPI documents `detail` with `loc`, `msg`, and `type`; fresh 422 artifacts match that envelope and include compatible extra `input`. | No confirmed drift | No immediate spec or test change required. A later spec pass may optionally document `input` if the API owners consider it stable, but current tests should not require it yet. |
+| `calculatedFields` stub guard | Fresh success artifact had non-stub calculated fields and the current guard passed. | No implementation bug observed | Keep the existing guard. Do not broaden conclusions beyond this protected fixture. |
 
-Evidence:
-- `file` and `fileType` are required by `ParseRequest`
-- the repo has direct 422 checks for missing `file` and missing `fileType`
+## Recommendations
 
-### 2. Validation error envelope
-Status: broadly aligned
+### Later `official-openapi.json` update
+Recommended in a separate implementation pass:
+- Add a conservative optional `pipeline` object to `ParseRequest`, including `use_cache` as a boolean.
+- Strengthen the `/v1/documents/parse` `200` response beyond generic object.
+- At minimum, document the stable top-level success fields currently asserted by tests: `fileType`, `documentQuality`, `summaryOCR`, `summaryResult`, and `calculatedFields`.
+- Prefer conservative type shapes over overfitting to the full protected fixture payload, because the pilot used one protected fixture and not the full matrix.
+- Optionally document the extra validation-item `input` field only if API owners confirm it is stable/public.
 
-Evidence:
-- `HTTPValidationError` exposes `detail`
-- the repo asserts `detail` exists, is a list, and includes `loc`, `msg`, and `type` in entries
+Do not update `official-openapi.json` in this audit tranche.
 
-## Unresolved Until Fresh Safe Artifacts Exist
-- the actual observed 200 response field optionality across current protected fixtures
-- whether the live 422 payload shape contains any fields beyond the current test assertions
-- whether the live service officially accepts `pipeline.use_cache` as part of the intended request contract or merely tolerates it
-- whether there are additional success fields that should be documented and asserted systematically
+### Test update recommendation
+Leave current parse tests unchanged in this audit tranche:
+- Do not weaken tests to match the generic `200` schema.
+- Do not require the extra validation `input` field yet.
+- In a later implementation tranche, consider focused type-shape assertions for the already-required success fields after the OpenAPI success schema is updated.
 
-## Safe Next Step
-When live env is already configured and a safe protected run is intentionally needed, use:
+### Follow-up implementation candidates
+1. Update `official-openapi.json` for optional `pipeline.use_cache` and a conservative parse success schema.
+2. Add or adjust non-live contract tests around the edited OpenAPI shape if the repo has a suitable static validation surface.
+3. Consider one focused parse contract validation pass after the spec update, using the canonical runner category mapping rather than matrix/full coverage unless broader live coverage is explicitly approved.
 
-```bash
-./.venv/bin/python tools/run_regression.py
-```
+## Pilot Status
+Status: fresh `/parse` OpenAPI drift pilot completed for the protected baseline fixture on 2026-04-26.
 
-Then compare:
-- `official-openapi.json`
-- fresh raw artifacts under `reports/parse/responses/`
-- any structured output under `reports/regression/` when `--report` is enabled intentionally
-
-## Pilot Next-Step Checklist
-1. Artifact source: choose an approved protected run or matrix run and record the command, run date, and artifact directory. Use batch artifacts only for the later `/documents/batch` extension.
-2. Sensitivity handling: inspect raw artifacts locally, summarize only field presence, type shape, and decision evidence, and avoid storing raw payloads, secrets, credentials, or full response bodies in docs or Mind.
-3. Spec-vs-observed comparison: compare `ParseRequest`, `HTTPValidationError`, and the generic parse success schema against current request payloads, validation responses, and representative `200` artifacts.
-4. Decision category: classify each mismatch as `spec stale`, `implementation bug`, `test stale`, or `unresolved owner question`.
-5. Follow-up action: for accepted drift, update the spec or tests in a separate reviewed pass; for unresolved drift, leave a blocker note with the needed owner/evidence.
-
-## Decision Boundary
-- Do not update `official-openapi.json` until fresh safe evidence confirms whether `pipeline` belongs in the intended request contract and what the documented success schema should contain.
-- Do not weaken the current parse tests to match the generic success schema; the schema is currently the weaker artifact.
+Remaining unresolved owner questions:
+- Is `pipeline.use_cache` an intended public request field or a tolerated internal override?
+- Should `pipeline` permit only `use_cache`, or is a broader public pipeline-options object intended?
+- Which non-core success fields are stable enough to document beyond the current test-required fields?
+- Is validation-item `input` part of the intended public validation-error shape?

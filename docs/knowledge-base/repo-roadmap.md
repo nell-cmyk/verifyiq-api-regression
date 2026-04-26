@@ -60,13 +60,13 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 | Phase 0: Inventory and guardrails | Largely complete; keep current | Command registry, endpoint inventory, non-live CI, safe discovery, fixture registry visibility | Docs and CI stay aligned as commands and coverage change |
 | Phase 1: Suite taxonomy and onboarding rules | In progress | Define suite/category/risk rules for current and future endpoints | New endpoint proposals include safety class, suite lane, categories, fixtures/prereqs, artifacts, runner mapping, CI eligibility, and owner/blocker notes |
 | Phase 2: Canonical runner parity | Implemented for current main paths | Preserve protected, smoke, full, matrix, focused parse categories, direct batch, focused batch categories, selected batch, list, dry-run, and non-targeted report mappings | Non-live tests prove command, flag, dry-run, env, and return-code behavior for each supported mapping |
-| Phase 3: Contract and schema modernization | Started with `/parse` pilot | Compare OpenAPI, tests, and safe observed artifacts for in-scope endpoints | `/parse` drift decisions are documented from fresh safe artifacts; `/batch` follows after the pattern is stable |
+| Phase 3: Contract and schema modernization | `/parse` pilot completed; implementation follow-up pending | Compare OpenAPI, tests, and safe observed artifacts for in-scope endpoints | `/parse` spec/test follow-up lands; `/batch` follows after the pattern is stable |
 | Phase 4: Legacy deprecation | Not started | Reduce direct wrapper/operator duplication only after parity and approval | Docs, CI, tests, direct imports, shell-outs, and compatibility expectations no longer require direct wrapper use |
 | Phase 5: Reporting and CI maturity | In progress | Keep non-live CI current, govern artifact publishing, improve report parity | CI and local docs tell the same runner story; sensitive live artifacts remain opt-in |
 | Phase 6: Endpoint expansion | Deliberately constrained | Add endpoint groups through risk-based taxonomy and coverage inventory | New groups enter with explicit scope, safety, category depth, runner mapping, and default-suite decision |
 
 ## Prioritized Next Work
-1. Run the `/parse` OpenAPI drift pilot with fresh safe artifacts when live validation is already intentionally needed. Resolve whether `pipeline.use_cache=false` belongs in the contract and whether the parse success schema should be strengthened.
+1. In a separate implementation pass, update `official-openapi.json` for the completed `/parse` drift pilot findings: optional `pipeline.use_cache` and a conservative `200` success schema stronger than generic object. Keep tests from being weakened to match the old generic schema.
 2. Keep offline validation isolated from live env imports. Any shared fixture, root conftest, or runner change should preserve the `VERIFYIQ_SKIP_DOTENV=1` non-live lane.
 3. Use the focused `/parse` and `/documents/batch` category mappings for opt-in validation only when live category coverage is intentionally approved; keep the default protected suite parse-only.
 4. Keep non-targeted structured-report runner behavior covered as wrappers evolve, and decide separately whether batch needs a concise summary surface comparable to parse matrix summaries.
@@ -76,7 +76,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 
 ## Blockers And Deferred Items
 - `/documents/batch` auth-negative coverage and `--endpoint batch --category auth` mapping are blocked by live behavior: missing tenant-token requests have timed out, and invalid tenant-token requests have returned `200` and timed out in observed opt-in runs. See `docs/knowledge-base/batch/auth-negative-blocker.md`.
-- `/parse` OpenAPI drift cannot be closed from docs alone. It needs fresh safe artifacts from an approved protected or matrix run. See `docs/knowledge-base/parse/openapi-drift-pilot.md`.
+- `/parse` OpenAPI drift pilot evidence is now documented from a fresh protected report run. Remaining work is an explicit implementation pass for the spec/test decisions recorded in `docs/knowledge-base/parse/openapi-drift-pilot.md`.
 - Remaining true GET 200-smoke backlog is limited to four still-blocked endpoints: `/v1/admin/cache/stats`, `/monitoring/api/v1/providers`, `/ai-gateway/s3/s3/list`, and `/v1/documents/fraud-status/{job_id}`. Keep exact-status guards for known `401`, `403`, and `502` surfaces. See `docs/operations/endpoint-coverage-inventory.md`.
 - Default batch inclusion is deferred until batch auth, runtime, fixture stability, and failure ownership are better characterized.
 - Broader live CI lanes are deferred until runtime, stability, ownership, and artifact sensitivity are understood.
