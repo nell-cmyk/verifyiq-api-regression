@@ -13,6 +13,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 - The no-argument runner maps to the parse-only protected suite. This is still the default live gate and must not silently broaden.
 - Structured-report runner mappings are non-targeted and guarded by non-live runner tests: no-arg `--report` and `--suite protected --report` delegate to the baseline report helper, `--suite full --report` delegates to the full wrapper, and `--endpoint parse --category matrix --report` delegates to the matrix wrapper.
 - A separate concise `/documents/batch` summary surface is not planned for the normal runner right now. Normal batch validation remains opt-in and raw-artifact-only, while broad batch review belongs to the dedicated ground-truth export workbook, manifest, and recovery-planning workflow.
+- The endpoint coverage inventory has been rechecked against current GET smoke tests and `official-openapi.json`; keep it current as smoke coverage changes, but do not treat inventory maintenance as a separate expansion decision.
 - Current automated live coverage includes `/v1/documents/parse`, `/v1/documents/batch`, and the opt-in cross-group GET smoke lane under `tests/endpoints/get_smoke/`.
 - Requests are live, not mocked. `tests/client.py` builds an `httpx.Client` from live environment settings and Google IAP credentials.
 - `/parse` and `/documents/batch` use GCS-backed fixtures. `PARSE_FIXTURE_FILE` must remain a `gs://` URI, and batch selection reuses the generated fixture registry.
@@ -70,8 +71,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 
 ## Prioritized Next Work
 1. Re-run the opt-in `/documents/batch` tenant-token auth characterization only after auth-layer or staging behavior changes. Keep it out of the default suite and out of mapped batch `auth` until missing and invalid tenant-token requests return confirmed `401` or `403`.
-2. Keep `docs/operations/endpoint-coverage-inventory.md` current as GET smoke expands, but keep sequencing decisions here.
-3. Decide whether this repository should remain parse/batch-centered with selective GET smoke, or become a broader multi-endpoint automation hub. Until that decision is explicit, expansion should stay near safe document-processing surfaces.
+2. Decide whether this repository should remain parse/batch-centered with selective GET smoke, or become a broader multi-endpoint automation hub. Until that decision is explicit, expansion should stay near safe document-processing surfaces.
 
 ## Blockers And Deferred Items
 - `/documents/batch` auth-negative coverage and `--endpoint batch --category auth` mapping are blocked by live behavior: missing tenant-token requests have timed out, and invalid tenant-token requests have returned `200` and timed out in observed opt-in runs. See `docs/knowledge-base/batch/auth-negative-blocker.md`.
