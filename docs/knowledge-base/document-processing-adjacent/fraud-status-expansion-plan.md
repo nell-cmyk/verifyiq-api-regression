@@ -86,6 +86,45 @@ Source-backed facts:
 - Unit tests cover pending, running, complete, failed, invalid-format, not-found,
   wrong-tenant, scheduling success, scheduling failure, and sync fallback paths.
 
+## Bounded Staging Characterization
+Observed in bounded staging characterization on 2026-04-27 because no API owner
+was available to confirm the intended producer and contract. This evidence is
+provisional and not owner-confirmed.
+
+Characterization bounds:
+- At most one `/parse` producer attempt using the existing protected parse
+  fixture and `pipeline.async_fraud=true`.
+- At most six fraud-status polls with at most ten seconds between polls.
+- Invalid-format and syntactically valid nonexistent job-id checks were limited
+  to single authenticated GET requests.
+- No full regression, matrix, batch, or broad smoke suite was run.
+- The script printed only sanitized status codes, booleans, status labels, and
+  top-level response keys. It did not write raw fraud-status artifacts.
+
+Observed behavior:
+- `/parse` accepted `pipeline.async_fraud=true` and returned `200`.
+- A `fraudJobId` was returned and matched the expected `fj_` plus 32 lowercase
+  hexadecimal character format.
+- Fraud-status polling returned `200` responses with the observed sequence
+  `running` then `complete`.
+- The final complete response exposed only these top-level keys in recorded
+  evidence: `authenticityScore`, `completedAt`, `fraudJobId`, `fraudScore`,
+  `fraudStatus`, `mathematicalFraudReport`, and `metadataFraudReport`.
+- Invalid-format `job_id` returned `404`.
+- A syntactically valid but artificial nonexistent `job_id` returned `404`.
+
+Provisional regression contract:
+- A bounded producer using `pipeline.async_fraud=true` can produce a pollable
+  fraud job in the current staging environment, but async scheduling is still
+  not guaranteed by source evidence and remains not owner-confirmed.
+- A minimal future assertion shape could check `200`, valid `fraudJobId` format,
+  allowed `fraudStatus` transitions, and top-level key presence by terminal
+  state. It should not assert raw fraud report contents.
+- `404` is a reasonable provisional negative expectation for malformed and
+  missing/not-found job IDs.
+- Do not promote to covered until behavior is stable and artifact policy remains
+  safe.
+
 ## Design Decision
 Endpoint group: keep this route in `document-processing-adjacent`.
 It is document-processing tagged, fraud-detection related, and close to the
@@ -97,10 +136,11 @@ read-only, but it is not safe to run without a fresh, legitimate fraud job ID
 created in the same tenant/environment.
 
 Producer hypothesis: the likely producer is a `/parse` request that enables
-async fraud scheduling and receives a fraud job ID in the parse response. This
-is still a hypothesis for regression automation, not an approved setup flow,
-because the API source also shows scheduling can return no job ID and fall back
-to synchronous fraud processing.
+async fraud scheduling and receives a fraud job ID in the parse response. A
+bounded staging characterization observed this working once, but it is still a
+provisional regression setup flow, not an approved setup flow, because the API
+source also shows scheduling can return no job ID and fall back to synchronous
+fraud processing.
 
 Do not use benchmark jobs, monitoring request IDs, correlation IDs, application
 document IDs, stale IDs, or hardcoded example job IDs as fraud job IDs. A future
@@ -108,17 +148,19 @@ test must derive the job ID from an approved fresh producer in the same tenant
 or skip only after a safe prerequisite path succeeds without producing a usable
 job ID.
 
-Owner requirement: the document-processing or fraud-detection API owner must
-confirm whether `pipeline.async_fraud=true` is public and safe for regression
-setup, what tenant configuration is required, whether the staging job store is
-available and reliable, runtime/polling limits, and which complete-result fields
-are stable enough for assertions. Platform/auth ownership may also be needed if
-IAP, tenant-token, or gateway behavior changes the API-key-only source contract
+Owner requirement: no API owner was available for this characterization. The
+document-processing or fraud-detection API owner must still confirm whether
+`pipeline.async_fraud=true` is public and safe for regression setup, what tenant
+configuration is required, whether the staging job store is available and
+reliable, runtime/polling limits, and which complete-result fields are stable
+enough for assertions. Platform/auth ownership may also be needed if IAP,
+tenant-token, or gateway behavior changes the API-key-only source contract
 observed in the API repo.
 
 ## Expected Statuses
-These are design expectations from API source evidence, not implemented
-regression assertions:
+These are design expectations from API source evidence plus observed in bounded
+staging characterization where noted. They are not implemented regression
+assertions and are not owner-confirmed:
 
 | Scenario | Current expectation |
 | --- | --- |
@@ -209,7 +251,16 @@ characterization with a fresh fraud job ID, and docs updates that summarize
 observed behavior without raw payloads.
 
 ## Next Action
-Ask the document-processing or fraud-detection API owner to confirm whether the
-async fraud parse path is safe as a regression setup producer and whether the
-source-backed response shapes are stable enough for assertions. Keep
-`GET /v1/documents/fraud-status/{job_id}` blocked until that evidence exists.
+If behavior remains stable, the smallest next implementation step is an opt-in,
+artifact-free coverage proposal for `GET /v1/documents/fraud-status/{job_id}`
+that derives a fresh job ID from one bounded parse setup request, polls with the
+same strict limits used in characterization, and asserts only status code,
+allowed `fraudStatus`, job-id format, and top-level keys. Do not add this to the
+default suite.
+
+Keep asking the document-processing or fraud-detection API owner to confirm
+whether the async fraud parse path is safe as a regression setup producer and
+whether the source-backed and staging-observed response shapes are stable enough
+for assertions. Keep `GET /v1/documents/fraud-status/{job_id}` proposed/blocked
+until owner confirmation exists or maintainers explicitly accept the provisional
+contract and artifact policy.
