@@ -3,7 +3,7 @@
 ## Purpose
 Use this inventory to track practical API automation coverage at the endpoint-group level.
 
-This is intentionally not a path-by-path busywork matrix. The current repo covers a small, high-value subset of the OpenAPI inventory, so the maintainable unit is the endpoint group plus its minimum required categories.
+This is intentionally not a path-by-path busywork matrix. The repo is evolving toward broader VerifyIQ multi-endpoint API automation, so the maintainable unit is the endpoint group plus its minimum required categories, safety class, prerequisites, ownership, and suite lane.
 
 ## Current Default-Suite Rule
 - Canonical operator path: `./.venv/bin/python tools/run_regression.py`

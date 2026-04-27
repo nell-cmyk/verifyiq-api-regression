@@ -14,6 +14,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 - Structured-report runner mappings are non-targeted and guarded by non-live runner tests: no-arg `--report` and `--suite protected --report` delegate to the baseline report helper, `--suite full --report` delegates to the full wrapper, and `--endpoint parse --category matrix --report` delegates to the matrix wrapper.
 - A separate concise `/documents/batch` summary surface is not planned for the normal runner right now. Normal batch validation remains opt-in and raw-artifact-only, while broad batch review belongs to the dedicated ground-truth export workbook, manifest, and recovery-planning workflow.
 - The endpoint coverage inventory has been rechecked against current GET smoke tests and `official-openapi.json`; keep it current as smoke coverage changes, but do not treat inventory maintenance as a separate expansion decision.
+- The repository strategy is to evolve into a broader VerifyIQ multi-endpoint API automation hub, with document parsing, `/documents/batch`, fraud detection, document-processing-adjacent behavior, and related quality/model validation remaining the core feature area and first-class priority.
 - Current automated live coverage includes `/v1/documents/parse`, `/v1/documents/batch`, and the opt-in cross-group GET smoke lane under `tests/endpoints/get_smoke/`.
 - Requests are live, not mocked. `tests/client.py` builds an `httpx.Client` from live environment settings and Google IAP credentials.
 - `/parse` and `/documents/batch` use GCS-backed fixtures. `PARSE_FIXTURE_FILE` must remain a `gs://` URI, and batch selection reuses the generated fixture registry.
@@ -29,7 +30,9 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 - Preserve the existing wrappers as delegated engines or compatibility/debug surfaces until parity, docs, CI, direct-use audits, and maintainer approval make removal safe.
 - Keep the protected suite lean and parse-only until there is an explicit decision to redefine the default suite.
 - Keep broader live coverage opt-in: GET smoke through `--suite smoke`, parse matrix through `--endpoint parse --category matrix`, full parse regression through `--suite full`, and batch through `--endpoint batch`.
-- Keep category and suite taxonomy practical. Do not build a generic automation framework ahead of real endpoint need.
+- Keep category and suite taxonomy practical. Broaden endpoint automation through concrete endpoint-group needs rather than a generic framework ahead of evidence.
+- Expand in phases using the endpoint-group onboarding checklist. Each new group needs repo-scope fit, safety class, suite lane, category depth, prerequisites, artifact expectations, runner mapping, CI eligibility, owner/blocker notes, and a default-suite decision.
+- Keep document parsing, fraud detection, document-processing, and quality/model-validation surfaces first in the expansion queue. GET smoke is the current opt-in mechanism for safe read-only expansion.
 - Keep OpenAPI drift work evidence-backed. Use safe existing run artifacts, summarize field shapes and decisions, and avoid storing raw payloads or secrets in docs.
 - Treat `reports/` as disposable generated output. Promote only durable findings into docs and Mind.
 
@@ -51,11 +54,12 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 ## Canonical Planning Decisions
 - `protected` currently means parse-only. `smoke` is real but opt-in and is not the default suite.
 - `full` currently means a stronger parse gate, not broad repository regression.
+- Long-term scope is broader multi-endpoint VerifyIQ API automation, but default-suite and CI expansion require explicit future decisions backed by runtime, stability, safety, ownership, and artifact-sensitivity evidence.
 - Batch remains opt-in until fixture stability, auth behavior, runtime, and failure ownership justify any protected-suite change.
 - Legacy direct pytest and wrapper commands stay documented only as implementation/debug, delegated engine, compatibility/debug, or advanced/internal surfaces.
 - Do not delete `tools/run_parse_full_regression.py`, `tools/reporting/run_parse_matrix_with_summary.py`, `tools/run_batch_with_fixtures.py`, or `tools/run_parse_with_report.py` until the legacy-deprecation gates in this roadmap are met.
 - Do not trust `official-openapi.json` blindly for success schemas while parse and batch `200` schemas remain generic objects.
-- Do not add mutating admin, monitoring, application-management, UI, debug, or storage endpoints to default automation without an explicit safety classification and scope decision.
+- Do not add mutating admin, application-management, storage, debug, or UI surfaces to default automation; keep them excluded or safety-blocked unless separately approved with explicit safety classification and ownership.
 - Do not normalize live instability with broad retries. Classify failures first and keep retries narrow, explicit, and endpoint-justified.
 
 ## Roadmap Phases
@@ -67,11 +71,12 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 | Phase 3: Contract and schema modernization | `/parse` pilot, conservative spec follow-up, static guard, and non-live isolation guard completed | Compare OpenAPI, tests, and safe observed artifacts for in-scope endpoints | `/batch` follows after the pattern is stable |
 | Phase 4: Legacy deprecation | Not started | Reduce direct wrapper/operator duplication only after parity and approval | Docs, CI, tests, direct imports, shell-outs, and compatibility expectations no longer require direct wrapper use |
 | Phase 5: Reporting and CI maturity | In progress; non-targeted report mappings guarded; batch summary deferred | Keep non-live CI current, govern artifact publishing, improve report parity | CI and local docs tell the same runner story; sensitive live artifacts remain opt-in |
-| Phase 6: Endpoint expansion | Deliberately constrained | Add endpoint groups through risk-based taxonomy and coverage inventory | New groups enter with explicit scope, safety, category depth, runner mapping, and default-suite decision |
+| Phase 6: Endpoint expansion | Phased and risk-gated | Evolve toward broader multi-endpoint VerifyIQ API automation while keeping document-processing surfaces first | New groups enter with explicit scope, safety, category depth, runner mapping, CI eligibility, ownership, and default-suite decision |
 
 ## Prioritized Next Work
 1. Re-run the opt-in `/documents/batch` tenant-token auth characterization only after auth-layer or staging behavior changes. Keep it out of the default suite and out of mapped batch `auth` until missing and invalid tenant-token requests return confirmed `401` or `403`.
-2. Decide whether this repository should remain parse/batch-centered with selective GET smoke, or become a broader multi-endpoint automation hub. Until that decision is explicit, expansion should stay near safe document-processing surfaces.
+2. Plan future `/documents/batch` OpenAPI drift work only when fresh safe batch artifacts or owner-backed contract questions are available; follow the completed `/parse` pilot pattern and keep raw payloads out of docs.
+3. Define the next endpoint-group expansion proposal for the broader hub, prioritizing document-processing-adjacent or fraud-detection surfaces before unrelated utility/admin/storage groups. Keep any implementation opt-in and checklist-backed.
 
 ## Blockers And Deferred Items
 - `/documents/batch` auth-negative coverage and `--endpoint batch --category auth` mapping are blocked by live behavior: missing tenant-token requests have timed out, and invalid tenant-token requests have returned `200` and timed out in observed opt-in runs. See `docs/knowledge-base/batch/auth-negative-blocker.md`.
