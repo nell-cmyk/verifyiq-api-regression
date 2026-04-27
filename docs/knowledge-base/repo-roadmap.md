@@ -80,23 +80,24 @@ Confirmed facts:
 - `official-openapi.json` exposes four adjacent document-processing routes beyond `/parse` and `/documents/batch`: `POST /v1/documents/check-cache`, `DELETE /v1/documents/cache`, `POST /v1/documents/crosscheck`, and `GET /v1/documents/fraud-status/{job_id}`.
 - The current GET smoke lane already supports setup-backed detail endpoints and skip-on-missing-prerequisite behavior.
 - The current inventory records `/v1/documents/fraud-status/{job_id}` as blocked because the repo has no producer flow for a fresh fraud job id, and previously tried benchmark/monitoring identifiers returned not-found behavior.
+- The non-live design pass is complete in `docs/knowledge-base/document-processing-adjacent/fraud-status-expansion-plan.md`. It confirms the endpoint should remain proposed/blocked until an API owner identifies the approved fresh fraud job-id producer and confirms lifecycle, auth, contract, artifact, and runner-lane expectations.
 
 Proposal:
-- First tranche: define a non-live implementation plan for `GET /v1/documents/fraud-status/{job_id}` that identifies the approved job-id producer, expected statuses, artifact sensitivity, contract fields, owner area, and runner lane before any live characterization.
-- Intended lane: opt-in GET smoke or endpoint-specific opt-in mapping only; do not add it to the parse-only protected default.
-- Minimum categories before promoting the group beyond proposed status: smoke/status signal, conservative contract shape, auth/validation expectations, and documented negative behavior for invalid or expired job ids.
+- First implementation tranche, after owner confirmation only: use the approved fresh fraud job-id producer to characterize `GET /v1/documents/fraud-status/{job_id}` without committing raw payloads, then add minimal status/shape coverage in the opt-in GET smoke lane or a future endpoint-specific opt-in lane.
+- Intended lane: opt-in GET smoke only if producer setup is safe, bounded, and artifact-free; otherwise use a future endpoint-specific opt-in mapping. Do not add it to the parse-only protected default.
+- Minimum categories before promoting the group beyond proposed status: smoke/status signal, conservative contract shape from owner/OpenAPI evidence, auth/validation expectations, and documented negative behavior for invalid or expired job ids.
 - Deferred within this group: `DELETE /v1/documents/cache` remains mutating; `POST /v1/documents/check-cache` and `POST /v1/documents/crosscheck` need request-shape, fixture, artifact, and owner review before live automation.
 
 ## Prioritized Next Work
 1. Re-run the opt-in `/documents/batch` tenant-token auth characterization only after auth-layer or staging behavior changes. Keep it out of the default suite and out of mapped batch `auth` until missing and invalid tenant-token requests return confirmed `401` or `403`.
 2. Plan future `/documents/batch` OpenAPI drift work only when fresh safe batch artifacts or owner-backed contract questions are available; follow the completed `/parse` pilot pattern and keep raw payloads out of docs.
-3. For endpoint expansion, perform a non-live design pass for `GET /v1/documents/fraud-status/{job_id}` that answers the job-id producer, ownership, safety, expected statuses, contract, artifacts, and runner-lane questions before requesting any live characterization.
+3. For endpoint expansion, obtain owner-backed confirmation for `GET /v1/documents/fraud-status/{job_id}`: approved fresh job-id producer, owning team, lifecycle statuses, invalid/expired behavior, auth expectations, stable contract fields, artifact policy, and whether opt-in GET smoke is safe or an endpoint-specific opt-in lane is required.
 
 ## Blockers And Deferred Items
 - `/documents/batch` auth-negative coverage and `--endpoint batch --category auth` mapping are blocked by live behavior: missing tenant-token requests have timed out, and invalid tenant-token requests have returned `200` and timed out in observed opt-in runs. See `docs/knowledge-base/batch/auth-negative-blocker.md`.
 - `/documents/batch` concise runner-summary work is deferred. Existing batch raw artifacts are sensitive, normal batch runs are bounded and assertion-driven, selected-fixture wrapper output already reports selection/chunk/warning context, and broad batch review is covered by the ground-truth export workflow rather than the normal regression runner.
 - `/parse` OpenAPI drift pilot evidence is documented from a fresh protected report run, `official-openapi.json` now includes optional `pipeline.use_cache` plus a conservative parse success schema, and the aligned shape is guarded by a narrow non-live JSON inspection test. Non-live validation isolation is also statically guarded. Remaining contract-modernization work is future `/batch` drift work.
-- Remaining true GET 200-smoke backlog is limited to four still-blocked endpoints: `/v1/admin/cache/stats`, `/monitoring/api/v1/providers`, `/ai-gateway/s3/s3/list`, and `/v1/documents/fraud-status/{job_id}`. Keep exact-status guards for known `401`, `403`, and `502` surfaces. See `docs/operations/endpoint-coverage-inventory.md`.
+- Remaining true GET 200-smoke backlog is limited to four still-blocked endpoints: `/v1/admin/cache/stats`, `/monitoring/api/v1/providers`, `/ai-gateway/s3/s3/list`, and `/v1/documents/fraud-status/{job_id}`. Fraud-status remains blocked pending owner-confirmed producer and contract evidence; keep exact-status guards for known `401`, `403`, and `502` surfaces. See `docs/operations/endpoint-coverage-inventory.md`.
 - Default batch inclusion is deferred until batch auth, runtime, fixture stability, and failure ownership are better characterized.
 - Broader live CI lanes are deferred until runtime, stability, ownership, and artifact sensitivity are understood.
 - Legacy wrapper deprecation is deferred until all deprecation gates below are satisfied.
