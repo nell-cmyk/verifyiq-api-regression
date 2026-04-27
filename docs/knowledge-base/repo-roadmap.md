@@ -73,10 +73,24 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 | Phase 5: Reporting and CI maturity | In progress; non-targeted report mappings guarded; batch summary deferred | Keep non-live CI current, govern artifact publishing, improve report parity | CI and local docs tell the same runner story; sensitive live artifacts remain opt-in |
 | Phase 6: Endpoint expansion | Phased and risk-gated | Evolve toward broader multi-endpoint VerifyIQ API automation while keeping document-processing surfaces first | New groups enter with explicit scope, safety, category depth, runner mapping, CI eligibility, ownership, and default-suite decision |
 
+## Next Endpoint-Group Expansion Proposal
+Prioritize the `document-processing-adjacent` group, starting with `/v1/documents/fraud-status/{job_id}` as a setup-backed, read-only GET candidate. This keeps expansion aligned with the broader multi-endpoint hub strategy while staying close to the core document parsing and fraud-detection product area.
+
+Confirmed facts:
+- `official-openapi.json` exposes four adjacent document-processing routes beyond `/parse` and `/documents/batch`: `POST /v1/documents/check-cache`, `DELETE /v1/documents/cache`, `POST /v1/documents/crosscheck`, and `GET /v1/documents/fraud-status/{job_id}`.
+- The current GET smoke lane already supports setup-backed detail endpoints and skip-on-missing-prerequisite behavior.
+- The current inventory records `/v1/documents/fraud-status/{job_id}` as blocked because the repo has no producer flow for a fresh fraud job id, and previously tried benchmark/monitoring identifiers returned not-found behavior.
+
+Proposal:
+- First tranche: define a non-live implementation plan for `GET /v1/documents/fraud-status/{job_id}` that identifies the approved job-id producer, expected statuses, artifact sensitivity, contract fields, owner area, and runner lane before any live characterization.
+- Intended lane: opt-in GET smoke or endpoint-specific opt-in mapping only; do not add it to the parse-only protected default.
+- Minimum categories before promoting the group beyond proposed status: smoke/status signal, conservative contract shape, auth/validation expectations, and documented negative behavior for invalid or expired job ids.
+- Deferred within this group: `DELETE /v1/documents/cache` remains mutating; `POST /v1/documents/check-cache` and `POST /v1/documents/crosscheck` need request-shape, fixture, artifact, and owner review before live automation.
+
 ## Prioritized Next Work
 1. Re-run the opt-in `/documents/batch` tenant-token auth characterization only after auth-layer or staging behavior changes. Keep it out of the default suite and out of mapped batch `auth` until missing and invalid tenant-token requests return confirmed `401` or `403`.
 2. Plan future `/documents/batch` OpenAPI drift work only when fresh safe batch artifacts or owner-backed contract questions are available; follow the completed `/parse` pilot pattern and keep raw payloads out of docs.
-3. Define the next endpoint-group expansion proposal for the broader hub, prioritizing document-processing-adjacent or fraud-detection surfaces before unrelated utility/admin/storage groups. Keep any implementation opt-in and checklist-backed.
+3. For endpoint expansion, perform a non-live design pass for `GET /v1/documents/fraud-status/{job_id}` that answers the job-id producer, ownership, safety, expected statuses, contract, artifacts, and runner-lane questions before requesting any live characterization.
 
 ## Blockers And Deferred Items
 - `/documents/batch` auth-negative coverage and `--endpoint batch --category auth` mapping are blocked by live behavior: missing tenant-token requests have timed out, and invalid tenant-token requests have returned `200` and timed out in observed opt-in runs. See `docs/knowledge-base/batch/auth-negative-blocker.md`.
