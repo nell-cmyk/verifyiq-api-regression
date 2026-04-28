@@ -102,6 +102,15 @@ Source-backed facts:
   processing capacity. Keep these as useful but owner-unconfirmed setup
   prerequisites until confirmed by the document-processing or fraud-detection
   owner.
+- The latest VerifyIQ AI assistant producer answer adds source-backed setup
+  context: `POST /v1/documents/parse` is the only known fraud-job producer, and
+  there is no standalone create-fraud-job endpoint. The parse response
+  `fraudStatus` setup meanings are: `pending` means an async job was created and
+  its `fraudJobId` can be polled; `complete` means fraud ran synchronously
+  inline; `skipped` means fraud was skipped by a completeness gate; and
+  `disabled` means fraud detection was disabled. Treat this mapping as
+  source-backed but owner-unconfirmed setup behavior, not as an owner-approved
+  product contract.
 - Unit tests cover pending, running, complete, failed, invalid-format, not-found,
   wrong-tenant, scheduling success, scheduling failure, and sync fallback paths.
 
@@ -217,9 +226,10 @@ Conservative contract from OpenAPI plus verified API source evidence:
   - failed: `fraudJobId`, `fraudStatus`, sanitized `error`, `completedAt`
 
 Do not assert these unresolved fields yet:
-- parse-response fraud status values such as `skipped` or `disabled`; the
-  provisional poll endpoint contract remains limited to `pending`, `running`,
-  `complete`, and `failed`
+- parse-response fraud status values such as `pending`, `complete`, `skipped`,
+  or `disabled`; they describe setup behavior, while the provisional poll
+  endpoint contract remains limited to `pending`, `running`, `complete`, and
+  `failed`
 - whether complete-result report fields are stable enough for external
   regression assertions
 - whether optional fields may be null or omitted in some real job states
