@@ -17,6 +17,11 @@ evidence verified in the API source. The regression repo remains the source of
 truth for test harness behavior; the API source is used here only to refine the
 implementation design before any live characterization.
 
+The 2026-04-28 VerifyIQ AI assistant fraud-status answer is treated as
+source-code-backed supporting evidence only. It is not product-owner approval
+and does not promote this endpoint beyond maintainer-accepted provisional
+coverage.
+
 ## Repo-Local Evidence
 - `official-openapi.json` tags the route as `document-processing`, names it
   "Get Fraud Status", and describes it as polling an async fraud detection job.
@@ -40,10 +45,17 @@ implementation design before any live characterization.
   identifiers are not valid fraud job IDs; prior probes returned `404` with
   `Fraud job not found or expired.` Treat that as blocker evidence only, not as
   an accepted fixture source.
-- The repo has no visible producer flow for a fresh fraud job ID. Existing
-  `/parse` and `/documents/batch` coverage exercises document processing and
-  fraud result fields, but no checked-in test or tool currently exposes an async
-  fraud job producer.
+- `official-openapi.json` documents `pipeline.use_cache` on `/parse` but does
+  not document `pipeline.async_fraud`; treat `pipeline.async_fraud=true` as a
+  hidden/internal setup knob unless an API owner explicitly approves it for
+  regression use.
+- The repo now has maintainer-accepted provisional producer coverage in
+  `tests/endpoints/get_smoke/test_fraud_status.py`: one protected-fixture
+  `/parse` request with hidden/internal `pipeline.async_fraud=true` is used to
+  request a fresh fraud job ID for the opt-in GET smoke lane.
+- That provisional producer is not an owner-approved public contract. The smoke
+  test skips when `/parse` returns `200` without a usable `fraudJobId`, because
+  async fraud scheduling can fall back to synchronous processing.
 - `tests/client.py` supplies IAP, API-key Authorization, and `X-Tenant-Token`
   headers for live API calls. Auth-negative behavior differs across current
   document-processing endpoints, so this endpoint needs owner-backed expected
@@ -84,6 +96,12 @@ Source-backed facts:
 - Async scheduling can also return `None`, which causes synchronous fraud
   fallback, so a parse request with async fraud requested is not guaranteed to
   produce a pollable fraud job ID.
+- The VerifyIQ AI assistant response adds source-backed scheduling context:
+  async job creation depends on fraud detection being enabled, async fraud being
+  requested, database/job-store availability, and available background
+  processing capacity. Keep these as useful but owner-unconfirmed setup
+  prerequisites until confirmed by the document-processing or fraud-detection
+  owner.
 - Unit tests cover pending, running, complete, failed, invalid-format, not-found,
   wrong-tenant, scheduling success, scheduling failure, and sync fallback paths.
 
@@ -139,9 +157,10 @@ legitimate fraud job ID created in the same tenant/environment.
 Producer: the implemented provisional setup flow is one `/parse` request using
 the protected parse fixture with `pipeline.async_fraud=true`. A bounded staging
 characterization observed this working once, but it is still a provisional
-regression setup flow, not an owner-approved setup flow, because the API source
-also shows scheduling can return no job ID and fall back to synchronous fraud
-processing.
+regression setup flow, not an owner-approved setup flow. The knob is hidden from
+the current OpenAPI request schema, and source-backed evidence shows scheduling
+can return no job ID and fall back to synchronous fraud processing when fraud
+detection or async scheduling prerequisites are not met.
 
 Do not use benchmark jobs, monitoring request IDs, correlation IDs, application
 document IDs, stale IDs, or hardcoded example job IDs as fraud job IDs. The
@@ -150,12 +169,13 @@ the same tenant and skips only when that producer returns `200` without a
 usable `fraudJobId`.
 
 Owner requirement: no API owner was available for this characterization. The
-document-processing or fraud-detection API owner must still confirm whether
-`pipeline.async_fraud=true` is public and safe for regression setup, what tenant
-configuration is required, whether the staging job store is available and
-reliable, runtime/polling limits, and which complete-result fields are stable
-enough for assertions. Platform/auth ownership may also be needed if IAP,
-tenant-token, or gateway behavior changes the API-key-only source contract
+document-processing or fraud-detection API owner must still confirm whether the
+hidden/internal `pipeline.async_fraud=true` setup knob may be used safely for
+regression setup, what tenant and fraud-detection configuration is required,
+whether the staging job store and background processing capacity are available
+and reliable, runtime/polling limits, and which complete-result fields are
+stable enough for assertions. Platform/auth ownership may also be needed if
+IAP, tenant-token, or gateway behavior changes the API-key-only source contract
 observed in the API repo.
 
 ## Expected Statuses
@@ -185,6 +205,9 @@ Conservative contract from OpenAPI plus verified API source evidence:
   detection results when complete; jobs expire after tenant cache TTL
 - API source behavior: malformed, missing, expired, and wrong-tenant jobs return
   `404`, not `422`
+- API source behavior: expired jobs intentionally share the same `404` outcome
+  as malformed, missing, nonexistent, or wrong-tenant jobs; do not distinguish
+  those cases in regression assertions without owner direction
 - API source behavior: job lookup is tenant-scoped through the API key hash
 - API source response shapes:
   - pending/running: `fraudJobId`, `fraudStatus`
@@ -194,6 +217,9 @@ Conservative contract from OpenAPI plus verified API source evidence:
   - failed: `fraudJobId`, `fraudStatus`, sanitized `error`, `completedAt`
 
 Do not assert these unresolved fields yet:
+- parse-response fraud status values such as `skipped` or `disabled`; the
+  provisional poll endpoint contract remains limited to `pending`, `running`,
+  `complete`, and `failed`
 - whether complete-result report fields are stable enough for external
   regression assertions
 - whether optional fields may be null or omitted in some real job states
@@ -254,14 +280,18 @@ Do not add this route to:
 ## Promotion Criteria
 Before promoting beyond maintainer-accepted provisional coverage, collect
 owner-backed evidence for:
-1. Whether `pipeline.async_fraud=true` is public and safe for regression setup.
+1. Whether hidden/internal `pipeline.async_fraud=true` may be used safely for
+   regression setup, or whether a different public producer is required.
 2. Tenant configuration needed for async fraud scheduling.
-3. Staging DB/job-store availability and expected cleanup/TTL behavior.
-4. Runtime and polling limits that keep the suite stable.
-5. Whether GET smoke is sufficient or an endpoint-specific opt-in lane is needed.
-6. Whether complete-result fields are stable enough for assertions.
-7. Artifact handling rules for fraud detection results.
-8. Whether gateway/IAP/tenant-token behavior changes auth expectations beyond
+3. Whether `fraud_detection=true`, DB/job-store availability, and background
+   processing capacity are required and stable in staging.
+4. Expected cleanup/TTL behavior and whether all expired jobs should remain
+   indistinguishable from nonexistent jobs at `404`.
+5. Runtime and polling limits that keep the suite stable.
+6. Whether GET smoke is sufficient or an endpoint-specific opt-in lane is needed.
+7. Whether complete-result fields are stable enough for assertions.
+8. Artifact handling rules for fraud detection results.
+9. Whether gateway/IAP/tenant-token behavior changes auth expectations beyond
    the API-key behavior verified in the API source.
 
 Before moving from provisional smoke coverage to owner-confirmed covered
