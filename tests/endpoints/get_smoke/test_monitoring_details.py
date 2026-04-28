@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import pytest
 
 from tests.endpoints.get_smoke.helpers import (
@@ -17,6 +19,13 @@ _GROUND_TRUTH_DOC_TYPES_CASE = GetSmokeCase(
     "monitoring-ground-truth-document-types", "/monitoring/api/v1/ground-truth/document-types"
 )
 _GCS_TYPES_CASE = GetSmokeCase("monitoring-gcs-types", "/monitoring/api/v1/golden-dataset/gcs/types")
+
+
+@dataclass(frozen=True)
+class GcsPreviewReference:
+    category: str
+    variant: str
+    document_id: str
 
 
 @pytest.fixture(scope="module")
@@ -119,6 +128,132 @@ def _first_string_item(items: list[object], *, source_case: GetSmokeCase, prereq
     )
 
 
+def _string_items_from_field(
+    body: object,
+    case: GetSmokeCase,
+    *,
+    field: str,
+    prerequisite: str,
+    item_label: str,
+) -> list[str]:
+    if not isinstance(body, dict):
+        pytest.fail(f"{case.path} response was not a JSON object; cannot derive {prerequisite}.")
+    if field not in body:
+        pytest.fail(f"{case.path} response did not contain field {field!r}; cannot derive {prerequisite}.")
+    value = body[field]
+    if not isinstance(value, list):
+        pytest.fail(f"{case.path} field {field!r} was not a list; cannot derive {prerequisite}.")
+
+    usable: list[str] = []
+    for index, item in enumerate(value, start=1):
+        if not isinstance(item, str):
+            pytest.fail(
+                f"{case.path} {item_label} entry #{index} was not a string; "
+                f"cannot derive {prerequisite}."
+            )
+        item_value = item.strip()
+        if item_value:
+            usable.append(item_value)
+    return usable
+
+
+def _document_id_from_items(documents: list[object], case: GetSmokeCase) -> str | None:
+    for index, item in enumerate(documents, start=1):
+        if not isinstance(item, dict):
+            pytest.fail(
+                f"{case.path} GCS document entry #{index} was not an object; "
+                "cannot derive monitoring GCS preview document id."
+            )
+        for key in ("document_id", "id", "name"):
+            raw_value = item.get(key)
+            if raw_value is None:
+                continue
+            value = str(raw_value).strip()
+            if value:
+                return value
+    return None
+
+
+@pytest.fixture(scope="module")
+def monitoring_gcs_preview_reference(client) -> GcsPreviewReference:
+    body = get_smoke_json(client, _GCS_TYPES_CASE)
+    categories = _string_items_from_field(
+        body,
+        _GCS_TYPES_CASE,
+        field="types",
+        prerequisite="monitoring GCS category",
+        item_label="GCS category",
+    )
+    if not categories:
+        pytest.skip(
+            "Skipping setup-backed detail GET smoke: missing prerequisite monitoring GCS category; "
+            f"{_GCS_TYPES_CASE.path} returned no usable GCS category values."
+        )
+
+    saw_variant = False
+    saw_document = False
+    for category in categories:
+        variants_case = GetSmokeCase(
+            "monitoring-gcs-variants",
+            f"/monitoring/api/v1/golden-dataset/gcs/types/{category}/variants",
+        )
+        variants_body = get_smoke_json(client, variants_case)
+        variants = _string_items_from_field(
+            variants_body,
+            variants_case,
+            field="variants",
+            prerequisite="monitoring GCS variant",
+            item_label="GCS variant",
+        )
+        if not variants:
+            continue
+        saw_variant = True
+
+        for variant in variants:
+            documents_case = GetSmokeCase(
+                "monitoring-gcs-variant-documents",
+                f"/monitoring/api/v1/golden-dataset/gcs/types/{category}/variants/{variant}/documents",
+            )
+            documents_body = get_smoke_json(client, documents_case)
+            if not isinstance(documents_body, dict):
+                pytest.fail(
+                    f"{documents_case.path} response was not a JSON object; "
+                    "cannot derive monitoring GCS preview document id."
+                )
+            if "documents" not in documents_body:
+                pytest.fail(
+                    f"{documents_case.path} response did not contain field 'documents'; "
+                    "cannot derive monitoring GCS preview document id."
+                )
+            documents = documents_body["documents"]
+            if not isinstance(documents, list):
+                pytest.fail(
+                    f"{documents_case.path} field 'documents' was not a list; "
+                    "cannot derive monitoring GCS preview document id."
+                )
+            if not documents:
+                continue
+            saw_document = True
+            document_id = _document_id_from_items(documents, documents_case)
+            if document_id:
+                return GcsPreviewReference(category=category, variant=variant, document_id=document_id)
+
+    if not saw_variant:
+        pytest.skip(
+            "Skipping setup-backed detail GET smoke: missing prerequisite monitoring GCS variant; "
+            "all discovered GCS categories returned no usable variants."
+        )
+    if not saw_document:
+        pytest.skip(
+            "Skipping setup-backed detail GET smoke: missing prerequisite monitoring GCS preview document; "
+            "all discovered GCS category/variant pairs returned no documents."
+        )
+    pytest.skip(
+        "Skipping setup-backed detail GET smoke: missing prerequisite monitoring GCS preview document; "
+        "all discovered GCS documents lacked a usable document_id, id, or name."
+    )
+
+
 @pytest.fixture(scope="module")
 def monitoring_gcs_category(client) -> str:
     body = get_smoke_json(client, _GCS_TYPES_CASE)
@@ -156,32 +291,6 @@ def monitoring_gcs_variant(client, monitoring_gcs_category: str) -> str:
         source_case=variants_case,
         prerequisite="monitoring GCS variant",
         item_label="GCS variant",
-    )
-
-
-@pytest.fixture(scope="module")
-def monitoring_gcs_document_id(client, monitoring_gcs_category: str, monitoring_gcs_variant: str) -> str:
-    documents_case = GetSmokeCase(
-        "monitoring-gcs-variant-documents",
-        (
-            f"/monitoring/api/v1/golden-dataset/gcs/types/{monitoring_gcs_category}"
-            f"/variants/{monitoring_gcs_variant}/documents"
-        ),
-    )
-    body = get_smoke_json(client, documents_case)
-    documents = require_setup_list(
-        body,
-        documents_case,
-        fields=("documents",),
-        prerequisite="monitoring GCS document id",
-        item_label="GCS document",
-    )
-    return first_mapping_value(
-        documents,
-        keys=("document_id", "id", "name"),
-        source_case=documents_case,
-        prerequisite="monitoring GCS document id",
-        item_label="GCS document",
     )
 
 
@@ -267,17 +376,15 @@ def test_monitoring_gcs_variant_documents_get_smoke_returns_200(
 
 def test_monitoring_gcs_preview_get_smoke_returns_200(
     client,
-    monitoring_gcs_category: str,
-    monitoring_gcs_variant: str,
-    monitoring_gcs_document_id: str,
+    monitoring_gcs_preview_reference: GcsPreviewReference,
 ):
     assert_get_smoke_200(
         client,
         GetSmokeCase(
             "monitoring-gcs-preview",
             (
-                f"/monitoring/api/v1/golden-dataset/gcs/preview/{monitoring_gcs_category}"
-                f"/{monitoring_gcs_variant}/{monitoring_gcs_document_id}"
+                f"/monitoring/api/v1/golden-dataset/gcs/preview/{monitoring_gcs_preview_reference.category}"
+                f"/{monitoring_gcs_preview_reference.variant}/{monitoring_gcs_preview_reference.document_id}"
             ),
         ),
     )
