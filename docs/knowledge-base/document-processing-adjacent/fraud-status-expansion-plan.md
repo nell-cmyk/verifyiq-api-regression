@@ -236,6 +236,15 @@ polls, and asserts only status codes, job-id format, allowed `fraudStatus`
 values, and top-level response keys for the observed state. It also asserts
 `404` for invalid-format and artificial syntactically valid nonexistent job IDs.
 
+Lane audit on 2026-04-28 keeps this coverage in GET smoke for now because the
+suite remains opt-in, `--suite smoke --dry-run` lists the protected parse fixture
+environment required for setup, the module is import-safe without live env, and
+the narrow fraud-status pytest node is available for focused validation. Move it
+to an endpoint-specific opt-in lane if it becomes flaky, materially slows GET
+smoke, routinely skips because async scheduling returns no `fraudJobId`, needs
+raw artifacts or broader polling/retry behavior, or owner confirmation narrows
+the safe setup path.
+
 Do not add this route to:
 - the parse-only protected default
 - existing protected CI

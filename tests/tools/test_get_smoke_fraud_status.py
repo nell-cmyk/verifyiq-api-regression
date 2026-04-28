@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 
+import httpx
 import pytest
 
 
@@ -10,6 +11,11 @@ MODULE_NAME = "tests.endpoints.get_smoke.test_fraud_status"
 
 def _module():
     return importlib.import_module(MODULE_NAME)
+
+
+def _parse_response(status_code: int, body: dict[str, object]) -> httpx.Response:
+    request = httpx.Request("POST", "https://verifyiq.example.test/v1/documents/parse")
+    return httpx.Response(status_code, json=body, request=request)
 
 
 def test_fraud_status_module_import_is_safe_without_live_env():
@@ -64,3 +70,19 @@ def test_status_shape_rejects_unexpected_top_level_keys():
 
     with pytest.raises(pytest.fail.Exception, match="top-level keys did not match"):
         module.assert_fraud_status_shape(body)
+
+
+def test_producer_skips_only_when_parse_accepts_without_fraud_job_id(monkeypatch):
+    module = _module()
+    monkeypatch.setattr(module, "_post_async_fraud_parse", lambda client: _parse_response(200, {}))
+
+    with pytest.raises(pytest.skip.Exception, match="returned 200 but no fraudJobId"):
+        module._produce_fraud_job_id(object())
+
+
+def test_producer_unexpected_status_fails_instead_of_skipping(monkeypatch):
+    module = _module()
+    monkeypatch.setattr(module, "_post_async_fraud_parse", lambda client: _parse_response(503, {}))
+
+    with pytest.raises(pytest.fail.Exception, match="unexpected status 503"):
+        module._produce_fraud_job_id(object())
