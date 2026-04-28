@@ -194,6 +194,60 @@ OBSERVED_BASELINES: tuple[ObservedEndpoint, ...] = (
         ),
         loose_paths=("$.results[].data",),
     ),
+    ObservedEndpoint(
+        method="GET",
+        path="/v1/documents/fraud-status/{job_id}",
+        comparison_scope=(
+            "Provisional fraud-status GET smoke top-level shape only. Terminal "
+            "result fields and fraud report contents remain loose."
+        ),
+        evidence=(
+            "tests/endpoints/get_smoke/test_fraud_status.py",
+            "docs/knowledge-base/document-processing-adjacent/fraud-status-expansion-plan.md",
+            "docs/operations/endpoint-coverage-inventory.md",
+        ),
+        responses=(
+            ObservedResponse(
+                status_code=200,
+                evidence=(
+                    "tests/endpoints/get_smoke/test_fraud_status.py::assert_fraud_status_shape",
+                    "docs/knowledge-base/document-processing-adjacent/fraud-status-expansion-plan.md",
+                ),
+                fields=(
+                    ObservedField(
+                        "$.fraudJobId",
+                        ("string",),
+                        ("tests/endpoints/get_smoke/test_fraud_status.py",),
+                    ),
+                    ObservedField(
+                        "$.fraudStatus",
+                        ("string",),
+                        ("tests/endpoints/get_smoke/test_fraud_status.py",),
+                    ),
+                ),
+            ),
+            ObservedResponse(
+                status_code=404,
+                evidence=(
+                    "tests/endpoints/get_smoke/test_fraud_status.py::"
+                    "test_fraud_status_rejects_invalid_and_nonexistent_job_ids",
+                    "docs/knowledge-base/document-processing-adjacent/fraud-status-expansion-plan.md",
+                ),
+            ),
+        ),
+        loose_paths=(
+            "$.fraudScore",
+            "$.authenticityScore",
+            "$.mathematicalFraudReport",
+            "$.metadataFraudReport",
+            "$.completedAt",
+            "$.error",
+        ),
+        public_contract_status=(
+            "observed_runtime_only; maintainer-accepted provisional smoke "
+            "coverage, not owner-confirmed public contract"
+        ),
+    ),
 )
 
 
@@ -201,13 +255,15 @@ ENDPOINT_CLASSIFICATION: dict[str, list[str]] = {
     "safe_to_compare_now": [
         "POST /v1/documents/parse: protected response envelope from current tests and completed /parse drift pilot",
         "POST /v1/documents/batch: envelope-only response shape from current batch tests; results[].data remains loose",
+        "GET /v1/documents/fraud-status/{job_id}: provisional opt-in smoke top-level shape and 404 status only; terminal result fields remain loose",
     ],
     "compare_using_existing_artifacts_only": [
         "POST /v1/documents/parse: use sanitized pilot notes and current static guard; do not require a fresh live run",
         "POST /v1/documents/batch: use tests, manifests, clean summaries, and triage summaries; avoid raw batch JSON and workbook cell payloads",
+        "GET /v1/documents/fraud-status/{job_id}: use current artifact-free smoke assertions and sanitized planning notes; do not persist raw fraud responses or job IDs",
     ],
     "needs_fresh_sanitized_artifact": [
-        "GET /v1/documents/fraud-status/{job_id}: provisional smoke coverage is artifact-free; needs sanitized shape summary before spec tightening",
+        "GET /v1/documents/fraud-status/{job_id}: complete/failed deep result schemas need fresh sanitized shape summaries or owner confirmation before spec tightening",
         "GET smoke groups beyond exact status checks: need per-endpoint sanitized shape summaries before response-schema comparison",
     ],
     "blocked_pending_owner_setup_auth_data": [

@@ -177,15 +177,19 @@ implemented smoke test derives the job ID from the bounded parse producer in
 the same tenant and skips only when that producer returns `200` without a
 usable `fraudJobId`.
 
-Owner requirement: no API owner was available for this characterization. The
-document-processing or fraud-detection API owner must still confirm whether the
-hidden/internal `pipeline.async_fraud=true` setup knob may be used safely for
-regression setup, what tenant and fraud-detection configuration is required,
-whether the staging job store and background processing capacity are available
-and reliable, runtime/polling limits, and which complete-result fields are
-stable enough for assertions. Platform/auth ownership may also be needed if
-IAP, tenant-token, or gateway behavior changes the API-key-only source contract
-observed in the API repo.
+Owner-confirmation gate: no API owner was available for this characterization.
+That should not block further observed-runtime characterization from safe,
+sanitized evidence. The document-processing or fraud-detection API owner must
+still confirm whether the hidden/internal `pipeline.async_fraud=true` setup knob
+may be used safely for regression setup, what tenant and fraud-detection
+configuration is required, whether the staging job store and background
+processing capacity are available and reliable, runtime/polling limits, and
+which complete-result fields are stable enough for public-contract assertions.
+Platform/auth ownership may also be needed if IAP, tenant-token, or gateway
+behavior changes the API-key-only source contract observed in the API repo.
+Use owner confirmation as the gate for public-contract promotion,
+protected/default-suite inclusion, strict deep schemas, auth-negative behavior,
+artifact policy changes, and long-lived guarantees.
 
 ## Expected Statuses
 These are design expectations from API source evidence plus observed in bounded
@@ -288,8 +292,10 @@ Do not add this route to:
 - batch mappings or `/batch auth`
 
 ## Promotion Criteria
-Before promoting beyond maintainer-accepted provisional coverage, collect
-owner-backed evidence for:
+Observed-runtime characterization may continue from artifact-free smoke
+assertions, sanitized summaries, and current repo evidence. Before promoting
+beyond maintainer-accepted provisional coverage, collect owner-backed evidence
+for:
 1. Whether hidden/internal `pipeline.async_fraud=true` may be used safely for
    regression setup, or whether a different public producer is required.
 2. Tenant configuration needed for async fraud scheduling.
@@ -310,8 +316,10 @@ live validation with a fresh fraud job ID, and docs updates that summarize
 observed behavior without raw payloads.
 
 ## Next Action
-Keep asking the document-processing or fraud-detection API owner to confirm
-whether the async fraud parse path is safe as a regression setup producer and
-whether the source-backed and staging-observed response shapes are stable enough
-for assertions. Keep `GET /v1/documents/fraud-status/{job_id}` labeled as
-maintainer-accepted provisional coverage until owner confirmation exists.
+Continue observed-runtime characterization without waiting for owner
+confirmation. The safe next tranche is to compare the current artifact-free
+smoke top-level shape and 404 status evidence against `official-openapi.json`,
+keeping terminal complete/failed result fields loose and avoiding raw fraud
+payloads, job IDs, fixture URIs, or report values in tracked artifacts. Keep
+`GET /v1/documents/fraud-status/{job_id}` labeled as maintainer-accepted
+provisional coverage until owner confirmation exists.

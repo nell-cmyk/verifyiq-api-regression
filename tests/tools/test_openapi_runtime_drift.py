@@ -21,7 +21,11 @@ def test_current_report_uses_runtime_baseline_principle() -> None:
         f"{endpoint['method']} {endpoint['path']}"
         for endpoint in report["observed_baselines"]
     }
-    assert compared == {"POST /v1/documents/parse", "POST /v1/documents/batch"}
+    assert compared == {
+        "POST /v1/documents/parse",
+        "POST /v1/documents/batch",
+        "GET /v1/documents/fraud-status/{job_id}",
+    }
 
 
 def test_batch_envelope_has_no_observed_drift_and_keeps_data_loose() -> None:
@@ -43,10 +47,59 @@ def test_batch_envelope_has_no_observed_drift_and_keeps_data_loose() -> None:
     assert "$.results[].data" in batch_baseline["loose_paths"]
 
 
-def test_compared_baselines_have_no_current_observed_drift_findings() -> None:
+def test_parse_and_batch_have_no_current_observed_drift_findings() -> None:
     report = _load_report()
 
-    assert report["findings"] == []
+    findings_by_endpoint = {
+        "POST /v1/documents/parse": [],
+        "POST /v1/documents/batch": [],
+    }
+    for finding in report["findings"]:
+        if finding["endpoint"] in findings_by_endpoint:
+            findings_by_endpoint[finding["endpoint"]].append(finding)
+
+    assert findings_by_endpoint == {
+        "POST /v1/documents/parse": [],
+        "POST /v1/documents/batch": [],
+    }
+
+
+def test_fraud_status_reports_observed_runtime_drift_without_contract_promotion() -> None:
+    report = _load_report()
+    fraud_baseline = next(
+        endpoint
+        for endpoint in report["observed_baselines"]
+        if endpoint["path"] == "/v1/documents/fraud-status/{job_id}"
+    )
+
+    assert "observed_runtime_only" in fraud_baseline["public_contract_status"]
+    assert "not owner-confirmed public contract" in fraud_baseline["public_contract_status"]
+    assert "$.mathematicalFraudReport" in fraud_baseline["loose_paths"]
+    assert "$.metadataFraudReport" in fraud_baseline["loose_paths"]
+    assert "$.error" in fraud_baseline["loose_paths"]
+
+    fraud_findings = [
+        finding
+        for finding in report["findings"]
+        if finding["endpoint"] == "GET /v1/documents/fraud-status/{job_id}"
+    ]
+    assert any(
+        finding["status_code"] == 200
+        and finding["kind"] == "generic_schema_under_documents_observed_field"
+        and finding["observed"].startswith("$.fraudJobId")
+        for finding in fraud_findings
+    )
+    assert any(
+        finding["status_code"] == 200
+        and finding["kind"] == "generic_schema_under_documents_observed_field"
+        and finding["observed"].startswith("$.fraudStatus")
+        for finding in fraud_findings
+    )
+    assert any(
+        finding["status_code"] == 404
+        and finding["kind"] == "observed_status_undocumented"
+        for finding in fraud_findings
+    )
 
 
 def test_batch_openapi_schema_documents_conservative_envelope() -> None:
@@ -116,7 +169,11 @@ def test_endpoint_classification_covers_deferred_and_excluded_groups() -> None:
     assert "needs_fresh_sanitized_artifact" in classification
     assert "blocked_pending_owner_setup_auth_data" in classification
     assert "excluded" in classification
-    assert any("/v1/documents/fraud-status" in item for item in classification["needs_fresh_sanitized_artifact"])
+    assert any("/v1/documents/fraud-status" in item for item in classification["safe_to_compare_now"])
+    assert any(
+        "complete/failed deep result schemas" in item
+        for item in classification["needs_fresh_sanitized_artifact"]
+    )
     assert any("/v1/documents/check-cache" in item for item in classification["blocked_pending_owner_setup_auth_data"])
     assert any("Destructive/admin mutation routes" in item for item in classification["excluded"])
 
@@ -162,4 +219,7 @@ def test_cli_json_output(capsys) -> None:
     assert captured.err == ""
     report = json.loads(captured.out)
     assert report["openapi_path"] == "official-openapi.json"
-    assert report["findings"] == []
+    assert any(
+        finding["endpoint"] == "GET /v1/documents/fraud-status/{job_id}"
+        for finding in report["findings"]
+    )

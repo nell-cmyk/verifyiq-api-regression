@@ -103,6 +103,9 @@ VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python tools/reporting/openapi_runtime_drift.
 Use it to compare current safe observed response-shape baselines against
 `official-openapi.json`. Findings are observed runtime/spec drift only; they do
 not automatically promote the observed shape to owner-approved public contract.
+Provisional GET shapes such as fraud-status may be compared when the evidence is
+sanitized and artifact-free; deep terminal result fields remain loose until
+broader safe evidence or owner confirmation exists.
 
 ## Normal Development Flow
 1. Install deps and configure `.env` for the current target.
