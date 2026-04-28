@@ -180,6 +180,18 @@ def test_suite_smoke_dry_run_prints_get_smoke_pytest_command():
     assert "-m pytest tests/endpoints/get_smoke/ -v" in stdout
 
 
+def test_suite_smoke_dry_run_lists_parse_fixture_env_for_fraud_status_setup():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "smoke", "--dry-run"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert "PARSE_FIXTURE_FILE" in stdout
+    assert "PARSE_FIXTURE_FILE_TYPE" in stdout
+
+
 def test_suite_full_executes_full_wrapper_and_returns_subprocess_code():
     module = _load_module()
     calls: list[tuple[str, ...]] = []

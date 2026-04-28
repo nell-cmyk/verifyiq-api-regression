@@ -218,10 +218,12 @@ Exact underlying implementation/debug path:
 Use it:
 - when touching GET smoke coverage or expanding safely testable GET coverage beyond `parse` and `batch`
 - when you need the current GET smoke signal for covered endpoints, including the small exact-status guard set for known non-200 surfaces
+- when validating maintainer-accepted provisional fraud-status coverage; use the narrow pytest node when only that endpoint changed
 
 Current suite rule:
 - `smoke` is opt-in.
 - no-argument `tools/run_regression.py` still maps to the parse-only protected suite.
+- fraud-status smoke coverage uses one protected-fixture `/parse` setup request with `pipeline.async_fraud=true`, writes no raw artifacts, polls at most six times with at most ten seconds between polls, and skips only when the producer returns `200` without a usable `fraudJobId`.
 - setup-dependent, query-dependent, auth-blocked, and otherwise deferred GET endpoints stay out of this suite until they have a legitimate 200 path.
 - Setup-backed detail tests may skip only when their prerequisite list endpoint succeeds but returns no usable identifier data. Bad list status, malformed list payloads, and no-path list endpoints still fail/assert normally.
 
