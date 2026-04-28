@@ -94,6 +94,16 @@ Safe runner discovery checks:
 ./.venv/bin/python tools/run_regression.py --dry-run
 ```
 
+Non-live OpenAPI drift report for curated observed runtime baselines:
+
+```bash
+VERIFYIQ_SKIP_DOTENV=1 ./.venv/bin/python tools/reporting/openapi_runtime_drift.py
+```
+
+Use it to compare current safe observed response-shape baselines against
+`official-openapi.json`. Findings are observed runtime/spec drift only; they do
+not automatically promote the observed shape to owner-approved public contract.
+
 ## Normal Development Flow
 1. Install deps and configure `.env` for the current target.
 2. Install Mind and run `mind setup opencode` if this machine has not been bootstrapped yet.
