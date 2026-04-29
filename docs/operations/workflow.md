@@ -95,9 +95,10 @@ Safe runner discovery checks:
 ./.venv/bin/python tools/run_regression.py --suite extended --dry-run
 ./.venv/bin/python tools/run_regression.py --suite extended --dry-run --hub-node get-smoke.safe-read-only
 ./.venv/bin/python tools/run_regression.py --suite extended --dry-run --hub-group get-smoke
+./.venv/bin/python tools/run_regression.py --suite extended --dry-run --report
 ```
 
-The `extended` suite commands above are non-live Automation Hub previews only. `--hub-node` and `--hub-group` filter discovery output to bounded manifest slices plus required prerequisites, but they do not prove live endpoint safety. Live `--suite extended` execution is not implemented.
+The `extended` suite commands above are non-live Automation Hub previews only. `--hub-node` and `--hub-group` filter discovery output to bounded manifest slices plus required prerequisites, but they do not prove live endpoint safety. Adding `--report` writes synthetic plan evidence under `reports/hub/` without endpoint calls or raw runtime evidence. Live `--suite extended` execution is not implemented.
 
 Non-live OpenAPI drift report for curated observed runtime baselines:
 
@@ -417,6 +418,11 @@ Optional structured report artifacts when `--report` is enabled:
 - `reports/regression/<timestamp>/report.json`
 - `reports/regression/<timestamp>/report.md`
 - `reports/regression/LATEST.txt`
+
+Optional synthetic Automation Hub dry-run report artifacts when `--suite extended --dry-run --report` is enabled:
+- `reports/hub/<run-id>/run.json`
+- `reports/hub/<run-id>/run.md`
+- `reports/hub/LATEST.txt`
 
 Default operator expectation:
 - protected structured reporting should use `./.venv/bin/python tools/run_regression.py --report`

@@ -11,6 +11,7 @@ This slice supports:
 - structured reporting for protected, full, and parse matrix via existing helpers
 - non-live `--suite extended --dry-run` preview for the planned Automation Hub
   with optional hub selector filtering
+- synthetic non-live hub reports for `--suite extended --dry-run --report`
 """
 from __future__ import annotations
 
@@ -26,12 +27,14 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from tools.automation_hub.manifest import ManifestSelectionError, render_extended_dry_run  # noqa: E402
+from tools.automation_hub.report_writer import write_synthetic_report  # noqa: E402
 
 FULL_WRAPPER = REPO_ROOT / "tools" / "run_parse_full_regression.py"
 PARSE_MATRIX_WRAPPER = REPO_ROOT / "tools" / "reporting" / "run_parse_matrix_with_summary.py"
 BATCH_WRAPPER = REPO_ROOT / "tools" / "run_batch_with_fixtures.py"
 PARSE_REPORT_WRAPPER = REPO_ROOT / "tools" / "run_parse_with_report.py"
 GET_SMOKE_TARGET = "tests/endpoints/get_smoke/"
+HUB_REPORT_ROOT = REPO_ROOT / "reports" / "hub"
 
 PROTECTED_ENV_VARS = (
     "BASE_URL",
@@ -293,6 +296,24 @@ def _validate_hub_selector_usage(args: argparse.Namespace, parser: argparse.Argu
     return None
 
 
+def _write_extended_synthetic_report(*, hub_node: str = "", hub_group: str = "") -> str:
+    paths = write_synthetic_report(
+        output_root=HUB_REPORT_ROOT,
+        hub_node=hub_node,
+        hub_group=hub_group,
+    )
+    lines = [
+        "",
+        "Synthetic hub report:",
+        f"- run directory: {paths.run_dir}",
+        f"- JSON: {paths.json_path}",
+        f"- Markdown: {paths.markdown_path}",
+        f"- latest pointer: {paths.latest_path}",
+        "- no endpoints were executed; this report contains only non-live plan evidence",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def _base_pytest_command(target: str | tuple[str, ...], *, k_expr: str = "") -> tuple[str, ...]:
     targets = (target,) if isinstance(target, str) else target
     command = [sys.executable, "-m", "pytest", *targets, "-v"]
@@ -400,13 +421,21 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
                 return _usage_error(parser, "--fixtures-json is not supported for --suite extended.")
             if args.k_expr:
                 return _usage_error(parser, "--k is not supported for --suite extended.")
-            if args.report:
-                return _usage_error(parser, "--report is not supported for --suite extended.")
+            if args.report and not args.dry_run:
+                return _usage_error(
+                    parser,
+                    "--report for --suite extended is supported only with --dry-run; live extended hub execution is not implemented.",
+                )
             if args.dry_run:
                 try:
                     dry_run_text = render_extended_dry_run(hub_node=args.hub_node, hub_group=args.hub_group)
                 except ManifestSelectionError as exc:
                     return _usage_error(parser, str(exc))
+                if args.report:
+                    dry_run_text += _write_extended_synthetic_report(
+                        hub_node=args.hub_node,
+                        hub_group=args.hub_group,
+                    )
                 return ResolvedPlan(
                     selector="suite=extended",
                     description="Planned Automation Hub dependency graph preview.",

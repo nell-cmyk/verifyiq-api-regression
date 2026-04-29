@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import sys
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -1031,6 +1032,112 @@ def test_suite_extended_hub_group_filters_to_endpoint_group_nodes():
     assert "parse.protected" not in stdout
     assert "batch.validation" not in stdout
     assert "Executing command:" not in stdout
+
+
+def test_suite_extended_report_dry_run_writes_synthetic_hub_report(tmp_path: Path):
+    module = _load_module()
+    module._run_command = _no_call_runner
+    module.HUB_REPORT_ROOT = tmp_path
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--dry-run", "--report"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert "Synthetic hub report:" in stdout
+    assert "no endpoints were executed" in stdout
+    latest = tmp_path / "LATEST.txt"
+    assert latest.exists()
+    run_dir = tmp_path / latest.read_text(encoding="utf-8").strip()
+    payload = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    assert (run_dir / "run.md").exists()
+    assert payload["run_metadata"]["selected_suite"] == "extended"
+    assert payload["run_metadata"]["endpoints_executed"] is False
+    assert payload["run_metadata"]["endpoint_call_count"] == 0
+    assert payload["selector"] == {"type": "full", "value": None}
+    assert "parse.protected" in payload["selected_nodes"]
+    assert payload["node_result_summaries"] == []
+    assert payload["request_metadata"] == []
+    assert payload["safe_response_metadata"] == []
+    assert "Executing command:" not in stdout
+
+
+def test_suite_extended_report_hub_node_writes_filtered_report(tmp_path: Path):
+    module = _load_module()
+    module._run_command = _no_call_runner
+    module.HUB_REPORT_ROOT = tmp_path
+
+    rc, stdout, stderr = _invoke(
+        module,
+        ["--suite", "extended", "--dry-run", "--report", "--hub-node", "get-smoke.safe-read-only"],
+    )
+
+    assert rc == 0
+    assert stderr == ""
+    latest = tmp_path / "LATEST.txt"
+    payload = json.loads((tmp_path / latest.read_text(encoding="utf-8").strip() / "run.json").read_text(encoding="utf-8"))
+    assert payload["selector"] == {"type": "hub-node", "value": "get-smoke.safe-read-only"}
+    assert payload["selected_nodes"] == ["get-smoke.safe-read-only"]
+    assert payload["dependency_order"] == ["get-smoke.safe-read-only"]
+    assert "document-processing.fraud-status.producer" not in payload["dependency_order"]
+    assert "Synthetic hub report:" in stdout
+
+
+def test_suite_extended_report_hub_node_includes_dependency_closure(tmp_path: Path):
+    module = _load_module()
+    module._run_command = _no_call_runner
+    module.HUB_REPORT_ROOT = tmp_path
+
+    rc, stdout, stderr = _invoke(
+        module,
+        [
+            "--suite",
+            "extended",
+            "--dry-run",
+            "--report",
+            "--hub-node",
+            "document-processing.fraud-status.consumer",
+        ],
+    )
+
+    assert rc == 0
+    assert stderr == ""
+    latest = tmp_path / "LATEST.txt"
+    payload = json.loads((tmp_path / latest.read_text(encoding="utf-8").strip() / "run.json").read_text(encoding="utf-8"))
+    assert payload["selected_nodes"] == ["document-processing.fraud-status.consumer"]
+    assert payload["dependency_order"] == [
+        "document-processing.fraud-status.producer",
+        "document-processing.fraud-status.consumer",
+    ]
+    assert payload["prerequisite_closure"] == ["document-processing.fraud-status.producer"]
+    assert "prerequisite for selected node" in stdout
+
+
+def test_suite_extended_report_hub_group_writes_filtered_report(tmp_path: Path):
+    module = _load_module()
+    module._run_command = _no_call_runner
+    module.HUB_REPORT_ROOT = tmp_path
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--dry-run", "--report", "--hub-group", "get-smoke"])
+
+    assert rc == 0
+    assert stderr == ""
+    latest = tmp_path / "LATEST.txt"
+    payload = json.loads((tmp_path / latest.read_text(encoding="utf-8").strip() / "run.json").read_text(encoding="utf-8"))
+    assert payload["selector"] == {"type": "hub-group", "value": "get-smoke"}
+    assert payload["selected_nodes"] == ["get-smoke.safe-read-only"]
+    assert payload["dependency_order"] == ["get-smoke.safe-read-only"]
+    assert "selected endpoint-group node" in stdout
+
+
+def test_suite_extended_report_without_dry_run_fails_clearly():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--report"])
+
+    assert rc == 2
+    assert stdout == ""
+    assert "--report for --suite extended is supported only with --dry-run" in stderr
 
 
 def test_suite_extended_unknown_hub_node_fails_clearly():
