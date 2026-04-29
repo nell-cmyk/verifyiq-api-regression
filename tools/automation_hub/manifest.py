@@ -43,6 +43,10 @@ class ManifestValidationError(ValueError):
     """Raised when a hub manifest cannot produce a deterministic run plan."""
 
 
+class ManifestSelectionError(ValueError):
+    """Raised when a requested non-live manifest slice cannot be resolved."""
+
+
 @dataclass(frozen=True)
 class NamedOutput:
     name: str
@@ -73,6 +77,19 @@ class HubNode:
 
 
 @dataclass(frozen=True)
+class HubNodeSelection:
+    nodes: tuple[HubNode, ...]
+    selected_node_ids: frozenset[str]
+    prerequisite_node_ids: frozenset[str]
+    selector_label: str = ""
+    scope_label: str = "full manifest"
+
+    @property
+    def is_filtered(self) -> bool:
+        return bool(self.selector_label)
+
+
+@dataclass(frozen=True)
 class HubManifest:
     nodes: tuple[HubNode, ...]
 
@@ -81,6 +98,9 @@ class HubManifest:
 
     def ordered_nodes(self) -> tuple[HubNode, ...]:
         return order_nodes(self.nodes)
+
+    def select_nodes(self, *, hub_node: str = "", hub_group: str = "") -> HubNodeSelection:
+        return select_nodes(self.nodes, hub_node=hub_node, hub_group=hub_group)
 
 
 DEFAULT_HUB_MANIFEST = HubManifest(
@@ -217,19 +237,82 @@ def order_nodes(nodes: Iterable[HubNode]) -> tuple[HubNode, ...]:
     return ordered
 
 
-def render_extended_dry_run() -> str:
+def select_nodes(
+    nodes: Iterable[HubNode],
+    *,
+    hub_node: str = "",
+    hub_group: str = "",
+) -> HubNodeSelection:
+    node_selector = hub_node.strip()
+    group_selector = hub_group.strip()
+    if node_selector and group_selector:
+        raise ManifestSelectionError("--hub-node and --hub-group are mutually exclusive.")
+
+    ordered_nodes = order_nodes(nodes)
+    by_id = _nodes_by_id(ordered_nodes)
+
+    if node_selector:
+        if node_selector not in by_id:
+            raise ManifestSelectionError(f"Unknown hub node id for --hub-node: {node_selector}")
+        prerequisite_ids = frozenset(_dependency_closure(by_id[node_selector], by_id))
+        selected_ids = frozenset((node_selector,))
+        included_ids = selected_ids | prerequisite_ids
+        return HubNodeSelection(
+            nodes=tuple(node for node in ordered_nodes if node.node_id in included_ids),
+            selected_node_ids=selected_ids,
+            prerequisite_node_ids=prerequisite_ids,
+            selector_label=f"--hub-node {node_selector}",
+            scope_label="selected node plus required prerequisite closure",
+        )
+
+    if group_selector:
+        selected_ids = frozenset(
+            node.node_id for node in ordered_nodes if node.endpoint_group == group_selector
+        )
+        if not selected_ids:
+            raise ManifestSelectionError(f"Unknown hub endpoint group for --hub-group: {group_selector}")
+        prerequisite_ids = frozenset(
+            dependency_id
+            for node_id in selected_ids
+            for dependency_id in _dependency_closure(by_id[node_id], by_id)
+            if dependency_id not in selected_ids
+        )
+        included_ids = selected_ids | prerequisite_ids
+        return HubNodeSelection(
+            nodes=tuple(node for node in ordered_nodes if node.node_id in included_ids),
+            selected_node_ids=selected_ids,
+            prerequisite_node_ids=prerequisite_ids,
+            selector_label=f"--hub-group {group_selector}",
+            scope_label="endpoint-group nodes plus required prerequisite closure",
+        )
+
+    return HubNodeSelection(
+        nodes=ordered_nodes,
+        selected_node_ids=frozenset(node.node_id for node in ordered_nodes),
+        prerequisite_node_ids=frozenset(),
+    )
+
+
+def render_extended_dry_run(*, hub_node: str = "", hub_group: str = "") -> str:
     manifest = DEFAULT_HUB_MANIFEST
-    ordered_nodes = manifest.ordered_nodes()
+    selection = manifest.select_nodes(hub_node=hub_node, hub_group=hub_group)
+    ordered_nodes = selection.nodes
     contract = default_evidence_contract()
 
     lines: list[str] = []
     lines.append("Selection: suite=extended")
+    if selection.is_filtered:
+        lines.append(f"Hub selector: {selection.selector_label}")
+        lines.append(f"Selection scope: {selection.scope_label}.")
     lines.append("Description: Planned Automation Hub dependency graph preview.")
     lines.append("Live execution: not implemented; this dry-run performs no endpoint calls.")
     lines.append("")
     lines.append("Dependency order:")
     for index, node in enumerate(ordered_nodes, start=1):
         lines.append(f"{index}. {node.node_id}")
+        inclusion = _format_inclusion(node, selection)
+        if inclusion:
+            lines.append(f"   inclusion: {inclusion}")
         lines.append(f"   endpoint group: {node.endpoint_group}")
         lines.append(f"   label: {node.endpoint_label}")
         lines.append(f"   status: {node.status}")
@@ -362,3 +445,15 @@ def _format_inputs(inputs: tuple[NamedInput, ...]) -> str:
     if not inputs:
         return "none"
     return ", ".join(f"{item.name} from {item.source_node_id}" for item in inputs)
+
+
+def _format_inclusion(node: HubNode, selection: HubNodeSelection) -> str:
+    if not selection.is_filtered:
+        return ""
+    if node.node_id in selection.prerequisite_node_ids:
+        if selection.selector_label.startswith("--hub-group "):
+            return "prerequisite for selected endpoint group"
+        return "prerequisite for selected node"
+    if selection.selector_label.startswith("--hub-group "):
+        return "selected endpoint-group node"
+    return "selected node"

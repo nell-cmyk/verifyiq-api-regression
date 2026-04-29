@@ -15,7 +15,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 - A separate concise `/documents/batch` summary surface is not planned for the normal runner right now. Normal batch validation remains opt-in and raw-artifact-only, while broad batch review belongs to the dedicated ground-truth export workbook, manifest, and recovery-planning workflow.
 - The endpoint coverage inventory has been rechecked against current GET smoke tests and `official-openapi.json`; keep it current as smoke coverage changes, but do not treat inventory maintenance as a separate expansion decision.
 - The repository strategy is to evolve into a broader VerifyIQ multi-endpoint API automation hub, with document parsing, `/documents/batch`, fraud detection, document-processing-adjacent behavior, and related quality/model validation remaining the core feature area and first-class priority.
-- Automation Hub Expansion is a planned roadmap item with a non-live foundation only, not an implemented live runner mode. The future target is a dependency-aware safe endpoint hub behind `tools/run_regression.py`. `--suite extended --dry-run` is now a non-live dependency-plan preview; live `--suite extended` execution remains unavailable until endpoint mapping, tests, reporting behavior, docs, and CI posture are implemented and approved.
+- Automation Hub Expansion is a planned roadmap item with a non-live foundation only, not an implemented live runner mode. The future target is a dependency-aware safe endpoint hub behind `tools/run_regression.py`. `--suite extended --dry-run` is now a non-live dependency-plan preview and can be filtered with `--hub-node` or `--hub-group`; live `--suite extended` execution remains unavailable until endpoint mapping, tests, reporting behavior, docs, and CI posture are implemented and approved.
 - Current automated live coverage includes `/v1/documents/parse`, `/v1/documents/batch`, and the opt-in cross-group GET smoke lane under `tests/endpoints/get_smoke/`, including maintainer-accepted provisional fraud-status coverage.
 - Requests are live, not mocked. `tests/client.py` builds an `httpx.Client` from live environment settings and Google IAP credentials.
 - `/parse` and `/documents/batch` use GCS-backed fixtures. `PARSE_FIXTURE_FILE` must remain a `gs://` URI, and batch selection reuses the generated fixture registry.
@@ -32,7 +32,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 - Preserve the existing wrappers as delegated engines or compatibility/debug surfaces until parity, docs, CI, direct-use audits, and maintainer approval make removal safe.
 - Keep the protected suite lean and parse-only until there is an explicit decision to redefine the default suite.
 - Keep broader live coverage opt-in: GET smoke through `--suite smoke`, parse matrix through `--endpoint parse --category matrix`, full parse regression through `--suite full`, and batch through `--endpoint batch`.
-- Keep the planned Automation Hub Expansion behind the canonical runner and live execution future-tense until implemented. The no-argument runner remains the parse-only protected suite, and hub planning must not imply that every endpoint is safe or currently runnable. The `extended` suite currently supports non-live dry-run preview only.
+- Keep the planned Automation Hub Expansion behind the canonical runner and live execution future-tense until implemented. The no-argument runner remains the parse-only protected suite, and hub planning must not imply that every endpoint is safe or currently runnable. The `extended` suite currently supports non-live dry-run preview and selector filtering only.
 - Keep category and suite taxonomy practical. Broaden endpoint automation through concrete endpoint-group needs rather than a generic framework ahead of evidence.
 - Expand in phases using the endpoint-group onboarding checklist. Each new group needs repo-scope fit, safety class, suite lane, category depth, prerequisites, artifact expectations, runner mapping, CI eligibility, owner/blocker notes, and a default-suite decision.
 - Keep document parsing, fraud detection, document-processing, and quality/model-validation surfaces first in the expansion queue. GET smoke is the current opt-in mechanism for safe read-only expansion.
@@ -53,7 +53,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 | Focused `/documents/batch` categories | `./.venv/bin/python tools/run_regression.py --endpoint batch --category contract|negative` | Existing batch-suite tests selected by category without duplicating test logic | Opt-in |
 | Selected batch fixtures | `./.venv/bin/python tools/run_regression.py --endpoint batch --fixtures-json /path/to/fixtures.json` | Targeted batch fixture execution through delegated wrapper | Opt-in |
 | Runner discovery | `./.venv/bin/python tools/run_regression.py --list` and `--dry-run` | Non-executing inventory and command mapping | Safe discovery |
-| Automation Hub preview | `./.venv/bin/python tools/run_regression.py --suite extended --dry-run` | Non-live dependency graph and reporting-contract preview for the future hub | Safe discovery; live execution unavailable |
+| Automation Hub preview | `./.venv/bin/python tools/run_regression.py --suite extended --dry-run [--hub-node NODE_ID | --hub-group ENDPOINT_GROUP]` | Non-live dependency graph and reporting-contract preview for the future hub; optional selectors bound the preview to a manifest slice plus prerequisites | Safe discovery; live execution unavailable |
 
 ## Canonical Planning Decisions
 - `protected` currently means parse-only. `smoke` is real but opt-in and is not the default suite.
@@ -78,7 +78,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 | Phase 6: Endpoint expansion | Phased and risk-gated | Evolve toward broader multi-endpoint VerifyIQ API automation while keeping document-processing surfaces first | New groups enter with explicit scope, safety, category depth, runner mapping, CI eligibility, ownership, and default-suite decision |
 
 ## Automation Hub Expansion Roadmap Item
-Target state: evolve toward one canonical dependency-aware runner for safe, non-legacy VerifyIQ endpoint automation, still reached through `tools/run_regression.py`. The likely future live suite name is `extended`. Today, only `--suite extended --dry-run` is available as a non-live dependency graph and reporting-contract preview; live `--suite extended` execution is not implemented.
+Target state: evolve toward one canonical dependency-aware runner for safe, non-legacy VerifyIQ endpoint automation, still reached through `tools/run_regression.py`. The likely future live suite name is `extended`. Today, only `--suite extended --dry-run` is available as a non-live dependency graph and reporting-contract preview; it can be filtered with `--hub-node` or `--hub-group` for bounded discovery, and live `--suite extended` execution is not implemented.
 
 Guardrails:
 - Preserve the current parse-only protected default. Hub expansion must be explicit and opt-in until a later approved default-suite decision.
@@ -97,7 +97,7 @@ Phases:
 
 Existing wrappers and scripts remain until parity, documentation, CI references, direct-use audits, artifact behavior, and maintainer approval are complete. Do not delete, rename, or deprecate wrapper files as part of the documentation-first hub planning tranche.
 
-First non-live foundation status: `tools/run_regression.py --suite extended --dry-run` now renders an endpoint-group oriented manifest preview with dependency order, named outputs, dependency skip semantics, artifact policy, and the scaffolded evidence/redaction contract. It does not execute endpoints, generate reports, broaden the protected default, or replace current delegated wrappers.
+First non-live foundation status: `tools/run_regression.py --suite extended --dry-run` now renders an endpoint-group oriented manifest preview with dependency order, named outputs, dependency skip semantics, artifact policy, and the scaffolded evidence/redaction contract. The preview can be filtered with `--hub-node` or `--hub-group`; filtered output includes required prerequisite closure but remains non-live discovery only and does not prove live endpoint safety. It does not execute endpoints, generate reports, broaden the protected default, or replace current delegated wrappers.
 
 ## Next Endpoint-Group Expansion Proposal
 Prioritize the `document-processing-adjacent` group, starting with `/v1/documents/fraud-status/{job_id}` as a setup-backed, read-only GET candidate. This keeps expansion aligned with the broader multi-endpoint hub strategy while staying close to the core document parsing and fraud-detection product area.

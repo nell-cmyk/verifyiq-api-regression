@@ -963,6 +963,141 @@ def test_suite_extended_dry_run_prints_non_live_hub_plan():
     assert "Executing command:" not in stdout
 
 
+def test_suite_extended_hub_node_filters_to_selected_node():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(
+        module,
+        ["--suite", "extended", "--dry-run", "--hub-node", "get-smoke.safe-read-only"],
+    )
+
+    assert rc == 0
+    assert stderr == ""
+    assert "Hub selector: --hub-node get-smoke.safe-read-only" in stdout
+    assert "Selection scope: selected node plus required prerequisite closure." in stdout
+    assert "1. get-smoke.safe-read-only" in stdout
+    assert "   inclusion: selected node" in stdout
+    assert "endpoint group: get-smoke" in stdout
+    assert "parse.protected" not in stdout
+    assert "batch.validation" not in stdout
+    assert "document-processing.fraud-status.producer" not in stdout
+    assert "document-processing.fraud-status.consumer" not in stdout
+    assert "Dependency semantics:" in stdout
+    assert "Reporting contract scaffold:" in stdout
+    assert "Executing command:" not in stdout
+
+
+def test_suite_extended_hub_node_includes_prerequisite_closure():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(
+        module,
+        [
+            "--suite",
+            "extended",
+            "--dry-run",
+            "--hub-node",
+            "document-processing.fraud-status.consumer",
+        ],
+    )
+
+    assert rc == 0
+    assert stderr == ""
+    assert "Hub selector: --hub-node document-processing.fraud-status.consumer" in stdout
+    assert "1. document-processing.fraud-status.producer" in stdout
+    assert "   inclusion: prerequisite for selected node" in stdout
+    assert "2. document-processing.fraud-status.consumer" in stdout
+    assert "   inclusion: selected node" in stdout
+    assert "fraud_status.job_reference from document-processing.fraud-status.producer" in stdout
+    assert "parse.protected" not in stdout
+    assert "Executing command:" not in stdout
+
+
+def test_suite_extended_hub_group_filters_to_endpoint_group_nodes():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--dry-run", "--hub-group", "get-smoke"])
+
+    assert rc == 0
+    assert stderr == ""
+    assert "Hub selector: --hub-group get-smoke" in stdout
+    assert "Selection scope: endpoint-group nodes plus required prerequisite closure." in stdout
+    assert "1. get-smoke.safe-read-only" in stdout
+    assert "   inclusion: selected endpoint-group node" in stdout
+    assert "endpoint group: get-smoke" in stdout
+    assert "parse.protected" not in stdout
+    assert "batch.validation" not in stdout
+    assert "Executing command:" not in stdout
+
+
+def test_suite_extended_unknown_hub_node_fails_clearly():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--dry-run", "--hub-node", "missing.node"])
+
+    assert rc == 2
+    assert stdout == ""
+    assert "Unknown hub node id for --hub-node: missing.node" in stderr
+
+
+def test_suite_extended_unknown_hub_group_fails_clearly():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--dry-run", "--hub-group", "missing-group"])
+
+    assert rc == 2
+    assert stdout == ""
+    assert "Unknown hub endpoint group for --hub-group: missing-group" in stderr
+
+
+def test_suite_extended_hub_node_and_group_are_mutually_exclusive():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(
+        module,
+        [
+            "--suite",
+            "extended",
+            "--dry-run",
+            "--hub-node",
+            "get-smoke.safe-read-only",
+            "--hub-group",
+            "get-smoke",
+        ],
+    )
+
+    assert rc == 2
+    assert stdout == ""
+    assert "--hub-node and --hub-group are mutually exclusive" in stderr
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--hub-node", "get-smoke.safe-read-only", "--dry-run"],
+        ["--suite", "extended", "--hub-node", "get-smoke.safe-read-only"],
+        ["--suite", "smoke", "--dry-run", "--hub-node", "get-smoke.safe-read-only"],
+        ["--endpoint", "parse", "--category", "matrix", "--dry-run", "--hub-group", "get-smoke"],
+        ["--list", "--hub-group", "get-smoke"],
+    ],
+)
+def test_hub_selectors_are_valid_only_for_extended_dry_run(argv: list[str]):
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, argv)
+
+    assert rc == 2
+    assert stdout == ""
+    assert "--hub-node and --hub-group are supported only with --suite extended --dry-run" in stderr
+
+
 def test_suite_full_dry_run_does_not_call_subprocess():
     module = _load_module()
     module._run_command = _no_call_runner

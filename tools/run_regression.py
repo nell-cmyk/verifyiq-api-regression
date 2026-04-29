@@ -10,6 +10,7 @@ This slice supports:
 - live execution for mapped opt-in parse and batch category selections
 - structured reporting for protected, full, and parse matrix via existing helpers
 - non-live `--suite extended --dry-run` preview for the planned Automation Hub
+  with optional hub selector filtering
 """
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from tools.automation_hub.manifest import render_extended_dry_run  # noqa: E402
+from tools.automation_hub.manifest import ManifestSelectionError, render_extended_dry_run  # noqa: E402
 
 FULL_WRAPPER = REPO_ROOT / "tools" / "run_parse_full_regression.py"
 PARSE_MATRIX_WRAPPER = REPO_ROOT / "tools" / "reporting" / "run_parse_matrix_with_summary.py"
@@ -267,6 +268,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--report", action="store_true", help="Include report-mode behavior where the selected mapping supports it.")
     parser.add_argument("--list", action="store_true", help="Print available suites, endpoints, categories, and command mappings.")
     parser.add_argument("--dry-run", action="store_true", help="Resolve the selected mapping and print the exact command(s) that would run.")
+    parser.add_argument("--hub-node", default="", help="Filter the non-live extended dry-run preview to one hub node id.")
+    parser.add_argument("--hub-group", default="", help="Filter the non-live extended dry-run preview to one endpoint group.")
     return parser
 
 
@@ -278,6 +281,16 @@ def _usage_error(parser: argparse.ArgumentParser, message: str) -> int:
     parser.print_usage(sys.stderr)
     print(f"{parser.prog}: error: {message}", file=sys.stderr)
     return 2
+
+
+def _validate_hub_selector_usage(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int | None:
+    if args.hub_node and args.hub_group:
+        return _usage_error(parser, "--hub-node and --hub-group are mutually exclusive.")
+    if not args.hub_node and not args.hub_group:
+        return None
+    if _normalize(args.suite) != "extended" or not args.dry_run or args.list or args.endpoint or args.category:
+        return _usage_error(parser, "--hub-node and --hub-group are supported only with --suite extended --dry-run.")
+    return None
 
 
 def _base_pytest_command(target: str | tuple[str, ...], *, k_expr: str = "") -> tuple[str, ...]:
@@ -359,6 +372,10 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
     endpoint = _normalize(args.endpoint)
     category = _normalize(args.category)
 
+    hub_selector_error = _validate_hub_selector_usage(args, parser)
+    if hub_selector_error is not None:
+        return hub_selector_error
+
     if args.list and args.dry_run:
         return _usage_error(parser, "--list and --dry-run are mutually exclusive.")
 
@@ -386,6 +403,10 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
             if args.report:
                 return _usage_error(parser, "--report is not supported for --suite extended.")
             if args.dry_run:
+                try:
+                    dry_run_text = render_extended_dry_run(hub_node=args.hub_node, hub_group=args.hub_group)
+                except ManifestSelectionError as exc:
+                    return _usage_error(parser, str(exc))
                 return ResolvedPlan(
                     selector="suite=extended",
                     description="Planned Automation Hub dependency graph preview.",
@@ -395,7 +416,7 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
                         "Dry-run prints a dependency-aware hub plan without executing endpoints.",
                         "Live extended Automation Hub execution is not implemented yet.",
                     ),
-                    dry_run_text=render_extended_dry_run(),
+                    dry_run_text=dry_run_text,
                 )
             return ResolvedPlan(
                 selector="suite=extended",
@@ -743,6 +764,10 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else 2
         return code
+
+    hub_selector_error = _validate_hub_selector_usage(args, parser)
+    if hub_selector_error is not None:
+        return hub_selector_error
 
     if args.list and args.dry_run:
         return _usage_error(parser, "--list and --dry-run are mutually exclusive.")

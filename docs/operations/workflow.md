@@ -93,9 +93,11 @@ Safe runner discovery checks:
 ./.venv/bin/python tools/run_regression.py --list
 ./.venv/bin/python tools/run_regression.py --dry-run
 ./.venv/bin/python tools/run_regression.py --suite extended --dry-run
+./.venv/bin/python tools/run_regression.py --suite extended --dry-run --hub-node get-smoke.safe-read-only
+./.venv/bin/python tools/run_regression.py --suite extended --dry-run --hub-group get-smoke
 ```
 
-The `extended` suite command above is a non-live Automation Hub preview only. Live `--suite extended` execution is not implemented.
+The `extended` suite commands above are non-live Automation Hub previews only. `--hub-node` and `--hub-group` filter discovery output to bounded manifest slices plus required prerequisites, but they do not prove live endpoint safety. Live `--suite extended` execution is not implemented.
 
 Non-live OpenAPI drift report for curated observed runtime baselines:
 
