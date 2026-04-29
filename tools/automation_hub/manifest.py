@@ -1,7 +1,8 @@
-"""Dependency-aware dry-run manifest for the planned Automation Hub.
+"""Dependency-aware manifest for the Automation Hub.
 
-This module models future hub nodes and validates dependency order without
-executing live endpoints.
+Most hub nodes remain dry-run planning entries. A narrow approved live tranche
+is represented explicitly so broad endpoint groups cannot become executable by
+accident.
 """
 from __future__ import annotations
 
@@ -37,6 +38,9 @@ HUB_PLANNING_STATUSES = (
 EXECUTION_CURRENT_DELEGATED = "current delegated suite; future hub dry-run only"
 EXECUTION_DRY_RUN_ONLY = "future hub dry-run only"
 EXECUTION_NOT_EXECUTABLE = "not executable pending audit or approval"
+EXECUTION_LIVE_APPROVED = "approved live hub execution"
+
+APPROVED_LIVE_NODE_IDS = ("get-smoke.health.core",)
 
 
 class ManifestValidationError(ValueError):
@@ -146,22 +150,48 @@ DEFAULT_HUB_MANIFEST = HubManifest(
             notes=("Batch remains opt-in and is not part of the protected default.",),
         ),
         HubNode(
-            node_id="get-smoke.safe-read-only",
+            node_id="get-smoke.health.core",
             endpoint_group="get-smoke",
-            endpoint_label="Opt-in safe GET smoke endpoint groups",
+            endpoint_label="GET /health",
             status=STATUS_CURRENTLY_COVERED,
             dependencies=(),
             produces=(
                 NamedOutput(
-                    name="get_smoke.status_signal",
-                    description="Status and top-level shape signal from the current opt-in GET smoke lane.",
+                    name="health.core_status_signal",
+                    description="Status and safe metadata signal from the top-level health endpoint.",
+                ),
+            ),
+            consumes=(),
+            artifact_policy=metadata_only_policy(
+                "Live health-node reports persist metadata only: status, timing, outcome, and content-type."
+            ),
+            execution_availability=EXECUTION_LIVE_APPROVED,
+            rerun_selector="./.venv/bin/python tools/run_regression.py --suite extended --hub-node get-smoke.health.core",
+            notes=(
+                "First approved live Automation Hub node; limited to GET /health only.",
+                "This node does not include /health/live, /health/ready, /health/detailed, /health/startup, or health-like routes in other groups.",
+            ),
+        ),
+        HubNode(
+            node_id="get-smoke.safe-read-only",
+            endpoint_group="get-smoke",
+            endpoint_label="Delegated opt-in safe GET smoke groups outside approved health core",
+            status=STATUS_CURRENTLY_COVERED,
+            dependencies=(),
+            produces=(
+                NamedOutput(
+                    name="get_smoke.delegated_status_signal",
+                    description="Status and top-level shape signal from the current opt-in GET smoke lane outside the approved hub health node.",
                 ),
             ),
             consumes=(),
             artifact_policy=metadata_only_policy("GET smoke should avoid raw response artifact persistence."),
             execution_availability=EXECUTION_CURRENT_DELEGATED,
             rerun_selector="./.venv/bin/python tools/run_regression.py --suite smoke",
-            notes=("Only already covered safe GET smoke groups are represented here.",),
+            notes=(
+                "The broad GET smoke lane remains delegated and is not a live-executable hub unit.",
+                "Other GET smoke groups stay non-live in the hub manifest until split and approved separately.",
+            ),
         ),
         HubNode(
             node_id="document-processing.fraud-status.producer",
@@ -216,6 +246,21 @@ DEFAULT_HUB_MANIFEST = HubManifest(
         ),
     )
 )
+
+
+def live_capable_nodes(manifest: HubManifest = DEFAULT_HUB_MANIFEST) -> tuple[HubNode, ...]:
+    """Return the manifest nodes approved for live Automation Hub execution."""
+
+    approved = set(APPROVED_LIVE_NODE_IDS)
+    return tuple(node for node in manifest.ordered_nodes() if node.node_id in approved)
+
+
+def live_capable_node_ids(manifest: HubManifest = DEFAULT_HUB_MANIFEST) -> frozenset[str]:
+    return frozenset(node.node_id for node in live_capable_nodes(manifest))
+
+
+def is_live_capable_node(node_id: str, manifest: HubManifest = DEFAULT_HUB_MANIFEST) -> bool:
+    return node_id in live_capable_node_ids(manifest)
 
 
 def validate_manifest(nodes: Iterable[HubNode]) -> None:
@@ -305,7 +350,10 @@ def render_extended_dry_run(*, hub_node: str = "", hub_group: str = "") -> str:
         lines.append(f"Hub selector: {selection.selector_label}")
         lines.append(f"Selection scope: {selection.scope_label}.")
     lines.append("Description: Planned Automation Hub dependency graph preview.")
-    lines.append("Live execution: not implemented; this dry-run performs no endpoint calls.")
+    lines.append(
+        "Live execution: approved only for --hub-node get-smoke.health.core; "
+        "this dry-run performs no endpoint calls."
+    )
     lines.append("")
     lines.append("Dependency order:")
     for index, node in enumerate(ordered_nodes, start=1):
@@ -344,6 +392,7 @@ def render_extended_dry_run(*, hub_node: str = "", hub_group: str = "") -> str:
     lines.append("")
     lines.append("Notes:")
     lines.append("- this is an endpoint-group oriented plan, not a path-by-path coverage matrix")
+    lines.append("- get-smoke.health.core is the only approved live hub node and represents GET /health only")
     lines.append("- legacy, unsafe, admin, destructive, internal/debug, storage-risk, artifact-risk, auth-blocked, owner-unconfirmed, setup-dependent, and unknown groups remain outside live hub scope until approved")
     return "\n".join(lines) + "\n"
 

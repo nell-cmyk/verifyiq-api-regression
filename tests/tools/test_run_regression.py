@@ -50,7 +50,7 @@ def test_list_exits_zero_and_mentions_core_mappings():
     assert "protected" in stdout
     assert "smoke" in stdout
     assert "full" in stdout
-    assert "extended (dry-run plan available; live execution not implemented)" in stdout
+    assert "extended (dry-run plan available; live execution approved only for --hub-node get-smoke.health.core)" in stdout
     assert "parse" in stdout
     assert "batch" in stdout
     assert "matrix" in stdout
@@ -58,6 +58,7 @@ def test_list_exits_zero_and_mentions_core_mappings():
     assert "auth" in stdout
     assert "negative" in stdout
     assert "tools/run_batch_with_fixtures.py" in stdout
+    assert "suite=extended hub-node=get-smoke.health.core" in stdout
     assert "endpoint=batch category=auth" in stdout
     assert "Deferred endpoint/category mappings" in stdout
 
@@ -955,7 +956,8 @@ def test_suite_extended_dry_run_prints_non_live_hub_plan():
     assert stderr == ""
     assert "Selection: suite=extended" in stdout
     assert "Planned Automation Hub dependency graph preview" in stdout
-    assert "Live execution: not implemented" in stdout
+    assert "Live execution: approved only for --hub-node get-smoke.health.core" in stdout
+    assert "get-smoke.health.core" in stdout
     assert "parse.protected" in stdout
     assert "document-processing.fraud-status.producer" in stdout
     assert "document-processing.fraud-status.consumer" in stdout
@@ -986,6 +988,25 @@ def test_suite_extended_hub_node_filters_to_selected_node():
     assert "document-processing.fraud-status.consumer" not in stdout
     assert "Dependency semantics:" in stdout
     assert "Reporting contract scaffold:" in stdout
+    assert "Executing command:" not in stdout
+
+
+def test_suite_extended_hub_node_filters_to_health_core_node():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(
+        module,
+        ["--suite", "extended", "--dry-run", "--hub-node", "get-smoke.health.core"],
+    )
+
+    assert rc == 0
+    assert stderr == ""
+    assert "Hub selector: --hub-node get-smoke.health.core" in stdout
+    assert "1. get-smoke.health.core" in stdout
+    assert "label: GET /health" in stdout
+    assert "execution availability: approved live hub execution" in stdout
+    assert "get-smoke.safe-read-only" not in stdout
     assert "Executing command:" not in stdout
 
 
@@ -1026,7 +1047,8 @@ def test_suite_extended_hub_group_filters_to_endpoint_group_nodes():
     assert stderr == ""
     assert "Hub selector: --hub-group get-smoke" in stdout
     assert "Selection scope: endpoint-group nodes plus required prerequisite closure." in stdout
-    assert "1. get-smoke.safe-read-only" in stdout
+    assert "1. get-smoke.health.core" in stdout
+    assert "2. get-smoke.safe-read-only" in stdout
     assert "   inclusion: selected endpoint-group node" in stdout
     assert "endpoint group: get-smoke" in stdout
     assert "parse.protected" not in stdout
@@ -1124,8 +1146,8 @@ def test_suite_extended_report_hub_group_writes_filtered_report(tmp_path: Path):
     latest = tmp_path / "LATEST.txt"
     payload = json.loads((tmp_path / latest.read_text(encoding="utf-8").strip() / "run.json").read_text(encoding="utf-8"))
     assert payload["selector"] == {"type": "hub-group", "value": "get-smoke"}
-    assert payload["selected_nodes"] == ["get-smoke.safe-read-only"]
-    assert payload["dependency_order"] == ["get-smoke.safe-read-only"]
+    assert payload["selected_nodes"] == ["get-smoke.health.core", "get-smoke.safe-read-only"]
+    assert payload["dependency_order"] == ["get-smoke.health.core", "get-smoke.safe-read-only"]
     assert "selected endpoint-group node" in stdout
 
 
@@ -1137,7 +1159,68 @@ def test_suite_extended_report_without_dry_run_fails_clearly():
 
     assert rc == 2
     assert stdout == ""
-    assert "--report for --suite extended is supported only with --dry-run" in stderr
+    assert "Live extended Automation Hub execution requires the approved selector --hub-node get-smoke.health.core" in stderr
+
+
+def test_suite_extended_hub_group_live_fails_clearly():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--hub-group", "get-smoke"])
+
+    assert rc == 2
+    assert stdout == ""
+    assert "Live extended Automation Hub execution does not support --hub-group" in stderr
+    assert "--hub-node get-smoke.health.core" in stderr
+
+
+def test_suite_extended_other_hub_node_live_fails_clearly():
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--hub-node", "get-smoke.safe-read-only"])
+
+    assert rc == 2
+    assert stdout == ""
+    assert "Live extended Automation Hub execution is approved only for --hub-node get-smoke.health.core" in stderr
+
+
+def test_suite_extended_health_node_live_calls_hub_executor(tmp_path: Path):
+    module = _load_module()
+    module._run_command = _no_call_runner
+    module.HUB_REPORT_ROOT = tmp_path
+    calls: list[tuple[str, Path]] = []
+
+    class FakePaths:
+        pass
+
+    fake_paths = FakePaths()
+    fake_paths.run_dir = tmp_path / "unit-live"
+    fake_paths.json_path = fake_paths.run_dir / "run.json"
+    fake_paths.markdown_path = fake_paths.run_dir / "run.md"
+
+    class FakeResult:
+        pass
+
+    fake_result = FakeResult()
+    fake_result.report_paths = fake_paths
+    fake_result.endpoint_result = {"outcome": "passed"}
+    fake_result.exit_code = 7
+
+    def fake_execute_approved_live_node(*, node_id: str, output_root: Path):
+        calls.append((node_id, output_root))
+        return fake_result
+
+    module.execute_approved_live_node = fake_execute_approved_live_node
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--hub-node", "get-smoke.health.core"])
+
+    assert rc == 7
+    assert stderr == ""
+    assert calls == [("get-smoke.health.core", tmp_path)]
+    assert "Executing Automation Hub node: get-smoke.health.core" in stdout
+    assert "Hub report JSON:" in stdout
+    assert "Outcome: passed" in stdout
 
 
 def test_suite_extended_unknown_hub_node_fails_clearly():
@@ -1188,7 +1271,6 @@ def test_suite_extended_hub_node_and_group_are_mutually_exclusive():
     "argv",
     [
         ["--hub-node", "get-smoke.safe-read-only", "--dry-run"],
-        ["--suite", "extended", "--hub-node", "get-smoke.safe-read-only"],
         ["--suite", "smoke", "--dry-run", "--hub-node", "get-smoke.safe-read-only"],
         ["--endpoint", "parse", "--category", "matrix", "--dry-run", "--hub-group", "get-smoke"],
         ["--list", "--hub-group", "get-smoke"],
@@ -1202,7 +1284,7 @@ def test_hub_selectors_are_valid_only_for_extended_dry_run(argv: list[str]):
 
     assert rc == 2
     assert stdout == ""
-    assert "--hub-node and --hub-group are supported only with --suite extended --dry-run" in stderr
+    assert "--hub-node and --hub-group are supported only with --suite extended" in stderr
 
 
 def test_suite_full_dry_run_does_not_call_subprocess():
@@ -1280,4 +1362,4 @@ def test_suite_extended_without_dry_run_exits_nonzero_without_execution():
 
     assert rc != 0
     assert stdout == ""
-    assert "Live extended Automation Hub execution is not implemented yet" in stderr
+    assert "Live extended Automation Hub execution requires the approved selector --hub-node get-smoke.health.core" in stderr

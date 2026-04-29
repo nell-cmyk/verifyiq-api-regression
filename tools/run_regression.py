@@ -12,6 +12,7 @@ This slice supports:
 - non-live `--suite extended --dry-run` preview for the planned Automation Hub
   with optional hub selector filtering
 - synthetic non-live hub reports for `--suite extended --dry-run --report`
+- live Automation Hub execution for the approved `get-smoke.health.core` node only
 """
 from __future__ import annotations
 
@@ -26,7 +27,13 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from tools.automation_hub.manifest import ManifestSelectionError, render_extended_dry_run  # noqa: E402
+from tools.automation_hub.executor import HEALTH_CORE_NODE_ID, execute_approved_live_node  # noqa: E402
+from tools.automation_hub.manifest import (  # noqa: E402
+    DEFAULT_HUB_MANIFEST,
+    ManifestSelectionError,
+    is_live_capable_node,
+    render_extended_dry_run,
+)
 from tools.automation_hub.report_writer import write_synthetic_report  # noqa: E402
 
 FULL_WRAPPER = REPO_ROOT / "tools" / "run_parse_full_regression.py"
@@ -55,6 +62,7 @@ BATCH_ENV_VARS = (
 )
 
 GET_SMOKE_ENV_VARS = PROTECTED_ENV_VARS
+HUB_HEALTH_ENV_VARS = BATCH_ENV_VARS
 
 IMPLEMENTED_SUITES = ("protected", "smoke", "full")
 PLANNED_SUITES = ("extended",)
@@ -212,6 +220,17 @@ INVENTORY: tuple[InventoryItem, ...] = (
         ),
     ),
     InventoryItem(
+        selector=f"suite=extended hub-node={HEALTH_CORE_NODE_ID}",
+        description="Approved live Automation Hub health node for GET /health only.",
+        required_env=HUB_HEALTH_ENV_VARS,
+        supported_flags=("--report",),
+        notes=(
+            "This is the only live-capable Automation Hub node in the first executor tranche.",
+            "Live execution always writes metadata-only reports under reports/hub/.",
+            "Broad --suite extended and --hub-group execution remain blocked.",
+        ),
+    ),
+    InventoryItem(
         selector="suite=full",
         description="Protected /parse baseline followed by the parse matrix wrapper.",
         required_env=PROTECTED_ENV_VARS,
@@ -291,8 +310,8 @@ def _validate_hub_selector_usage(args: argparse.Namespace, parser: argparse.Argu
         return _usage_error(parser, "--hub-node and --hub-group are mutually exclusive.")
     if not args.hub_node and not args.hub_group:
         return None
-    if _normalize(args.suite) != "extended" or not args.dry_run or args.list or args.endpoint or args.category:
-        return _usage_error(parser, "--hub-node and --hub-group are supported only with --suite extended --dry-run.")
+    if _normalize(args.suite) != "extended" or args.list or args.endpoint or args.category:
+        return _usage_error(parser, "--hub-node and --hub-group are supported only with --suite extended.")
     return None
 
 
@@ -337,6 +356,20 @@ def _protected_report_command() -> tuple[str, ...]:
 
 def _smoke_command(*, k_expr: str = "") -> tuple[str, ...]:
     return _base_pytest_command(GET_SMOKE_TARGET, k_expr=k_expr)
+
+
+def _extended_health_command(*, report: bool = False) -> tuple[str, ...]:
+    command = [
+        sys.executable,
+        "tools/run_regression.py",
+        "--suite",
+        "extended",
+        "--hub-node",
+        HEALTH_CORE_NODE_ID,
+    ]
+    if report:
+        command.append("--report")
+    return tuple(command)
 
 
 def _full_command(*, report: bool = False, file_types: str = "", k_expr: str = "") -> tuple[str, ...]:
@@ -421,11 +454,6 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
                 return _usage_error(parser, "--fixtures-json is not supported for --suite extended.")
             if args.k_expr:
                 return _usage_error(parser, "--k is not supported for --suite extended.")
-            if args.report and not args.dry_run:
-                return _usage_error(
-                    parser,
-                    "--report for --suite extended is supported only with --dry-run; live extended hub execution is not implemented.",
-                )
             if args.dry_run:
                 try:
                     dry_run_text = render_extended_dry_run(hub_node=args.hub_node, hub_group=args.hub_group)
@@ -443,18 +471,41 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
                     required_env=(),
                     notes=(
                         "Dry-run prints a dependency-aware hub plan without executing endpoints.",
-                        "Live extended Automation Hub execution is not implemented yet.",
+                        f"Live extended execution is approved only for --hub-node {HEALTH_CORE_NODE_ID}.",
                     ),
                     dry_run_text=dry_run_text,
                 )
+            if args.hub_group:
+                return _usage_error(
+                    parser,
+                    "Live extended Automation Hub execution does not support --hub-group; "
+                    f"use --hub-node {HEALTH_CORE_NODE_ID}.",
+                )
+            if not args.hub_node:
+                return _usage_error(
+                    parser,
+                    "Live extended Automation Hub execution requires the approved selector "
+                    f"--hub-node {HEALTH_CORE_NODE_ID}; broad --suite extended remains blocked.",
+                )
+            try:
+                DEFAULT_HUB_MANIFEST.select_nodes(hub_node=args.hub_node)
+            except ManifestSelectionError as exc:
+                return _usage_error(parser, str(exc))
+            if not is_live_capable_node(args.hub_node):
+                return _usage_error(
+                    parser,
+                    "Live extended Automation Hub execution is approved only for "
+                    f"--hub-node {HEALTH_CORE_NODE_ID}.",
+                )
             return ResolvedPlan(
-                selector="suite=extended",
-                description="Planned Automation Hub live execution is not implemented yet.",
-                commands=(),
-                required_env=(),
+                selector=f"suite=extended hub-node={HEALTH_CORE_NODE_ID}",
+                description="Approved live Automation Hub health node for GET /health only.",
+                commands=(_extended_health_command(report=args.report),),
+                required_env=HUB_HEALTH_ENV_VARS,
                 notes=(
-                    "Use --suite extended --dry-run to inspect the non-live dependency plan.",
-                    "No live endpoints are executed for this selection.",
+                    "Live execution calls only GET /health through the Automation Hub executor.",
+                    "Metadata-only live reports are always written under reports/hub/.",
+                    "Raw request bodies, raw response bodies, auth material, document identifiers, GCS names, fraud details, and artifact/export payloads are not persisted.",
                 ),
             )
         if suite in PLANNED_SUITES:
@@ -650,7 +701,9 @@ def render_list() -> str:
     lines.append("Planned suites:")
     for suite in PLANNED_SUITES:
         if suite == "extended":
-            lines.append("- extended (dry-run plan available; live execution not implemented)")
+            lines.append(
+                f"- extended (dry-run plan available; live execution approved only for --hub-node {HEALTH_CORE_NODE_ID})"
+            )
         else:
             lines.append(f"- {suite}")
     lines.append("")
@@ -676,6 +729,8 @@ def render_list() -> str:
             command = _protected_command()
         elif item.selector == "suite=smoke":
             command = _smoke_command()
+        elif item.selector == f"suite=extended hub-node={HEALTH_CORE_NODE_ID}":
+            command = _extended_health_command()
         elif item.selector == "suite=full":
             command = _full_command()
         elif item.selector == "endpoint=parse category=matrix":
@@ -713,7 +768,7 @@ def render_list() -> str:
     lines.append(
         "Live execution is implemented for protected, smoke, full, parse matrix, mapped parse categories, "
         "direct batch, selected batch, and mapped batch categories. "
-        "--suite extended supports dry-run plan preview only; live extended hub execution is not implemented. "
+        f"--suite extended supports dry-run plan preview and live execution only for --hub-node {HEALTH_CORE_NODE_ID}. "
         "Use --dry-run to inspect commands without executing them."
     )
     return "\n".join(lines) + "\n"
@@ -753,6 +808,7 @@ def execute_live(args: argparse.Namespace, plan: ResolvedPlan) -> int:
         "suite=protected",
         "suite=smoke",
         "suite=full",
+        f"suite=extended hub-node={HEALTH_CORE_NODE_ID}",
         "endpoint=parse category=matrix",
         "endpoint=batch",
         "endpoint=batch --fixtures-json",
@@ -761,8 +817,8 @@ def execute_live(args: argparse.Namespace, plan: ResolvedPlan) -> int:
     if plan.selector not in live_selectors:
         if plan.selector == "suite=extended":
             print(
-                "Live extended Automation Hub execution is not implemented yet. "
-                "Use --suite extended --dry-run to inspect the non-live dependency plan.",
+                "Live extended Automation Hub execution requires the approved selector "
+                f"--hub-node {HEALTH_CORE_NODE_ID}; use --suite extended --dry-run to inspect the hub plan.",
                 file=sys.stderr,
             )
             return 2
@@ -772,6 +828,15 @@ def execute_live(args: argparse.Namespace, plan: ResolvedPlan) -> int:
             file=sys.stderr,
         )
         return 2
+
+    if plan.selector == f"suite=extended hub-node={HEALTH_CORE_NODE_ID}":
+        print(f"Executing Automation Hub node: {HEALTH_CORE_NODE_ID}")
+        result = execute_approved_live_node(node_id=HEALTH_CORE_NODE_ID, output_root=HUB_REPORT_ROOT)
+        print(f"Hub report directory: {result.report_paths.run_dir}")
+        print(f"Hub report JSON: {result.report_paths.json_path}")
+        print(f"Hub report Markdown: {result.report_paths.markdown_path}")
+        print(f"Outcome: {result.endpoint_result['outcome']}")
+        return result.exit_code
 
     if plan.selector == "suite=protected" and (args.file_types or args.fixtures_json or args.k_expr):
         print(

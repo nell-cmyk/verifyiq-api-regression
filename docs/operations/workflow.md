@@ -93,12 +93,12 @@ Safe runner discovery checks:
 ./.venv/bin/python tools/run_regression.py --list
 ./.venv/bin/python tools/run_regression.py --dry-run
 ./.venv/bin/python tools/run_regression.py --suite extended --dry-run
-./.venv/bin/python tools/run_regression.py --suite extended --dry-run --hub-node get-smoke.safe-read-only
+./.venv/bin/python tools/run_regression.py --suite extended --dry-run --hub-node get-smoke.health.core
 ./.venv/bin/python tools/run_regression.py --suite extended --dry-run --hub-group get-smoke
 ./.venv/bin/python tools/run_regression.py --suite extended --dry-run --report
 ```
 
-The `extended` suite commands above are non-live Automation Hub previews only. `--hub-node` and `--hub-group` filter discovery output to bounded manifest slices plus required prerequisites, but they do not prove live endpoint safety. Adding `--report` writes synthetic plan evidence under `reports/hub/` without endpoint calls or raw runtime evidence. Live `--suite extended` execution is not implemented.
+The `extended` dry-run commands above are non-live Automation Hub previews only. `--hub-node` and `--hub-group` filter discovery output to bounded manifest slices plus required prerequisites, but they do not prove live endpoint safety. Adding `--report` writes synthetic plan evidence under `reports/hub/` without endpoint calls or raw runtime evidence. Live `extended` execution is approved only for `./.venv/bin/python tools/run_regression.py --suite extended --hub-node get-smoke.health.core`, which calls `GET /health` only and should not be run unless live validation is explicitly approved.
 
 Non-live OpenAPI drift report for curated observed runtime baselines:
 
@@ -419,7 +419,7 @@ Optional structured report artifacts when `--report` is enabled:
 - `reports/regression/<timestamp>/report.md`
 - `reports/regression/LATEST.txt`
 
-Optional synthetic Automation Hub dry-run report artifacts when `--suite extended --dry-run --report` is enabled:
+Automation Hub report artifacts when `--suite extended --dry-run --report` or approved live `--suite extended --hub-node get-smoke.health.core` is enabled:
 - `reports/hub/<run-id>/run.json`
 - `reports/hub/<run-id>/run.md`
 - `reports/hub/LATEST.txt`

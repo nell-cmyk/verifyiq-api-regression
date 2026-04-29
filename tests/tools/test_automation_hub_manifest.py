@@ -45,13 +45,24 @@ def test_extended_dry_run_text_documents_dependency_and_reporting_contract() -> 
 
     assert "Selection: suite=extended" in text
     assert "Hub selector:" not in text
-    assert "Live execution: not implemented" in text
+    assert "Live execution: approved only for --hub-node get-smoke.health.core" in text
     assert "Dependency order:" in text
     assert "fraud_status.job_reference from document-processing.fraud-status.producer" in text
     assert "failed producer -> dependent consumers skipped as dependency failed" in text
     assert "successful producer with no safe usable value -> dependent consumers skipped as missing prerequisite" in text
     assert "required sections: run_metadata, selected_nodes" in text
     assert "Raw response bodies are not automatically persisted" in text
+    assert "get-smoke.health.core is the only approved live hub node" in text
+
+
+def test_default_manifest_marks_only_health_core_live_capable() -> None:
+    live_nodes = manifest.live_capable_nodes()
+
+    assert [node.node_id for node in live_nodes] == ["get-smoke.health.core"]
+    assert live_nodes[0].endpoint_label == "GET /health"
+    assert live_nodes[0].execution_availability == manifest.EXECUTION_LIVE_APPROVED
+    assert manifest.live_capable_node_ids() == frozenset(("get-smoke.health.core",))
+    assert not manifest.is_live_capable_node("get-smoke.safe-read-only")
 
 
 def test_node_selector_filters_to_selected_node_without_dependencies() -> None:
@@ -78,8 +89,11 @@ def test_node_selector_includes_prerequisite_closure_for_dependency_consumer() -
 def test_group_selector_filters_to_matching_endpoint_group_nodes() -> None:
     selection = manifest.DEFAULT_HUB_MANIFEST.select_nodes(hub_group="get-smoke")
 
-    assert [node.node_id for node in selection.nodes] == ["get-smoke.safe-read-only"]
-    assert selection.selected_node_ids == frozenset(("get-smoke.safe-read-only",))
+    assert [node.node_id for node in selection.nodes] == [
+        "get-smoke.health.core",
+        "get-smoke.safe-read-only",
+    ]
+    assert selection.selected_node_ids == frozenset(("get-smoke.health.core", "get-smoke.safe-read-only"))
     assert selection.prerequisite_node_ids == frozenset()
 
 

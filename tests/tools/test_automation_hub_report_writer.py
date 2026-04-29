@@ -93,9 +93,60 @@ def test_synthetic_report_writer_filters_hub_group(tmp_path) -> None:
 
     payload = _read_payload(paths.run_dir)
     assert payload["selector"] == {"type": "hub-group", "value": "get-smoke"}
-    assert payload["selected_nodes"] == ["get-smoke.safe-read-only"]
-    assert payload["dependency_order"] == ["get-smoke.safe-read-only"]
+    assert payload["selected_nodes"] == ["get-smoke.health.core", "get-smoke.safe-read-only"]
+    assert payload["dependency_order"] == ["get-smoke.health.core", "get-smoke.safe-read-only"]
     assert payload["node_plans"][0]["inclusion"] == "selected endpoint-group node"
+
+
+def test_live_report_writer_emits_metadata_only_health_result(tmp_path) -> None:
+    paths = report_writer.write_live_report(
+        output_root=tmp_path,
+        run_id="unit-live",
+        endpoint_result={
+            "node_id": "get-smoke.health.core",
+            "endpoint_label": "GET /health",
+            "method": "GET",
+            "path": "/health",
+            "status_code": 200,
+            "expected_status_code": 200,
+            "duration_ms": 12.5,
+            "outcome": "passed",
+            "safe_response_headers": {
+                "content-type": "application/json",
+                "set-cookie": "secret-cookie",
+                "x-request-id": "raw-id",
+            },
+            "started_at": "2026-04-29T00:00:00Z",
+            "completed_at": "2026-04-29T00:00:01Z",
+            "response_body": {"raw": "do not persist"},
+        },
+    )
+
+    payload = _read_payload(paths.run_dir)
+    assert payload["run_metadata"]["report_kind"] == "automation_hub_live"
+    assert payload["run_metadata"]["dry_run"] is False
+    assert payload["run_metadata"]["endpoints_executed"] is True
+    assert payload["selector"] == {"type": "hub-node", "value": "get-smoke.health.core"}
+    assert payload["selected_nodes"] == ["get-smoke.health.core"]
+    assert payload["node_result_summaries"] == [
+        {
+            "node_id": "get-smoke.health.core",
+            "endpoint_label": "GET /health",
+            "method": "GET",
+            "path": "/health",
+            "status_code": 200,
+            "expected_status_code": 200,
+            "duration_ms": 12.5,
+            "outcome": "passed",
+            "rerun_selector": "./.venv/bin/python tools/run_regression.py --suite extended --hub-node get-smoke.health.core",
+        }
+    ]
+    assert payload["safe_response_metadata"][0]["headers"] == {"content-type": "application/json"}
+    assert payload["response_body_policy"]["raw_response_bodies_present"] is False
+    raw_json = paths.json_path.read_text(encoding="utf-8")
+    assert "do not persist" not in raw_json
+    assert "secret-cookie" not in raw_json
+    assert "raw-id" not in raw_json
 
 
 def test_synthetic_report_writer_redacts_or_excludes_sensitive_metadata(tmp_path) -> None:
@@ -140,3 +191,62 @@ def test_synthetic_report_writer_redacts_or_excludes_sensitive_metadata(tmp_path
     assert "placeholder object name" not in raw_json
     assert "placeholder artifact material" not in raw_json
     assert "placeholder export material" not in raw_json
+
+
+def test_live_report_writer_redacts_or_excludes_sensitive_metadata(tmp_path) -> None:
+    paths = report_writer.write_live_report(
+        output_root=tmp_path,
+        run_id="unit-live-redaction",
+        endpoint_result={
+            "node_id": "get-smoke.health.core",
+            "endpoint_label": "GET /health",
+            "method": "GET",
+            "path": "/health",
+            "status_code": 200,
+            "expected_status_code": 200,
+            "duration_ms": 3.0,
+            "outcome": "passed",
+            "safe_response_headers": {"content-type": "application/json"},
+            "started_at": "2026-04-29T00:00:00Z",
+            "completed_at": "2026-04-29T00:00:01Z",
+        },
+        extra_metadata={
+            "headers": {
+                "Authorization": "placeholder auth material",
+                "Cookie": "placeholder cookie material",
+                "X-Tenant-Token": "placeholder tenant material",
+                "X-API-Key": "placeholder api material",
+                "Accept": "application/json",
+            },
+            "document_id": "placeholder document identifier",
+            "gcs_uri": "gs://bucket/raw-object",
+            "response_body": {"placeholder": "sensitive body"},
+            "fraudStatus": "placeholder fraud status",
+            "fraudScore": "placeholder fraud detail",
+            "artifact_payload": "placeholder artifact material",
+            "exportPayload": "placeholder export material",
+        },
+    )
+
+    payload = _read_payload(paths.run_dir)
+    sanitized = payload["sanitized_metadata"]
+    assert sanitized["headers"]["Authorization"] == REDACTED
+    assert sanitized["headers"]["Cookie"] == REDACTED
+    assert sanitized["headers"]["X-Tenant-Token"] == REDACTED
+    assert sanitized["headers"]["X-API-Key"] == REDACTED
+    assert sanitized["headers"]["Accept"] == "application/json"
+    assert sanitized["document_id"] == EXCLUDED_BY_POLICY
+    assert sanitized["gcs_uri"] == EXCLUDED_BY_POLICY
+    assert sanitized["response_body"] == EXCLUDED_BY_POLICY
+    assert sanitized["fraudStatus"] == EXCLUDED_BY_POLICY
+    assert sanitized["fraudScore"] == EXCLUDED_BY_POLICY
+    assert sanitized["artifact_payload"] == EXCLUDED_BY_POLICY
+    assert sanitized["exportPayload"] == EXCLUDED_BY_POLICY
+
+    raw_json = paths.json_path.read_text(encoding="utf-8")
+    assert "placeholder auth material" not in raw_json
+    assert "placeholder document identifier" not in raw_json
+    assert "gs://bucket/raw-object" not in raw_json
+    assert "placeholder fraud status" not in raw_json
+    assert "placeholder fraud detail" not in raw_json
+    assert "placeholder artifact material" not in raw_json
