@@ -248,6 +248,53 @@ OBSERVED_BASELINES: tuple[ObservedEndpoint, ...] = (
             "coverage, not owner-confirmed public contract"
         ),
     ),
+    ObservedEndpoint(
+        method="GET",
+        path="/monitoring/api/v1/golden-dataset/gcs/types",
+        comparison_scope=(
+            "Provisional monitoring GCS types GET smoke top-level shape only. "
+            "Specific category values and child GCS endpoints remain loose."
+        ),
+        evidence=(
+            "tests/endpoints/get_smoke/test_monitoring.py",
+            "tests/endpoints/get_smoke/test_monitoring_details.py",
+            "docs/operations/endpoint-coverage-inventory.md",
+        ),
+        responses=(
+            ObservedResponse(
+                status_code=200,
+                evidence=(
+                    "tests/endpoints/get_smoke/test_monitoring.py::CASES",
+                    "tests/endpoints/get_smoke/test_monitoring_details.py::"
+                    "_string_items_from_field",
+                    "tests/endpoints/get_smoke/test_monitoring_details.py::"
+                    "monitoring_gcs_category",
+                ),
+                fields=(
+                    ObservedField(
+                        "$.types",
+                        ("array",),
+                        ("tests/endpoints/get_smoke/test_monitoring_details.py",),
+                    ),
+                    ObservedField(
+                        "$.types[]",
+                        ("string",),
+                        ("tests/endpoints/get_smoke/test_monitoring_details.py",),
+                    ),
+                ),
+            ),
+        ),
+        loose_paths=(
+            "$.types values",
+            "/monitoring/api/v1/golden-dataset/gcs/types/{document_type}/variants",
+            "/monitoring/api/v1/golden-dataset/gcs/types/{document_type}/variants/{variant}/documents",
+            "/monitoring/api/v1/golden-dataset/gcs/preview/{document_type}/{variant}/{document_id}",
+        ),
+        public_contract_status=(
+            "observed_runtime_only; smoke-derived GCS type list shape, not "
+            "owner-confirmed public contract"
+        ),
+    ),
 )
 
 
@@ -256,11 +303,13 @@ ENDPOINT_CLASSIFICATION: dict[str, list[str]] = {
         "POST /v1/documents/parse: protected response envelope from current tests and completed /parse drift pilot",
         "POST /v1/documents/batch: envelope-only response shape from current batch tests; results[].data remains loose",
         "GET /v1/documents/fraud-status/{job_id}: provisional opt-in smoke top-level shape and 404 status only; terminal result fields remain loose",
+        "GET /monitoring/api/v1/golden-dataset/gcs/types: provisional opt-in smoke top-level types array<string> shape only; category values and child GCS endpoints remain loose",
     ],
     "compare_using_existing_artifacts_only": [
         "POST /v1/documents/parse: use sanitized pilot notes and current static guard; do not require a fresh live run",
         "POST /v1/documents/batch: use tests, manifests, clean summaries, and triage summaries; avoid raw batch JSON and workbook cell payloads",
         "GET /v1/documents/fraud-status/{job_id}: use current artifact-free smoke assertions and sanitized planning notes; do not persist raw fraud responses or job IDs",
+        "GET /monitoring/api/v1/golden-dataset/gcs/types: use current GET smoke assertions only; do not persist or document raw category values",
     ],
     "needs_fresh_sanitized_artifact": [
         "GET /v1/documents/fraud-status/{job_id}: complete/failed deep result schemas need fresh sanitized shape summaries or owner confirmation before spec tightening",

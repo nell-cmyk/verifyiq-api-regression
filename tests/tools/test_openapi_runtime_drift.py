@@ -25,6 +25,7 @@ def test_current_report_uses_runtime_baseline_principle() -> None:
         "POST /v1/documents/parse",
         "POST /v1/documents/batch",
         "GET /v1/documents/fraud-status/{job_id}",
+        "GET /monitoring/api/v1/golden-dataset/gcs/types",
     }
 
 
@@ -71,6 +72,27 @@ def test_fraud_status_has_no_observed_drift_without_contract_promotion() -> None
         finding
         for finding in report["findings"]
         if finding["endpoint"] == "GET /v1/documents/fraud-status/{job_id}"
+    ] == []
+
+
+def test_monitoring_gcs_types_has_no_observed_drift_without_contract_promotion() -> None:
+    report = _load_report()
+    gcs_types_baseline = next(
+        endpoint
+        for endpoint in report["observed_baselines"]
+        if endpoint["path"] == "/monitoring/api/v1/golden-dataset/gcs/types"
+    )
+
+    assert "observed_runtime_only" in gcs_types_baseline["public_contract_status"]
+    assert "not owner-confirmed public contract" in gcs_types_baseline["public_contract_status"]
+    assert "$.types values" in gcs_types_baseline["loose_paths"]
+    assert any(field["path"] == "$.types" for response in gcs_types_baseline["responses"] for field in response["fields"])
+    assert any(field["path"] == "$.types[]" for response in gcs_types_baseline["responses"] for field in response["fields"])
+
+    assert [
+        finding
+        for finding in report["findings"]
+        if finding["endpoint"] == "GET /monitoring/api/v1/golden-dataset/gcs/types"
     ] == []
 
 
@@ -162,6 +184,19 @@ def test_fraud_status_openapi_schema_documents_only_conservative_top_level_shape
     }
 
 
+def test_monitoring_gcs_types_openapi_schema_documents_only_conservative_top_level_shape() -> None:
+    openapi = drift.load_openapi()
+    responses = openapi["paths"]["/monitoring/api/v1/golden-dataset/gcs/types"]["get"]["responses"]
+
+    success_schema = responses["200"]["content"]["application/json"]["schema"]
+    assert success_schema["type"] == "object"
+    assert success_schema["additionalProperties"] is True
+    assert success_schema.get("required", []) == []
+    assert set(success_schema["properties"]) == {"types"}
+    assert success_schema["properties"]["types"]["type"] == "array"
+    assert success_schema["properties"]["types"]["items"] == {"type": "string"}
+
+
 def test_endpoint_classification_covers_deferred_and_excluded_groups() -> None:
     report = _load_report()
     classification = report["endpoint_classification"]
@@ -172,6 +207,10 @@ def test_endpoint_classification_covers_deferred_and_excluded_groups() -> None:
     assert "blocked_pending_owner_setup_auth_data" in classification
     assert "excluded" in classification
     assert any("/v1/documents/fraud-status" in item for item in classification["safe_to_compare_now"])
+    assert any(
+        "/monitoring/api/v1/golden-dataset/gcs/types" in item
+        for item in classification["safe_to_compare_now"]
+    )
     assert any(
         "complete/failed deep result schemas" in item
         for item in classification["needs_fresh_sanitized_artifact"]
@@ -243,6 +282,48 @@ def test_comparator_detects_newly_missing_observed_fraud_status_404() -> None:
         finding.endpoint == "GET /v1/documents/fraud-status/{job_id}"
         and finding.kind == "observed_status_undocumented"
         and finding.status_code == 404
+        for finding in findings
+    )
+
+
+def test_comparator_detects_newly_missing_observed_monitoring_gcs_types_field() -> None:
+    openapi = drift.load_openapi()
+    modified = copy.deepcopy(openapi)
+    success_schema = (
+        modified["paths"]["/monitoring/api/v1/golden-dataset/gcs/types"]["get"]["responses"]["200"]
+        ["content"]["application/json"]["schema"]
+    )
+    success_schema["properties"].pop("types")
+
+    findings = drift.compare_openapi_to_observed(modified)
+
+    assert any(
+        finding.endpoint == "GET /monitoring/api/v1/golden-dataset/gcs/types"
+        and finding.kind
+        in {
+            "observed_field_undocumented",
+            "generic_schema_under_documents_observed_field",
+        }
+        and finding.observed.startswith("$.types")
+        for finding in findings
+    )
+
+
+def test_comparator_detects_newly_wrong_observed_monitoring_gcs_types_item_type() -> None:
+    openapi = drift.load_openapi()
+    modified = copy.deepcopy(openapi)
+    success_schema = (
+        modified["paths"]["/monitoring/api/v1/golden-dataset/gcs/types"]["get"]["responses"]["200"]
+        ["content"]["application/json"]["schema"]
+    )
+    success_schema["properties"]["types"]["items"] = {"type": "integer"}
+
+    findings = drift.compare_openapi_to_observed(modified)
+
+    assert any(
+        finding.endpoint == "GET /monitoring/api/v1/golden-dataset/gcs/types"
+        and finding.kind == "observed_field_type_mismatch"
+        and finding.observed.startswith("$.types[]")
         for finding in findings
     )
 
