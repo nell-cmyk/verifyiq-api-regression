@@ -47,24 +47,13 @@ def test_batch_envelope_has_no_observed_drift_and_keeps_data_loose() -> None:
     assert "$.results[].data" in batch_baseline["loose_paths"]
 
 
-def test_parse_and_batch_have_no_current_observed_drift_findings() -> None:
+def test_compared_baselines_have_no_current_observed_drift_findings() -> None:
     report = _load_report()
 
-    findings_by_endpoint = {
-        "POST /v1/documents/parse": [],
-        "POST /v1/documents/batch": [],
-    }
-    for finding in report["findings"]:
-        if finding["endpoint"] in findings_by_endpoint:
-            findings_by_endpoint[finding["endpoint"]].append(finding)
-
-    assert findings_by_endpoint == {
-        "POST /v1/documents/parse": [],
-        "POST /v1/documents/batch": [],
-    }
+    assert report["findings"] == []
 
 
-def test_fraud_status_reports_observed_runtime_drift_without_contract_promotion() -> None:
+def test_fraud_status_has_no_observed_drift_without_contract_promotion() -> None:
     report = _load_report()
     fraud_baseline = next(
         endpoint
@@ -78,28 +67,11 @@ def test_fraud_status_reports_observed_runtime_drift_without_contract_promotion(
     assert "$.metadataFraudReport" in fraud_baseline["loose_paths"]
     assert "$.error" in fraud_baseline["loose_paths"]
 
-    fraud_findings = [
+    assert [
         finding
         for finding in report["findings"]
         if finding["endpoint"] == "GET /v1/documents/fraud-status/{job_id}"
-    ]
-    assert any(
-        finding["status_code"] == 200
-        and finding["kind"] == "generic_schema_under_documents_observed_field"
-        and finding["observed"].startswith("$.fraudJobId")
-        for finding in fraud_findings
-    )
-    assert any(
-        finding["status_code"] == 200
-        and finding["kind"] == "generic_schema_under_documents_observed_field"
-        and finding["observed"].startswith("$.fraudStatus")
-        for finding in fraud_findings
-    )
-    assert any(
-        finding["status_code"] == 404
-        and finding["kind"] == "observed_status_undocumented"
-        for finding in fraud_findings
-    )
+    ] == []
 
 
 def test_batch_openapi_schema_documents_conservative_envelope() -> None:
@@ -160,6 +132,36 @@ def test_batch_openapi_schema_documents_conservative_envelope() -> None:
     assert timeout_risk["properties"]["details"]["additionalProperties"] is True
 
 
+def test_fraud_status_openapi_schema_documents_only_conservative_top_level_shape() -> None:
+    openapi = drift.load_openapi()
+    responses = openapi["paths"]["/v1/documents/fraud-status/{job_id}"]["get"]["responses"]
+
+    success_schema = responses["200"]["content"]["application/json"]["schema"]
+    assert success_schema["type"] == "object"
+    assert success_schema["additionalProperties"] is True
+    assert success_schema.get("required", []) == []
+    assert set(success_schema["properties"]) == {"fraudJobId", "fraudStatus"}
+    assert success_schema["properties"]["fraudJobId"]["type"] == "string"
+    assert success_schema["properties"]["fraudStatus"]["type"] == "string"
+    assert "mathematicalFraudReport" not in success_schema["properties"]
+    assert "metadataFraudReport" not in success_schema["properties"]
+    assert "fraudScore" not in success_schema["properties"]
+    assert "authenticityScore" not in success_schema["properties"]
+    assert "completedAt" not in success_schema["properties"]
+    assert "error" not in success_schema["properties"]
+
+    not_found = responses["404"]["content"]["application/json"]["schema"]
+    assert not_found["type"] == "object"
+    assert not_found["additionalProperties"] is True
+    assert not_found.get("required", []) == []
+    assert not_found["properties"]["detail"]["type"] == "string"
+    assert "enum" not in not_found["properties"]["detail"]
+
+    assert responses["422"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/HTTPValidationError"
+    }
+
+
 def test_endpoint_classification_covers_deferred_and_excluded_groups() -> None:
     report = _load_report()
     classification = report["endpoint_classification"]
@@ -211,6 +213,40 @@ def test_comparator_detects_newly_missing_observed_batch_envelope_field() -> Non
     )
 
 
+def test_comparator_detects_newly_missing_observed_fraud_status_field() -> None:
+    openapi = drift.load_openapi()
+    modified = copy.deepcopy(openapi)
+    success_schema = (
+        modified["paths"]["/v1/documents/fraud-status/{job_id}"]["get"]["responses"]["200"]
+        ["content"]["application/json"]["schema"]
+    )
+    success_schema["properties"].pop("fraudStatus")
+
+    findings = drift.compare_openapi_to_observed(modified)
+
+    assert any(
+        finding.endpoint == "GET /v1/documents/fraud-status/{job_id}"
+        and finding.kind == "observed_field_undocumented"
+        and finding.observed.startswith("$.fraudStatus")
+        for finding in findings
+    )
+
+
+def test_comparator_detects_newly_missing_observed_fraud_status_404() -> None:
+    openapi = drift.load_openapi()
+    modified = copy.deepcopy(openapi)
+    modified["paths"]["/v1/documents/fraud-status/{job_id}"]["get"]["responses"].pop("404")
+
+    findings = drift.compare_openapi_to_observed(modified)
+
+    assert any(
+        finding.endpoint == "GET /v1/documents/fraud-status/{job_id}"
+        and finding.kind == "observed_status_undocumented"
+        and finding.status_code == 404
+        for finding in findings
+    )
+
+
 def test_cli_json_output(capsys) -> None:
     exit_code = drift.main(["--json"])
 
@@ -219,7 +255,4 @@ def test_cli_json_output(capsys) -> None:
     assert captured.err == ""
     report = json.loads(captured.out)
     assert report["openapi_path"] == "official-openapi.json"
-    assert any(
-        finding["endpoint"] == "GET /v1/documents/fraud-status/{job_id}"
-        for finding in report["findings"]
-    )
+    assert report["findings"] == []

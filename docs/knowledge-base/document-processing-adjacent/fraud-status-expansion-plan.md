@@ -213,6 +213,10 @@ Conservative contract from OpenAPI plus verified API source evidence:
 - path parameter: required string `job_id`, accepted only when it uses the
   `fj_` plus 32 lowercase hexadecimal character format
 - documented success: `200` JSON object with additional properties allowed
+- documented observed-runtime top-level success fields: optional `fraudJobId`
+  string and optional `fraudStatus` string
+- documented observed-runtime not-found status: `404` JSON object with
+  additional properties allowed and optional `detail` string
 - documented validation failure: `422` HTTPValidationError
 - descriptive behavior: poll async fraud detection job status; include fraud
   detection results when complete; jobs expire after tenant cache TTL
@@ -316,10 +320,10 @@ live validation with a fresh fraud job ID, and docs updates that summarize
 observed behavior without raw payloads.
 
 ## Next Action
-Continue observed-runtime characterization without waiting for owner
-confirmation. The safe next tranche is to compare the current artifact-free
-smoke top-level shape and 404 status evidence against `official-openapi.json`,
-keeping terminal complete/failed result fields loose and avoiding raw fraud
-payloads, job IDs, fixture URIs, or report values in tracked artifacts. Keep
-`GET /v1/documents/fraud-status/{job_id}` labeled as maintainer-accepted
-provisional coverage until owner confirmation exists.
+The current artifact-free smoke top-level shape and 404 status evidence is now
+conservatively aligned in `official-openapi.json`. Continue observed-runtime
+characterization only when additional safe sanitized evidence exists, keeping
+terminal complete/failed result fields loose and avoiding raw fraud payloads,
+job IDs, fixture URIs, or report values in tracked artifacts. Keep `GET
+/v1/documents/fraud-status/{job_id}` labeled as maintainer-accepted provisional
+coverage until owner confirmation exists.
