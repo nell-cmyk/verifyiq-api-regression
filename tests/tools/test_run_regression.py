@@ -49,6 +49,7 @@ def test_list_exits_zero_and_mentions_core_mappings():
     assert "protected" in stdout
     assert "smoke" in stdout
     assert "full" in stdout
+    assert "extended (dry-run plan available; live execution not implemented)" in stdout
     assert "parse" in stdout
     assert "batch" in stdout
     assert "matrix" in stdout
@@ -943,15 +944,23 @@ def test_parse_category_requires_endpoint():
     assert "--category currently requires --endpoint" in stderr
 
 
-def test_planned_suite_reports_not_yet_mapped():
+def test_suite_extended_dry_run_prints_non_live_hub_plan():
     module = _load_module()
     module._run_command = _no_call_runner
 
     rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--dry-run"])
 
-    assert rc != 0
-    assert stdout == ""
-    assert "planned but not mapped in the current runner" in stderr
+    assert rc == 0
+    assert stderr == ""
+    assert "Selection: suite=extended" in stdout
+    assert "Planned Automation Hub dependency graph preview" in stdout
+    assert "Live execution: not implemented" in stdout
+    assert "parse.protected" in stdout
+    assert "document-processing.fraud-status.producer" in stdout
+    assert "document-processing.fraud-status.consumer" in stdout
+    assert "fraud_status.job_reference from document-processing.fraud-status.producer" in stdout
+    assert "Raw response bodies are not automatically persisted" in stdout
+    assert "Executing command:" not in stdout
 
 
 def test_suite_full_dry_run_does_not_call_subprocess():
@@ -1029,4 +1038,4 @@ def test_suite_extended_without_dry_run_exits_nonzero_without_execution():
 
     assert rc != 0
     assert stdout == ""
-    assert "Live execution is not implemented for this selection" in stderr
+    assert "Live extended Automation Hub execution is not implemented yet" in stderr

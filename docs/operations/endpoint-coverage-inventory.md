@@ -11,7 +11,9 @@ This is intentionally not a path-by-path busywork matrix. The repo is evolving t
 - Current stronger live gate: `./.venv/bin/python tools/run_regression.py --suite full`
 - Current opt-in live GET smoke suite: `./.venv/bin/python tools/run_regression.py --suite smoke`
 - Current opt-in live batch selection: `./.venv/bin/python tools/run_regression.py --endpoint batch`
+- Current non-live Automation Hub preview: `./.venv/bin/python tools/run_regression.py --suite extended --dry-run`
 - `smoke` is now real, but it is not a broader current default
+- live `--suite extended` execution is not implemented
 
 ## Group Inventory
 
@@ -48,6 +50,7 @@ Hub planning statuses:
 
 Dependency modeling:
 - Response-derived values should be modeled as named outputs in a run context, not copied through raw response-body coupling.
+- The current non-live `--suite extended --dry-run` preview models dependency order and named output/input relationships only; it does not execute endpoints or prove live safety.
 - Producer endpoints should validate and publish only the named output needed by consumers. Reports should use safe aliases or classifications for sensitive dependency values.
 - If a producer endpoint fails, dependent consumers should be skipped as dependency failed.
 - If a producer succeeds but does not yield a safe usable value, dependent consumers should be skipped as missing prerequisite.
@@ -55,6 +58,7 @@ Dependency modeling:
 
 Future hub reporting expectations:
 - Every executed endpoint/test should produce structured evidence with run metadata, selected nodes, endpoint result summaries, request metadata, safe response metadata/body policy, timing, dependency inputs/outputs, skips, failures, and rerun selectors.
+- The current reporting contract scaffold is non-live and does not create runtime reports.
 - Raw response bodies may be persisted only when the endpoint artifact policy allows it.
 - Reports must redact or exclude tokens, cookies, auth headers, tenant/API keys, raw document IDs, raw GCS object names, sensitive bodies, fraud results, and artifact/export payloads unless explicitly approved.
 - Treat `reports/` output as disposable runtime evidence. Promote durable endpoint behavior, blockers, workflow decisions, and validated findings into tracked docs by scope.

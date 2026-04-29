@@ -9,6 +9,7 @@ This slice supports:
 - live execution for `--suite full` via delegation
 - live execution for mapped opt-in parse and batch category selections
 - structured reporting for protected, full, and parse matrix via existing helpers
+- non-live `--suite extended --dry-run` preview for the planned Automation Hub
 """
 from __future__ import annotations
 
@@ -20,6 +21,11 @@ from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from tools.automation_hub.manifest import render_extended_dry_run  # noqa: E402
+
 FULL_WRAPPER = REPO_ROOT / "tools" / "run_parse_full_regression.py"
 PARSE_MATRIX_WRAPPER = REPO_ROOT / "tools" / "reporting" / "run_parse_matrix_with_summary.py"
 BATCH_WRAPPER = REPO_ROOT / "tools" / "run_batch_with_fixtures.py"
@@ -85,6 +91,7 @@ class ResolvedPlan:
     required_env: tuple[str, ...]
     notes: tuple[str, ...]
     defaulted_to_protected: bool = False
+    dry_run_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -369,6 +376,37 @@ def resolve_plan(args: argparse.Namespace, parser: argparse.ArgumentParser) -> R
     if suite:
         if suite not in IMPLEMENTED_SUITES and suite not in PLANNED_SUITES:
             return _usage_error(parser, f"Unknown suite: {suite!r}.")
+        if suite == "extended":
+            if args.file_types:
+                return _usage_error(parser, "--file-types is not supported for --suite extended.")
+            if args.fixtures_json:
+                return _usage_error(parser, "--fixtures-json is not supported for --suite extended.")
+            if args.k_expr:
+                return _usage_error(parser, "--k is not supported for --suite extended.")
+            if args.report:
+                return _usage_error(parser, "--report is not supported for --suite extended.")
+            if args.dry_run:
+                return ResolvedPlan(
+                    selector="suite=extended",
+                    description="Planned Automation Hub dependency graph preview.",
+                    commands=(),
+                    required_env=(),
+                    notes=(
+                        "Dry-run prints a dependency-aware hub plan without executing endpoints.",
+                        "Live extended Automation Hub execution is not implemented yet.",
+                    ),
+                    dry_run_text=render_extended_dry_run(),
+                )
+            return ResolvedPlan(
+                selector="suite=extended",
+                description="Planned Automation Hub live execution is not implemented yet.",
+                commands=(),
+                required_env=(),
+                notes=(
+                    "Use --suite extended --dry-run to inspect the non-live dependency plan.",
+                    "No live endpoints are executed for this selection.",
+                ),
+            )
         if suite in PLANNED_SUITES:
             if args.dry_run:
                 return _usage_error(parser, f"Suite {suite!r} is planned but not mapped in the current runner.")
@@ -559,9 +597,12 @@ def render_list() -> str:
     for suite in IMPLEMENTED_SUITES:
         lines.append(f"- {suite}")
     lines.append("")
-    lines.append("Planned suites not yet mapped:")
+    lines.append("Planned suites:")
     for suite in PLANNED_SUITES:
-        lines.append(f"- {suite}")
+        if suite == "extended":
+            lines.append("- extended (dry-run plan available; live execution not implemented)")
+        else:
+            lines.append(f"- {suite}")
     lines.append("")
     lines.append("Endpoints:")
     for endpoint in IMPLEMENTED_ENDPOINTS:
@@ -622,12 +663,15 @@ def render_list() -> str:
     lines.append(
         "Live execution is implemented for protected, smoke, full, parse matrix, mapped parse categories, "
         "direct batch, selected batch, and mapped batch categories. "
+        "--suite extended supports dry-run plan preview only; live extended hub execution is not implemented. "
         "Use --dry-run to inspect commands without executing them."
     )
     return "\n".join(lines) + "\n"
 
 
 def render_dry_run(plan: ResolvedPlan) -> str:
+    if plan.dry_run_text:
+        return plan.dry_run_text
     lines: list[str] = []
     lines.append(f"Selection: {plan.selector}")
     if plan.defaulted_to_protected:
@@ -665,6 +709,13 @@ def execute_live(args: argparse.Namespace, plan: ResolvedPlan) -> int:
     }
     live_selectors.update(_CATEGORY_MAPPING_BY_SELECTOR)
     if plan.selector not in live_selectors:
+        if plan.selector == "suite=extended":
+            print(
+                "Live extended Automation Hub execution is not implemented yet. "
+                "Use --suite extended --dry-run to inspect the non-live dependency plan.",
+                file=sys.stderr,
+            )
+            return 2
         print(
             "Live execution is not implemented for this selection. "
             "Use --dry-run for pending selections where supported.",

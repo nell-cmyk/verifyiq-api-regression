@@ -92,7 +92,10 @@ Safe runner discovery checks:
 ```bash
 ./.venv/bin/python tools/run_regression.py --list
 ./.venv/bin/python tools/run_regression.py --dry-run
+./.venv/bin/python tools/run_regression.py --suite extended --dry-run
 ```
+
+The `extended` suite command above is a non-live Automation Hub preview only. Live `--suite extended` execution is not implemented.
 
 Non-live OpenAPI drift report for curated observed runtime baselines:
 
