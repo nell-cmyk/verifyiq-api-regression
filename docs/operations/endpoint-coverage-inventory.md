@@ -34,6 +34,31 @@ This is intentionally not a path-by-path busywork matrix. The repo is evolving t
 - Parse matrix breadth is opt-in and intentionally limited to one canonical enabled fixture per registry file type.
 - Batch coverage reuses registry-backed fixtures and enforces a safe default request size of 4 items.
 
+## Automation Hub Planning Extensions
+The planned Automation Hub Expansion should continue to use endpoint groups as the planning unit. Do not turn this inventory into path-by-path busywork, and do not treat an endpoint as safe just because it exists in `official-openapi.json`.
+
+Hub planning statuses:
+- `currently covered`: covered by the current protected, smoke, full, matrix, batch, or focused category surfaces.
+- `safe candidate`: appears suitable for future hub inclusion after current evidence confirms non-legacy routing, non-destructive behavior, stable prerequisites, and acceptable artifact policy.
+- `dependency producer`: produces a validated value that another endpoint can use through the hub run context.
+- `dependency consumer`: requires one or more named outputs from earlier producer nodes.
+- `legacy/excluded`: legacy duplicate, UI route, debug route, destructive/admin mutation, or other explicitly excluded surface.
+- `blocked/deferred`: blocked by auth behavior, owner confirmation, setup prerequisites, artifact/output policy, storage risk, or missing safe request shape.
+- `unknown/pending audit`: not yet classified with enough repo or owner evidence for hub inclusion.
+
+Dependency modeling:
+- Response-derived values should be modeled as named outputs in a run context, not copied through raw response-body coupling.
+- Producer endpoints should validate and publish only the named output needed by consumers. Reports should use safe aliases or classifications for sensitive dependency values.
+- If a producer endpoint fails, dependent consumers should be skipped as dependency failed.
+- If a producer succeeds but does not yield a safe usable value, dependent consumers should be skipped as missing prerequisite.
+- Independent nodes that do not depend on the failed or missing prerequisite may continue.
+
+Future hub reporting expectations:
+- Every executed endpoint/test should produce structured evidence with run metadata, selected nodes, endpoint result summaries, request metadata, safe response metadata/body policy, timing, dependency inputs/outputs, skips, failures, and rerun selectors.
+- Raw response bodies may be persisted only when the endpoint artifact policy allows it.
+- Reports must redact or exclude tokens, cookies, auth headers, tenant/API keys, raw document IDs, raw GCS object names, sensitive bodies, fraud results, and artifact/export payloads unless explicitly approved.
+- Treat `reports/` output as disposable runtime evidence. Promote durable endpoint behavior, blockers, workflow decisions, and validated findings into tracked docs by scope.
+
 ## GET Smoke Selection Basis
 - This repo does not contain the VerifyIQ server/router implementation or product UI/backend source, so there is no in-repo router-registration evidence to inspect directly.
 - Current active GET inclusion therefore relies on the repo-native evidence that does exist: maintained smoke tests, the shared authenticated client in `tests/client.py`, current runner/doc command surfaces, live 200 characterization, and current v1 route structure in `official-openapi.json`.
@@ -116,3 +141,6 @@ Before a new endpoint group is added here as "in progress" or "covered", keep th
 7. Runner mapping requirement: the canonical `tools/run_regression.py` selection or the reason runner mapping is deferred.
 8. CI eligibility: whether the group is eligible for non-live CI, protected live CI, opt-in/scheduled live CI, or local-only validation.
 9. Owner and blocker notes: the current owner area, known upstream blocker, and evidence needed before promotion.
+10. Hub planning status: currently covered, safe candidate, dependency producer, dependency consumer, legacy/excluded, blocked/deferred, or unknown/pending audit.
+11. Dependency contract: named outputs the group can produce, named inputs it consumes, and dependency-failure or missing-prerequisite skip behavior.
+12. Structured evidence policy: safe metadata/body handling, redaction/exclusion requirements, rerun selectors, and whether raw body persistence is allowed for the group.
