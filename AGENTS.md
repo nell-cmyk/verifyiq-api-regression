@@ -87,7 +87,8 @@
 - Never run deployment, publish, destructive Git, or data-deleting commands unless explicitly requested.
 
 ## Development Rules
-- Patch narrowly. Preserve passing behavior unless the task explicitly requires a change.
+- Patch at the smallest coherent safe unit of work. Preserve passing behavior unless the task explicitly requires a change.
+- For Automation Hub docs/planning work, prefer completing one clearly supported catalog tranche or pass in a single patch instead of forcing one-line or one-endpoint commits; keep the scope bounded by current evidence, approved files, and the live-execution guardrails below.
 - Do not refactor, redesign, reorganize, or broaden repo scope unless explicitly asked.
 - Use evidence-first debugging: start from the latest terminal output, response body, status code, headers, and fixture metadata.
 - Planning source of truth: `docs/knowledge-base/repo-roadmap.md`.
@@ -120,7 +121,7 @@
 - When a canonical command or workflow changes, update the corresponding docs in the same pass.
 - After completing any Automation Hub master-plan tranche or pass, include a copy-ready `Next Prompt` block in the final response unless the user explicitly asks not to. This is scoped to Automation Hub master-plan work only; do not apply it automatically to ordinary roadmap maintenance, audit-only work, commit/push-only work, unrelated endpoint findings, or one-off doc corrections.
 - Generate the `Next Prompt` only after final validation and final git-state inspection. Base it on final repo state, the current Automation Hub section of `docs/knowledge-base/repo-roadmap.md`, relevant `docs/operations/*` guidance, and validation results. Include a commit SHA only when a commit was actually created.
-- The `Next Prompt` must state the completed tranche/pass and current state, the likely next narrow Automation Hub tranche, required inspection before editing, master-plan guardrails, validation expectations, final-response expectations, and the default instruction not to commit or push.
+- The `Next Prompt` must state the completed tranche/pass and current state, the likely next coherent Automation Hub tranche or pass, required inspection before editing, master-plan guardrails, validation expectations, final-response expectations, and the default instruction not to commit or push.
 
 ## Reporting Expectations
 - Return results in this order:

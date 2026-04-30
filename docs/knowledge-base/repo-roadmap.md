@@ -140,12 +140,14 @@ Existing wrappers and scripts remain until parity, documentation, CI references,
 Health live-capable tranche status: `tools/run_regression.py --suite extended --dry-run` still renders an endpoint-group oriented manifest preview with dependency order, named outputs, dependency skip semantics, artifact policy, and the scaffolded evidence/redaction contract. The manifest splits out `get-smoke.health.core` and `get-smoke.health.ready` as the only approved live nodes, representing `GET /health` and `GET /health/ready` only; broad `get-smoke.safe-read-only` remains delegated/non-live in the hub. Adding `--report` to dry-run writes disposable synthetic plan reports under `reports/hub/<run-id>/run.json` and `run.md`; approved live health-node execution writes metadata-only live reports to the same hub report tree. This path does not broaden the protected default or replace current delegated wrappers.
 
 Next-tranche sequence:
-1. Finish catalog normalization: mark each candidate group with suite lane, hub status, safety class, data sources, fixture/prerequisite needs, artifact policy, and owner/blocker notes.
+1. Finish catalog normalization in coherent passes: mark each candidate group with suite lane, hub status, safety class, data sources, fixture/prerequisite needs, artifact policy, and owner/blocker notes.
 2. Define migration candidates from `smoke` to `extended` without moving them yet. Start with read-only or already smoke-covered endpoints whose dependency inputs are simple and whose artifact policy is metadata-only.
 3. Add or update non-live manifest/reporting tests before any broad live execution. Prove dry-run, selector, dependency, skip, and artifact-contract behavior first.
 4. Promote one narrow live-safe tranche at a time through explicit selectors, keeping `smoke` as the fallback until parity and approval gates are complete.
 5. Defer `workflow` implementation until controlled mutation/stateful endpoint gates are fully documented and approved.
 6. Review CI only after local runner behavior, report artifacts, failure ownership, and rollback are proven.
+
+Tranche sizing: for documentation-only catalog normalization, "narrow" means bounded to current repo evidence, approved docs/planning files, and the live-execution guardrails, not artificially limited to one line or one endpoint group. Prefer one coherent patch for all clearly supported safe catalog gaps, and stop at unsupported or approval-dependent boundaries.
 
 ## Next Endpoint-Group Expansion Proposal
 Prioritize the `document-processing-adjacent` group, starting with `/v1/documents/fraud-status/{job_id}` as a setup-backed, read-only GET candidate. This keeps expansion aligned with the broader multi-endpoint hub strategy while staying close to the core document parsing and fraud-detection product area.

@@ -144,8 +144,13 @@ Validation strategy for documentation-only hub planning:
 - Run focused non-live runner and Automation Hub tests with `VERIFYIQ_SKIP_DOTENV=1`.
 - Use `git diff --check` and `git status --short` to confirm formatting and scope.
 
+Tranche sizing for documentation-only hub planning:
+- Prefer the smallest coherent pass that completes a clearly supported catalog or planning unit. Do not split safe catalog normalization into one-line commits solely for narrowness.
+- A broader docs-only pass is acceptable when every edit is backed by current repo evidence, stays in the approved planning/docs surface, preserves smoke coverage, and does not approve manifest, runner, CI, OpenAPI, report-generation, body-persistence, or live-execution changes.
+- Stop at the first unsupported or approval-dependent boundary instead of padding the pass with speculative readiness language.
+
 Next-tranche sequence:
-1. Normalize the endpoint catalog with suite lane, hub status, safety class, data sources, fixture/prerequisite needs, artifact policy, and owner/blocker notes.
+1. Normalize the endpoint catalog in coherent passes with suite lane, hub status, safety class, data sources, fixture/prerequisite needs, artifact policy, and owner/blocker notes.
 2. Identify smoke-covered read-only candidates for `extended` without removing smoke coverage.
 3. Prove dry-run, selector, dependency, skip, and report behavior through non-live tests.
 4. Promote one narrow live-safe tranche at a time behind explicit selectors and a documented rollback path.
@@ -157,7 +162,7 @@ Automatic `Next Prompt` continuity:
 - Generate the prompt after validation and final repo-state inspection. Check `git status --short`, re-read the Automation Hub roadmap section plus relevant operations docs, and use the actual final state rather than earlier assumptions.
 - Include a commit SHA only when this pass created one. If the work is uncommitted, say so in the prompt's current-state line.
 - The prompt should tell the next session to inspect `AGENTS.md`, `docs/knowledge-base/repo-roadmap.md`, `docs/operations/workflow.md`, `docs/operations/command-registry.md`, and `docs/operations/endpoint-coverage-inventory.md` before editing.
-- The prompt must preserve the master-plan guardrails: `tools/run_regression.py` remains canonical; `protected` remains the parse-only default; `smoke` remains preserved until `extended` reaches parity and approval gates; broad live `extended` remains blocked except approved explicit health-node selectors; `workflow` remains future blocked-by-default unless approved groundwork is the selected tranche; and smoke tests, wrappers, compatibility facades, generated compatibility copies, and direct wrapper docs must not be renamed, deleted, deprecated, or replaced before the documented gates are satisfied.
+- The prompt must preserve the master-plan guardrails: `tools/run_regression.py` remains canonical; `protected` remains the parse-only default; `smoke` remains preserved until `extended` reaches parity and approval gates; broad live `extended` remains blocked except approved explicit health-node selectors; `workflow` remains future blocked-by-default unless approved groundwork is the selected tranche; and smoke tests, wrappers, compatibility facades, generated compatibility copies, and direct wrapper docs must not be renamed, deleted, deprecated, or replaced before the documented gates are satisfied. It should ask for the next smallest coherent pass, not an artificially one-line task.
 - The prompt should default to implement plus validate, with no commit or push unless the user explicitly asks.
 
 ## Normal Development Flow
