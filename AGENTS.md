@@ -118,6 +118,9 @@
 - GCS-backed fixtures are required for `/parse`; do not add local fixture fallback or local file-path fallback.
 - Use `httpx` for HTTP client work.
 - When a canonical command or workflow changes, update the corresponding docs in the same pass.
+- After completing any Automation Hub master-plan tranche or pass, include a copy-ready `Next Prompt` block in the final response unless the user explicitly asks not to. This is scoped to Automation Hub master-plan work only; do not apply it automatically to ordinary roadmap maintenance, audit-only work, commit/push-only work, unrelated endpoint findings, or one-off doc corrections.
+- Generate the `Next Prompt` only after final validation and final git-state inspection. Base it on final repo state, the current Automation Hub section of `docs/knowledge-base/repo-roadmap.md`, relevant `docs/operations/*` guidance, and validation results. Include a commit SHA only when a commit was actually created.
+- The `Next Prompt` must state the completed tranche/pass and current state, the likely next narrow Automation Hub tranche, required inspection before editing, master-plan guardrails, validation expectations, final-response expectations, and the default instruction not to commit or push.
 
 ## Reporting Expectations
 - Return results in this order:

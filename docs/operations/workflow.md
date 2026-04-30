@@ -151,6 +151,15 @@ Next-tranche sequence:
 4. Promote one narrow live-safe tranche at a time behind explicit selectors and a documented rollback path.
 5. Leave `workflow` deferred until its blocked-by-default gates are approved.
 
+Automatic `Next Prompt` continuity:
+- After completing an Automation Hub master-plan tranche or pass, include a copy-ready `Next Prompt` block in the final response unless the user explicitly opts out.
+- This automatic prompt is scoped to Automation Hub master-plan work only. Do not emit it just because `docs/knowledge-base/repo-roadmap.md` changed for ordinary roadmap maintenance, audit-only work, commit/push-only work, unrelated endpoint findings, or one-off doc corrections.
+- Generate the prompt after validation and final repo-state inspection. Check `git status --short`, re-read the Automation Hub roadmap section plus relevant operations docs, and use the actual final state rather than earlier assumptions.
+- Include a commit SHA only when this pass created one. If the work is uncommitted, say so in the prompt's current-state line.
+- The prompt should tell the next session to inspect `AGENTS.md`, `docs/knowledge-base/repo-roadmap.md`, `docs/operations/workflow.md`, `docs/operations/command-registry.md`, and `docs/operations/endpoint-coverage-inventory.md` before editing.
+- The prompt must preserve the master-plan guardrails: `tools/run_regression.py` remains canonical; `protected` remains the parse-only default; `smoke` remains preserved until `extended` reaches parity and approval gates; broad live `extended` remains blocked except approved explicit health-node selectors; `workflow` remains future blocked-by-default unless approved groundwork is the selected tranche; and smoke tests, wrappers, compatibility facades, generated compatibility copies, and direct wrapper docs must not be renamed, deleted, deprecated, or replaced before the documented gates are satisfied.
+- The prompt should default to implement plus validate, with no commit or push unless the user explicitly asks.
+
 ## Normal Development Flow
 1. Install deps and configure `.env` for the current target.
 2. Install Mind and run `mind setup opencode` if this machine has not been bootstrapped yet.
