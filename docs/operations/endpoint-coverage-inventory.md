@@ -16,7 +16,19 @@ This is intentionally not a path-by-path busywork matrix. The repo is evolving t
   - `./.venv/bin/python tools/run_regression.py --suite extended --hub-node get-smoke.health.core`
   - `./.venv/bin/python tools/run_regression.py --suite extended --hub-node get-smoke.health.ready`
 - `smoke` is now real, but it is not a broader current default
+- `extended` is the future safe dependency-aware Automation Hub lane; broad live execution remains blocked
+- future `workflow` is reserved for controlled mutation/stateful endpoint flows, is blocked by default, and is not implemented
 - broad live `--suite extended`, live `--hub-group`, and all non-approved hub nodes remain blocked
+
+## Endpoint Catalog And Data Sources
+This inventory is the durable endpoint-group catalog for planning, safety classification, suite assignment, and migration gates. It should stay aligned with current tests, runner mappings, command docs, safe observed evidence, and `official-openapi.json`, but none of those inputs is sufficient by itself.
+
+Data-source policy:
+- Repo-owned tests and runner mappings prove current automated behavior.
+- `official-openapi.json` is inventory and contract input only. A listed route is not automatically safe to execute, current in staging, non-legacy, artifact-safe, or approved for live coverage.
+- The fixture registry is one curated data source for parse, batch, matrix, and approved fixture-backed producers. It is not the universal Automation Hub data layer and should not be forced onto endpoint groups that need list-derived IDs, query parameters, service-side state, or owner-provided setup.
+- Live observed evidence can characterize runtime behavior, but owner or maintainer approval is required before promoting it to public contract, default-suite behavior, or broader artifact policy.
+- Sensitive dependency values should be modeled as named outputs and inputs with redacted report handling, not copied through raw response-body coupling.
 
 ## Group Inventory
 
@@ -47,6 +59,7 @@ Hub planning statuses:
 - `safe candidate`: appears suitable for future hub inclusion after current evidence confirms non-legacy routing, non-destructive behavior, stable prerequisites, and acceptable artifact policy.
 - `dependency producer`: produces a validated value that another endpoint can use through the hub run context.
 - `dependency consumer`: requires one or more named outputs from earlier producer nodes.
+- `workflow candidate`: may belong in a future controlled mutation/stateful lane after explicit owner, setup, cleanup, rollback, artifact, selector, validation, and CI gates are satisfied.
 - `legacy/excluded`: legacy duplicate, UI route, debug route, destructive/admin mutation, or other explicitly excluded surface.
 - `blocked/deferred`: blocked by auth behavior, owner confirmation, setup prerequisites, artifact/output policy, storage risk, or missing safe request shape.
 - `unknown/pending audit`: not yet classified with enough repo or owner evidence for hub inclusion.
@@ -65,6 +78,17 @@ Future hub reporting expectations:
 - Raw response bodies may be persisted only when the endpoint artifact policy allows it.
 - Reports must redact or exclude tokens, cookies, auth headers, tenant/API keys, raw document IDs, raw GCS object names, sensitive bodies, fraud results, and artifact/export payloads unless explicitly approved.
 - Treat `reports/` output as disposable runtime evidence. Promote durable endpoint behavior, blockers, workflow decisions, and validated findings into tracked docs by scope.
+
+Smoke-to-extended migration gates:
+- Keep `smoke` as the current broad GET smoke suite until `extended` reaches functional parity, docs parity, CI behavior review, artifact behavior review, direct-use audit, rollback path, and maintainer approval.
+- Do not rename, delete, deprecate, or replace GET smoke tests merely because a node appears in the hub manifest.
+- Each migrated endpoint group needs matching status expectations, setup-skip behavior, dependency failure semantics, artifact policy, rerun selectors, and non-live tests before live migration.
+- Default CI behavior remains unchanged unless a separate approved CI decision updates it.
+
+Future workflow lane gates:
+- `workflow` is not implemented and has no current runnable command.
+- Treat mutation/stateful endpoints as blocked by default until setup data, side effects, cleanup, rollback, artifact handling, ownership, and target environment are approved.
+- Workflow candidates need explicit selectors and non-live planning/reporting proof before any live execution.
 
 ## GET Smoke Selection Basis
 - This repo does not contain the VerifyIQ server/router implementation or product UI/backend source, so there is no in-repo router-registration evidence to inspect directly.
@@ -141,7 +165,7 @@ Before a new endpoint group is added here as "in progress" or "covered", keep th
 
 1. Repo scope fit: why the endpoint group belongs in VerifyIQ API regression automation.
 2. Live automation safety class: safe read-only, setup-backed read-only, guarded negative, high-risk/admin, or out of scope.
-3. Required suite lane: `protected`, `smoke`, `full`, endpoint-specific opt-in, or deferred.
+3. Required suite lane: `protected`, `smoke`, future `extended`, `full`, endpoint-specific opt-in, future `workflow`, or deferred.
 4. Minimum categories before "covered": at least the group's agreed smoke/status signal plus the relevant contract, auth/validation, and negative expectations.
 5. Fixture or prerequisite needs: `gs://` fixtures, selected fixture JSON, list-derived identifiers, query parameters, tenant/admin prerequisites, or explicit blockers.
 6. Artifact expectations: whether the group writes raw artifacts, summary artifacts, structured reports, or no artifacts.
@@ -151,3 +175,5 @@ Before a new endpoint group is added here as "in progress" or "covered", keep th
 10. Hub planning status: currently covered, safe candidate, dependency producer, dependency consumer, legacy/excluded, blocked/deferred, or unknown/pending audit.
 11. Dependency contract: named outputs the group can produce, named inputs it consumes, and dependency-failure or missing-prerequisite skip behavior.
 12. Structured evidence policy: safe metadata/body handling, redaction/exclusion requirements, rerun selectors, and whether raw body persistence is allowed for the group.
+13. Data-source fit: which inputs support the decision, such as tests, runner mappings, OpenAPI, fixture registry, list-derived identifiers, safe observed evidence, or owner notes.
+14. Migration gate status: whether smoke-to-extended, wrapper/facade replacement, generated-copy retirement, or future workflow gates are not started, in progress, blocked, or approved.

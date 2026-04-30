@@ -9,6 +9,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 ## Current Repository Status
 - Scope remains Python + pytest live regression automation for VerifyIQ API surfaces. Manual QA workflow, ticketing, pass-sync logic, deployment, and unrelated process automation stay out of scope.
 - The canonical operator runner is `tools/run_regression.py`. Current safe discovery output confirms implemented live suites `protected`, `smoke`, and `full`; `extended` with non-live dry-run plan support plus two approved live health hub nodes, `get-smoke.health.core` for `GET /health` and `get-smoke.health.ready` for `GET /health/ready`; implemented endpoint groups `parse` and `batch`; implemented category selections `matrix`, `contract`, `auth`, and `negative`; and planned-but-unmapped category `legacy`.
+- Canonical suite taxonomy is now explicit: `protected` remains the parse-only default; `smoke` remains the current broad opt-in GET smoke suite until `extended` reaches functional and documentation parity; `extended` is the future safe dependency-aware Automation Hub lane, with broad live execution still blocked; `full` remains a stronger parse gate; and future `workflow` is reserved for controlled mutation/stateful endpoint flows, blocked by default, and not implemented.
 - Current category mappings are endpoint-specific, opt-in, backed by existing tests, and guarded by non-live runner tests: `/parse` maps `contract`, `auth`, `negative`, and `matrix`; `/documents/batch` maps `contract` and `negative`. `/documents/batch auth` remains deferred by the known auth-negative blocker.
 - The no-argument runner maps to the parse-only protected suite. This is still the default live gate and must not silently broaden.
 - Structured-report runner mappings are guarded by non-live runner tests: no-arg `--report` and `--suite protected --report` delegate to the baseline report helper, `--suite full --report` delegates to the full wrapper, and `--endpoint parse --category matrix --report` delegates to the matrix wrapper. `--suite extended --dry-run --report` writes synthetic non-live hub plan evidence only; approved live health-node selectors write metadata-only hub reports under `reports/hub/`.
@@ -16,6 +17,7 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 - The endpoint coverage inventory has been rechecked against current GET smoke tests and `official-openapi.json`; keep it current as smoke coverage changes, but do not treat inventory maintenance as a separate expansion decision.
 - The repository strategy is to evolve into a broader VerifyIQ multi-endpoint API automation hub, with document parsing, `/documents/batch`, fraud detection, document-processing-adjacent behavior, and related quality/model validation remaining the core feature area and first-class priority.
 - Automation Hub Expansion now has a non-live foundation plus a bounded health-only live executor tranche: `get-smoke.health.core` for `GET /health` and `get-smoke.health.ready` for `GET /health/ready`. The future target remains a dependency-aware safe endpoint hub behind `tools/run_regression.py`. `--suite extended --dry-run` is still the non-live dependency-plan preview, can be filtered with `--hub-node` or `--hub-group`, and can write synthetic plan evidence with `--report`; broad live `--suite extended`, live `--hub-group`, and all non-approved hub nodes remain blocked.
+- The endpoint catalog should combine repo-owned tests, runner mappings, endpoint inventory decisions, fixture registry data, safe observed evidence, and `official-openapi.json`. The fixture registry is one data source, mainly for parse, batch, matrix, and specifically approved fixture-backed producers; it is not the universal Automation Hub data layer. OpenAPI is inventory and contract input only, never proof that a route is safe to execute live.
 - Current automated live coverage includes `/v1/documents/parse`, `/v1/documents/batch`, and the opt-in cross-group GET smoke lane under `tests/endpoints/get_smoke/`, including maintainer-accepted provisional fraud-status coverage.
 - Requests are live, not mocked. `tests/client.py` builds an `httpx.Client` from live environment settings and Google IAP credentials.
 - `/parse` and `/documents/batch` use GCS-backed fixtures. `PARSE_FIXTURE_FILE` must remain a `gs://` URI, and batch selection reuses the generated fixture registry.
@@ -33,6 +35,8 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 - Keep the protected suite lean and parse-only until there is an explicit decision to redefine the default suite.
 - Keep broader live coverage opt-in: GET smoke through `--suite smoke`, parse matrix through `--endpoint parse --category matrix`, full parse regression through `--suite full`, and batch through `--endpoint batch`.
 - Keep the Automation Hub Expansion behind the canonical runner. The no-argument runner remains the parse-only protected suite, and hub planning must not imply that every endpoint is safe or currently runnable. The `extended` suite currently supports non-live dry-run preview, selector filtering, synthetic report generation, and approved live health-node selectors only: `get-smoke.health.core` for `GET /health` and `get-smoke.health.ready` for `GET /health/ready`.
+- Keep `smoke` as the current broad GET smoke lane until `extended` reaches parity. Migration from `smoke` to `extended` requires functional parity, docs parity, CI behavior review, artifact behavior review, direct-use audit, a rollback path, and maintainer approval before smoke tests are renamed, deleted, deprecated, or replaced.
+- Reserve future `workflow` for controlled mutation/stateful endpoints. It must stay blocked by default until each workflow has owner approval, non-destructive or reversible setup, isolated target data, cleanup/rollback rules, artifact policy, explicit selectors, non-live planning evidence, and CI exclusion or explicit CI approval.
 - Keep category and suite taxonomy practical. Broaden endpoint automation through concrete endpoint-group needs rather than a generic framework ahead of evidence.
 - Expand in phases using the endpoint-group onboarding checklist. Each new group needs repo-scope fit, safety class, suite lane, category depth, prerequisites, artifact expectations, runner mapping, CI eligibility, owner/blocker notes, and a default-suite decision.
 - Keep document parsing, fraud detection, document-processing, and quality/model-validation surfaces first in the expansion queue. GET smoke is the current opt-in mechanism for safe read-only expansion.
@@ -55,13 +59,17 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 | Runner discovery | `./.venv/bin/python tools/run_regression.py --list` and `--dry-run` | Non-executing inventory and command mapping | Safe discovery |
 | Automation Hub preview | `./.venv/bin/python tools/run_regression.py --suite extended --dry-run [--report] [--hub-node NODE_ID | --hub-group ENDPOINT_GROUP]` | Non-live dependency graph and reporting-contract preview for the future hub; optional selectors bound the preview to a manifest slice plus prerequisites, and `--report` writes synthetic plan evidence under `reports/hub/` | Safe discovery |
 | Automation Hub health nodes | `./.venv/bin/python tools/run_regression.py --suite extended --hub-node get-smoke.health.core` or `./.venv/bin/python tools/run_regression.py --suite extended --hub-node get-smoke.health.ready` | Approved live health-only hub executor tranche; each selector calls exactly one health endpoint and writes metadata-only `reports/hub/<run-id>/run.json` and `run.md` | Opt-in live; do not run without explicit approval |
+| Future workflow lane | No command yet | Reserved for controlled mutation/stateful endpoint workflows after explicit safety, cleanup, artifact, selector, owner, and CI gates are met | Not implemented; blocked by default |
 
 ## Canonical Planning Decisions
 - `protected` currently means parse-only. `smoke` is real but opt-in and is not the default suite.
 - `full` currently means a stronger parse gate, not broad repository regression.
+- `extended` is the future dependency-aware safe Automation Hub lane. Its current broad live execution remains blocked; only the non-live preview and the two explicit health-node selectors are approved today.
+- `workflow` is a future lane name for controlled mutation/stateful endpoint flows. It is not implemented and must not be documented as runnable until the blocked-by-default gates are satisfied.
 - Long-term scope is broader multi-endpoint VerifyIQ API automation, but default-suite and CI expansion require explicit future decisions backed by runtime, stability, safety, ownership, and artifact-sensitivity evidence.
 - Batch remains opt-in until fixture stability, auth behavior, runtime, and failure ownership justify any protected-suite change.
 - Legacy direct pytest and wrapper commands stay documented only as implementation/debug, delegated engine, compatibility/debug, or advanced/internal surfaces.
+- Existing parse, batch, matrix, full, reporting wrappers, GET smoke tests, compatibility facades, and generated compatibility copies must not be deleted, renamed, deprecated, or replaced until functional parity, docs parity, CI behavior review, artifact behavior review, direct-use audit, rollback path, and maintainer approval gates are satisfied.
 - Do not delete `tools/run_parse_full_regression.py`, `tools/reporting/run_parse_matrix_with_summary.py`, `tools/run_batch_with_fixtures.py`, or `tools/run_parse_with_report.py` until the legacy-deprecation gates in this roadmap are met.
 - Do not trust `official-openapi.json` blindly for success schemas while parse and batch `200` schemas remain generic objects.
 - Do not add mutating admin, application-management, storage, debug, or UI surfaces to default automation; keep them excluded or safety-blocked unless separately approved with explicit safety classification and ownership.
@@ -81,11 +89,42 @@ Keep operational commands and run sequences in `docs/operations/*`. Keep endpoin
 ## Automation Hub Expansion Roadmap Item
 Target state: evolve toward one canonical dependency-aware runner for safe, non-legacy VerifyIQ endpoint automation, still reached through `tools/run_regression.py`. The live suite name is `extended`, but broad execution remains blocked. Today, `--suite extended --dry-run` is available as a non-live dependency graph and reporting-contract preview; it can be filtered with `--hub-node` or `--hub-group` for bounded discovery, `--report` can write synthetic plan evidence, and live execution is approved only for explicit health-node selectors: `--hub-node get-smoke.health.core` and `--hub-node get-smoke.health.ready`.
 
+Master-plan boundaries:
+- `tools/run_regression.py` remains the single canonical operator entry point. New hub lanes should be exposed through it, not through a competing operator command.
+- `protected` remains the no-argument parse-only default unless a later roadmap decision explicitly changes the default suite.
+- `smoke` remains the current broad GET smoke suite while `extended` matures. Treat smoke tests as live coverage that must be preserved until the migration gates below are complete.
+- `extended` should become the safe dependency-aware lane for read-only or approved setup-backed endpoints. Broad live execution remains blocked until each node has a safety classification, dependency contract, artifact policy, and validation evidence.
+- `workflow` is reserved for future controlled mutation/stateful endpoints. It is blocked by default and not implemented.
+
+Endpoint catalog and data-source model:
+- Use `docs/operations/endpoint-coverage-inventory.md` as the durable endpoint-group catalog. Keep exact runnable commands in `docs/operations/command-registry.md` and operational flow in `docs/operations/workflow.md`.
+- Use `official-openapi.json` as inventory and contract input only. A path appearing in OpenAPI does not prove that the route is safe, current, non-legacy, reachable in staging, or acceptable to execute live.
+- Use the fixture registry as one data source for parse, batch, matrix, and specifically approved fixture-backed producers. Do not make it the universal hub data layer.
+- Prefer named producer outputs and consumer inputs over raw response-body coupling. Sensitive identifiers should be represented by aliases, classifications, or redacted metadata in reports.
+- Treat live observed evidence as runtime characterization unless an owner or maintainer explicitly promotes it to public contract.
+
 Guardrails:
 - Preserve the current parse-only protected default. Hub expansion must be explicit and opt-in until a later approved default-suite decision.
 - Include only endpoint groups that have been classified as safe candidates or currently covered. Legacy/excluded, unsafe, admin, destructive, internal/debug, storage-risk, artifact-risk, auth-blocked, owner-unconfirmed, setup-dependent, and unknown endpoints stay out of the future safe hub until classified and approved.
 - Model response-derived dependency values as named outputs in a run context, not as raw response-body coupling. Producers should expose validated output names, and consumers should request those names.
 - Every executed endpoint/test should produce structured evidence. Raw response-body persistence is allowed only when that endpoint's artifact policy permits it.
+
+Smoke-to-extended migration gates:
+- Functional parity: `extended` covers the same intended safe GET/status behavior, setup skips, exact-status assertions, dependency handling, and failure semantics as the smoke coverage it would absorb.
+- Docs parity: roadmap, endpoint inventory, command registry, workflow, and any endpoint-specific knowledge-base pages describe the new path and the retained fallback accurately.
+- CI behavior review: current CI behavior remains unchanged unless a separate approved CI decision is made.
+- Artifact behavior review: hub reports preserve or improve the current smoke artifact policy, including no raw artifacts for artifact-free smoke paths.
+- Direct-use audit: checked-in docs, scripts, tests, shell-outs, imports, and known operator notes no longer depend on the old direct path as the primary surface.
+- Rollback path: maintainers can re-enable or continue the previous smoke path without code archaeology if the migration regresses.
+- Maintainer approval: a maintainer explicitly approves deprecation, rename, deletion, or replacement of smoke tests or compatibility surfaces.
+
+Future workflow lane gates:
+- Each workflow has a repo-scope fit, owner approval, safety classification, explicit target environment, and confirmation that mutation/state changes are allowed.
+- Setup and cleanup are deterministic, bounded, and either reversible or isolated to disposable data.
+- Selectors are explicit and blocked by default; broad workflow execution is not enabled by default or by CI without separate approval.
+- Reports define request metadata, response metadata, state changes, cleanup result, redaction/exclusion rules, and artifact retention before live execution.
+- Non-live planning and tests prove command mapping, skip behavior, dependency handling, return codes, and artifact contract before any live workflow run.
+- Rollback, incident stop conditions, and maintainer approval are documented before implementation.
 
 Phases:
 1. Endpoint classification: extend the endpoint inventory with hub planning statuses and evidence needed before safe inclusion.
@@ -99,6 +138,14 @@ Phases:
 Existing wrappers and scripts remain until parity, documentation, CI references, direct-use audits, artifact behavior, and maintainer approval are complete. Do not delete, rename, or deprecate wrapper files as part of the documentation-first hub planning tranche.
 
 Health live-capable tranche status: `tools/run_regression.py --suite extended --dry-run` still renders an endpoint-group oriented manifest preview with dependency order, named outputs, dependency skip semantics, artifact policy, and the scaffolded evidence/redaction contract. The manifest splits out `get-smoke.health.core` and `get-smoke.health.ready` as the only approved live nodes, representing `GET /health` and `GET /health/ready` only; broad `get-smoke.safe-read-only` remains delegated/non-live in the hub. Adding `--report` to dry-run writes disposable synthetic plan reports under `reports/hub/<run-id>/run.json` and `run.md`; approved live health-node execution writes metadata-only live reports to the same hub report tree. This path does not broaden the protected default or replace current delegated wrappers.
+
+Next-tranche sequence:
+1. Finish catalog normalization: mark each candidate group with suite lane, hub status, safety class, data sources, fixture/prerequisite needs, artifact policy, and owner/blocker notes.
+2. Define migration candidates from `smoke` to `extended` without moving them yet. Start with read-only or already smoke-covered endpoints whose dependency inputs are simple and whose artifact policy is metadata-only.
+3. Add or update non-live manifest/reporting tests before any broad live execution. Prove dry-run, selector, dependency, skip, and artifact-contract behavior first.
+4. Promote one narrow live-safe tranche at a time through explicit selectors, keeping `smoke` as the fallback until parity and approval gates are complete.
+5. Defer `workflow` implementation until controlled mutation/stateful endpoint gates are fully documented and approved.
+6. Review CI only after local runner behavior, report artifacts, failure ownership, and rollback are proven.
 
 ## Next Endpoint-Group Expansion Proposal
 Prioritize the `document-processing-adjacent` group, starting with `/v1/documents/fraud-status/{job_id}` as a setup-backed, read-only GET candidate. This keeps expansion aligned with the broader multi-endpoint hub strategy while staying close to the core document parsing and fraud-detection product area.
@@ -131,15 +178,27 @@ Proposal:
 - Broader live CI lanes are deferred until runtime, stability, ownership, and artifact sensitivity are understood.
 - Legacy wrapper deprecation is deferred until all deprecation gates below are satisfied.
 
-## Legacy Deprecation Gates
-Before removing a direct wrapper from normal docs or deleting a wrapper file, all of these must be true:
+## Transition, Refactor, And Deprecation Gates
+Before renaming, deleting, deprecating, or replacing smoke tests, wrappers, compatibility facades, generated compatibility copies, or direct wrapper documentation, all of these must be true:
 - The canonical runner covers the same use case and preserves required artifact behavior.
 - Non-live tests prove command, flag, dry-run, return-code, and env propagation parity.
 - At least one approved live validation pass has proven artifact behavior where live validation is appropriate.
 - README, workflow, command registry, and CI identify the runner path as canonical and the wrapper as delegated, compatibility/debug, or advanced/internal.
 - No checked-in CI, automation, runbook, import, or shell-out requires the direct wrapper command as the primary path.
 - Direct imports, shell-outs, tests, and compatibility/debug expectations have been audited separately.
-- A maintainer explicitly approves compaction or deletion.
+- A rollback path exists and is documented before the old surface is removed.
+- A maintainer explicitly approves compaction, deprecation, rename, replacement, or deletion.
+
+Documentation-only validation strategy for this roadmap tranche:
+- Do not run live API calls for docs-only Automation Hub planning updates.
+- Use `./.venv/bin/python tools/run_regression.py --list`, `./.venv/bin/python tools/run_regression.py --dry-run`, `./.venv/bin/python tools/run_regression.py --suite smoke --dry-run`, and `./.venv/bin/python tools/run_regression.py --suite extended --dry-run` to confirm command discovery without execution.
+- Run focused non-live Automation Hub and runner tests with `VERIFYIQ_SKIP_DOTENV=1`.
+- Run `git diff --check` and review `git status --short`.
+
+Commit and push policy:
+- Documentation-only planning work should not commit or push unless the user explicitly asks for it.
+- If a commit is requested, use the guarded flow in `tools/safe_git_commit.py`; for documentation-only changes, prefer `--validation non-live`.
+- Push only when explicitly requested and after the intended branch, diff, validation scope, and remote target are clear.
 
 ## Historical Context Worth Preserving
 - The repository used to have several overlapping planning artifacts. Their current planning content has been consolidated here so agents do not need to search multiple markdown files for progression decisions.

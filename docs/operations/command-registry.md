@@ -16,6 +16,7 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 - Tool-only deps are needed only for fixture-registry maintenance: `./.venv/bin/python -m pip install -r tools/requirements.txt`.
 - `/parse` baseline, GET smoke, matrix, full regression, and `/documents/batch` validation all require the live repo env. GET smoke also uses the protected parse fixture env for the maintainer-accepted provisional fraud-status setup test.
 - Approved live Automation Hub nodes are narrow health selectors only: `get-smoke.health.core` calls `GET /health`, and `get-smoke.health.ready` calls `GET /health/ready`; both require live API/IAP env and write metadata-only `reports/hub/` artifacts.
+- Broad live `extended` execution remains blocked. Future `workflow` execution is not implemented and has no runnable command.
 - `PARSE_FIXTURE_FILE` must remain a `gs://` URI.
 - `VERIFYIQ_SKIP_DOTENV=1` disables repo `.env` loading so non-live tooling/reporting suites can prove they do not depend on live env bootstrap.
 - Mind is the canonical local memory/context layer. Install it with `curl -fsSL https://raw.githubusercontent.com/GabrielMartinMoran/mind/main/scripts/install.sh | bash`, then ensure `~/.local/bin` is on `PATH` for interactive `mind` usage.
@@ -35,7 +36,17 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 - `Compatibility/Debug`: still valid for focused debugging while the runner migration settles
 - `Advanced/Internal`: supported, but narrower or more specialized than the default flow
 - `Do Not Delete Yet`: retained until runner parity, docs, CI, and direct-use criteria are proven
+- `Future/Blocked`: planned or reserved lane with no broad runnable surface yet
 - `Mutating`: changes tracked files, Git state, or external local state
+
+## Suite Taxonomy And Operator Policy
+- `tools/run_regression.py` is the single canonical operator entry point.
+- `protected` is the no-argument parse-only default and must not silently broaden.
+- `smoke` is the current broad opt-in GET smoke suite. Keep it as the broad GET lane until `extended` reaches functional parity, docs parity, CI behavior review, artifact behavior review, direct-use audit, rollback path, and maintainer approval.
+- `extended` is the future safe dependency-aware Automation Hub lane. Today it provides non-live dry-run planning and the two explicit live health-node selectors listed below; broad live `extended`, live `--hub-group`, and non-approved hub nodes remain blocked.
+- `full` is a stronger parse gate, not a broad all-endpoint regression.
+- `workflow` is reserved for future controlled mutation/stateful endpoints, is blocked by default, and is not implemented.
+- OpenAPI is inventory and contract input only, not proof that a route is safe to execute. The fixture registry is one data source for parse, batch, matrix, and approved fixture-backed producers, not the universal hub data layer.
 
 ## Canonical Commands
 | Command | Normal Use | High-Level Prereqs | Primary Artifacts | Mutation Scope |
@@ -109,8 +120,10 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 - `tools/run_regression.py --suite extended --hub-node get-smoke.health.core` and `tools/run_regression.py --suite extended --hub-node get-smoke.health.ready` are the only approved live Automation Hub selectors. They write metadata-only hub reports with node id, method/path label, status code, content-type, timing, outcome, and rerun selector; they do not persist request bodies, response bodies, auth headers, tokens, cookies, tenant/API keys, raw document/GCS identifiers, fraud fields, or artifact/export payloads. Do not run them unless live validation is explicitly approved.
 - `tools/run_regression.py` is the canonical operator path for the default protected live suite, protected structured reporting, the opt-in `--suite smoke` GET smoke lane, the delegated `--suite full` path, direct parse matrix selection, mapped parse `contract`/`auth`/`negative` category selections, direct batch selection, mapped batch `contract`/`negative` category selections, and selected-fixture batch selection.
 - `/documents/batch` `auth` remains deferred and intentionally unmapped until missing and invalid tenant-token requests return confirmed `401` or `403`; see `docs/knowledge-base/batch/auth-negative-blocker.md`.
-- Wrapper and direct pytest surfaces remain valid delegated engines or compatibility/debug paths. Do not delete them until the legacy deprecation gates in `docs/knowledge-base/repo-roadmap.md` are met.
+- Wrapper and direct pytest surfaces remain valid delegated engines or compatibility/debug paths. Do not delete them until the transition/refactor/deprecation gates in `docs/knowledge-base/repo-roadmap.md` are met.
+- Existing GET smoke tests, wrappers, compatibility facades, and generated compatibility copies remain valid until functional parity, docs parity, CI behavior review, artifact behavior review, direct-use audit, rollback path, and maintainer approval gates are satisfied.
 - `smoke` is now a real opt-in suite, not the broader default suite.
+- `workflow` is a reserved future lane only. Do not add command examples for it until implementation, safety gates, non-live validation, rollback policy, and maintainer approval exist.
 - `tools/generate_fixture_registry.py` and `tools/onboard_fixture_json.py` are maintenance surfaces, not ordinary validation steps.
 - `tools/reporting/export_batch_ground_truth.py` is a reusable reporting/export surface for local ground-truth comparison work and reads the shared generated registry by default. `--max-concurrent-file-types` bounds fileTypes at once, `--max-concurrent-chunks` bounds chunks within each fileType, and the approximate configured in-flight batch request ceiling is their product. `--recovery-triage-csv` filters to exact retryable row identities from a previous triage CSV and should normally be generated by the recovery planner; see `docs/operations/batch-ground-truth-export.md`.
 - `tools/reporting/plan_batch_ground_truth_recovery.py` is a non-live command planner only. It reads an existing `recovery_triage.csv`, selects `transient_or_auth_failure` and `rate_limited` rows for rerun planning, excludes HTTP `5xx` invalid-JSON review rows, and prints paste-ready exporter commands without writing reports or calling `/documents/batch`. Add `--row-level` when only the failed row identities should be rerun instead of whole fileTypes.
@@ -121,6 +134,12 @@ Use `docs/operations/workflow.md` for the operator run sequence and `docs/operat
 - Mind uses a local SQLite store; avoid running multiple raw mutating `mind` commands in parallel against the same database or you may hit `SQLITE_BUSY_RECOVERY`. The wrapper already serializes access.
 - Historical Obsidian session helpers are removed. Use Mind directly for workflow memory and continuity.
 - Historical `.codex/skills/regression-run-summary/scripts/...` reporting entrypoints are removed. Translate any old reference to the canonical `tools/reporting/*` commands.
+
+## Commit And Push Policy
+- Do not commit or push documentation-only planning changes unless the user explicitly asks for it.
+- When a commit is requested, review the diff, stage only intended files, and use `./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"`.
+- For documentation-only changes, use `./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change" --validation non-live` unless the user asks for live validation.
+- Push only when explicitly requested and after the branch, remote target, validation scope, and intended diff are clear.
 
 ## Update Rules
 - Add new repo-owned executable surfaces here when they become user-visible.

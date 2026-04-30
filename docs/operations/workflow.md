@@ -92,6 +92,7 @@ Safe runner discovery checks:
 ```bash
 ./.venv/bin/python tools/run_regression.py --list
 ./.venv/bin/python tools/run_regression.py --dry-run
+./.venv/bin/python tools/run_regression.py --suite smoke --dry-run
 ./.venv/bin/python tools/run_regression.py --suite extended --dry-run
 ./.venv/bin/python tools/run_regression.py --suite extended --dry-run --hub-node get-smoke.health.core
 ./.venv/bin/python tools/run_regression.py --suite extended --dry-run --hub-node get-smoke.health.ready
@@ -114,6 +115,41 @@ Provisional GET shapes such as fraud-status and monitoring GCS types may be
 compared when the evidence is sanitized and artifact-free; deep terminal result
 fields, GCS category values, and child endpoint shapes remain loose until
 broader safe evidence or owner confirmation exists.
+
+## Automation Hub Master Plan
+Suite taxonomy:
+- `protected` remains the no-argument parse-only default through `tools/run_regression.py`.
+- `smoke` remains the current broad opt-in GET smoke suite until `extended` reaches parity and is approved as a replacement for any covered slice.
+- `extended` is the future safe dependency-aware Automation Hub lane. Current broad live execution remains blocked; only non-live dry-run planning and the two explicit health-node selectors are approved today.
+- `full` remains a stronger parse gate, not a broad all-endpoint regression.
+- `workflow` is a future blocked-by-default lane for controlled mutation/stateful endpoints. It is not implemented and has no runnable command.
+
+Endpoint catalog and data-source model:
+- Use `docs/operations/endpoint-coverage-inventory.md` for endpoint-group catalog decisions.
+- Use `official-openapi.json` as inventory and contract input only, not proof that a route is safe to execute.
+- Use the fixture registry as one data source for parse, batch, matrix, and approved fixture-backed producers, not as the universal hub data layer.
+- Model dependency values as named outputs and inputs with redacted reporting; do not couple consumers to raw response bodies.
+
+Smoke-to-extended migration gates:
+- Keep existing smoke tests and direct smoke validation available until functional parity, docs parity, CI behavior review, artifact behavior review, direct-use audit, rollback path, and maintainer approval are complete.
+- Do not delete, rename, deprecate, or replace smoke tests, wrappers, compatibility facades, or generated compatibility copies as part of planning-only work.
+- Default CI behavior does not change unless a separate approved CI decision changes it.
+
+Future workflow lane gates:
+- Treat mutation/stateful endpoints as blocked by default until owner approval, safe target data, setup, cleanup, rollback, artifact policy, explicit selectors, non-live validation, and CI policy are documented.
+- Do not document workflow as runnable until implementation and maintainer approval exist.
+
+Validation strategy for documentation-only hub planning:
+- Use safe discovery and dry-run commands only; do not run live API calls.
+- Run focused non-live runner and Automation Hub tests with `VERIFYIQ_SKIP_DOTENV=1`.
+- Use `git diff --check` and `git status --short` to confirm formatting and scope.
+
+Next-tranche sequence:
+1. Normalize the endpoint catalog with suite lane, hub status, safety class, data sources, fixture/prerequisite needs, artifact policy, and owner/blocker notes.
+2. Identify smoke-covered read-only candidates for `extended` without removing smoke coverage.
+3. Prove dry-run, selector, dependency, skip, and report behavior through non-live tests.
+4. Promote one narrow live-safe tranche at a time behind explicit selectors and a documented rollback path.
+5. Leave `workflow` deferred until its blocked-by-default gates are approved.
 
 ## Normal Development Flow
 1. Install deps and configure `.env` for the current target.
@@ -476,7 +512,8 @@ Do not use it:
 - Use `./.venv/bin/python tools/safe_git_commit.py --message "Describe the reviewed change"` for the guarded mechanical commit step.
 - Use `--validation non-live` for documentation, tooling, reporting, or skills changes where live API validation is intentionally out of scope.
 - Use `--validation full` only when the stronger full-regression gate is intentionally required.
-- Use `--push` only when you are ready to push to the current branch's matching upstream.
+- Do not commit or push unless the user explicitly asks for it.
+- Use `--push` only when explicitly requested and when you are ready to push to the current branch's matching upstream.
 
 ## Active Session State
 - Mind now replaces `docs/operations/current-handoff.md` for active state, handoff, working context, and ongoing task tracking.
