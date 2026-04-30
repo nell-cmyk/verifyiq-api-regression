@@ -45,6 +45,104 @@ Data-source policy:
 | `admin` | 8 | No | exact-status guard on cache health; `cache/stats` remains blocked | isolated smoke only, negative, safety review | Low | Safety-blocked | `/v1/admin/cache/health` is now codified in smoke as the expected `403` response. `/v1/admin/cache/stats` still hits a `403` admin-password gate even after repo-derived tenant candidates are supplied. Never add this group casually to the default suite. |
 | `other-service-surfaces` | 30 | Yes | opt-in GET smoke on selected safe gateway, benchmark, and utility list/health/detail endpoints | explicit scope review first | Low | Partially covered | Covered now: `/ai-gateway/health/gateway-circuit-breakers`, `/api/v1/benchmark/jobs`, `/api/v1/benchmark/{job_id}/status`, `/api/v1/benchmark/{job_id}/result`, `/api/v1/benchmark/{job_id}/preview`, and `/api/v1/pii-cleanup/runs`. Deferred: gateway S3 routes, legacy AI shortcut/cross-validation POST routes, UI/debug routes, and other mixed utility surfaces. |
 
+## Normalized Automation Hub Catalog: Tranche 1
+This tranche normalizes only the endpoint groups that already have explicit
+nodes in `tools/automation_hub/manifest.py`. It does not change runner
+behavior, suite membership, live execution approval, CI policy, or the
+smoke-to-extended migration gates.
+
+### `parse`
+- Suite lane: current no-argument `protected` default through `tools/run_regression.py`; opt-in `full`, matrix, and focused category selections remain separate.
+- Automation Hub status: currently covered through the delegated protected lane; represented in the hub manifest as `parse.protected` for non-live planning only, not approved live hub execution.
+- Safety class: fixture-backed live document parse with policy-controlled raw response handling; not safe to broaden into default or live hub execution without a separate default-suite decision.
+- Data sources: repo-owned `/parse` tests and runner mappings, `tests/endpoints/parse/file_types.py`, fixture registry data, safe observed report evidence, `official-openapi.json`, and the `/parse` OpenAPI drift pilot notes.
+- Fixture or prerequisite needs: live API/IAP env, `TENANT_TOKEN`, `API_KEY`, `PARSE_FIXTURE_FILE` as a `gs://` URI, and matching `PARSE_FIXTURE_FILE_TYPE`.
+- Artifact policy: protected and focused parse runs may write raw artifacts under `reports/parse/responses/`; structured reports are opt-in under `reports/regression/`; future hub body persistence remains policy-controlled.
+- Owner, blocker, or approval notes: protected remains parse-only; owner or maintainer confirmation is still required before observed runtime shape is promoted beyond the current guarded contract.
+
+### `batch`
+- Suite lane: endpoint-specific opt-in through `tools/run_regression.py --endpoint batch`; focused `contract` and `negative` categories are mapped, while `auth` remains deferred.
+- Automation Hub status: currently covered through a delegated batch validation lane; represented in the hub manifest as `batch.validation` for non-live planning only, not approved live hub execution.
+- Safety class: fixture-backed live batch POST with bounded request size and policy-controlled raw response handling; not a protected/default-suite candidate today.
+- Data sources: repo-owned `/documents/batch` tests and runner mappings, generated fixture registry data, selected-fixture wrapper behavior, `official-openapi.json`, envelope-only observed-runtime drift coverage, and the batch auth-negative blocker note.
+- Fixture or prerequisite needs: live batch env, registry-backed GCS fixtures, default item cap of 4, optional selected fixture JSON, and stable tenant-token behavior.
+- Artifact policy: batch runs write raw artifacts under `reports/batch/`; future hub persistence remains policy-controlled; concise normal-run summary remains deferred.
+- Owner, blocker, or approval notes: strict tenant-token auth coverage and `--endpoint batch --category auth` remain blocked until missing and invalid tenant-token requests return confirmed `401` or `403`; default-suite inclusion is deferred.
+
+### `health`
+- Suite lane: current opt-in `smoke` for top-level and health-like GET status checks; future `extended` live execution is approved only for explicit `--hub-node get-smoke.health.core` and `--hub-node get-smoke.health.ready` selectors.
+- Automation Hub status: currently covered; `GET /health` and `GET /health/ready` are the only approved live hub nodes, while the broader `get-smoke.safe-read-only` manifest node remains delegated and non-live.
+- Safety class: safe read-only metadata-only checks for the two approved top-level health nodes; other health-like or admin-gated routes require their existing group-specific handling.
+- Data sources: GET smoke health tests, exact-status smoke guards, Automation Hub manifest and executor tests, `tools/run_regression.py` selector behavior, command docs, and `official-openapi.json`.
+- Fixture or prerequisite needs: live API/IAP env for live health-node execution; no request body, path parameter, fixture registry, or list-derived identifier is needed for the two approved nodes.
+- Artifact policy: normal smoke writes no artifacts; approved live hub health selectors write metadata-only `reports/hub/<run-id>/run.json`, `run.md`, and `reports/hub/LATEST.txt` without request or response bodies.
+- Owner, blocker, or approval notes: approval is limited to `GET /health` and `GET /health/ready`; broad live `extended`, live `--hub-group`, and all other hub nodes remain blocked.
+
+### `document-processing-adjacent`
+- Suite lane: current maintainer-accepted provisional GET smoke coverage for `GET /v1/documents/fraud-status/{job_id}` only; future `extended` modeling is dry-run producer/consumer planning, not live execution.
+- Automation Hub status: dependency producer plus dependency consumer in the hub manifest; the producer models a bounded parse setup that yields `fraud_status.job_reference`, and the consumer models the fraud-status top-level status check.
+- Safety class: setup-backed read-only consumer with hidden/internal parse producer prerequisites; related `check-cache`, `crosscheck`, and cache mutation routes stay deferred pending request-shape, fixture, artifact, and owner review.
+- Data sources: fraud-status smoke tests, non-live fraud-status helper tests, Automation Hub manifest and report-writer tests, safe observed staging characterization, `official-openapi.json`, the fraud-status expansion plan, and provisional OpenAPI runtime-drift coverage.
+- Fixture or prerequisite needs: live API/IAP env, protected parse GCS fixture env, `pipeline.async_fraud=true`, tenant-scoped fraud job scheduling, job-store/background-capacity availability, and skip behavior when the producer returns `200` without a usable fraud job id.
+- Artifact policy: no raw fraud-status artifacts by default; producer output must be represented as a sensitive alias, and reports may keep only safe top-level metadata unless separate approval allows deeper fraud result persistence.
+- Owner, blocker, or approval notes: maintainer acceptance is provisional and not owner-confirmed product contract; public-contract promotion, strict deep schemas, protected/default-suite inclusion, auth-negative expansion, artifact policy changes, and live hub execution remain blocked pending owner confirmation and stability evidence.
+
+## Normalized Automation Hub Catalog: Tranche 2
+This tranche normalizes one additional smoke-covered endpoint group. It does not
+move coverage from `smoke` to `extended`, add a hub manifest node, change CI
+behavior, or approve broader live Automation Hub execution.
+
+### `applications-api`
+- Suite lane: current opt-in GET smoke through `tools/run_regression.py --suite smoke`; future `extended` consideration is migration-planning only until parity and approval gates are complete.
+- Automation Hub status: currently covered through the delegated broad GET smoke lane; safe candidate for a future split hub node only after artifact policy, dependency semantics, and rollback expectations are documented and tested.
+- Safety class: safe read-only and setup-backed read-only GET coverage; application/document detail checks depend on identifiers derived from prior list responses, and export-style GETs need artifact caution even when the smoke lane persists no bodies.
+- Data sources: repo-owned GET smoke tests in `tests/endpoints/get_smoke/test_bls_api.py` and `test_bls_api_details.py`, shared smoke helper skip semantics, runner and command docs, endpoint inventory decisions, live smoke characterization recorded in this inventory, and `official-openapi.json` as inventory input only.
+- Fixture or prerequisite needs: live API/IAP env, tenant/API auth, usable `applicationId` from `/api/v1/applications/`, usable document id from `/api/v1/applications/{application_id}/documents`, and `format=json` for the canonical applications export smoke path; no fixture-registry dependency is implied.
+- Artifact policy: current smoke coverage writes no artifacts and should not persist raw application, document, page, activity, or export response bodies; future hub evidence should keep metadata, status, timing, safe dependency aliases, skip reasons, and rerun selectors unless owner-approved body retention exists.
+- Owner, blocker, or approval notes: duplicate alias routes remain excluded, setup-backed detail tests may skip only for missing list-derived prerequisites, and no owner confirmation currently promotes this group into protected/default coverage or live `extended` execution.
+
+## Normalized Automation Hub Catalog: Tranche 3
+This tranche normalizes one additional smoke-covered endpoint group. It does not
+move coverage from `smoke` to `extended`, add a hub manifest node, change CI
+behavior, or approve broader live Automation Hub execution.
+
+### `qa`
+- Suite lane: current opt-in GET smoke through `tools/run_regression.py --suite smoke`; future `extended` consideration is migration-planning only until parity and approval gates are complete.
+- Automation Hub status: currently covered through the delegated broad GET smoke lane; safe candidate for a future split hub node only after queue-derived dependency behavior, artifact policy, and rollback expectations are documented and tested.
+- Safety class: safe read-only and setup-backed read-only GET coverage for QA API JSON endpoints; the `/qa` UI surface remains excluded and is not an API smoke or hub target.
+- Data sources: repo-owned GET smoke tests in `tests/endpoints/get_smoke/test_qa.py` and `test_qa_details.py`, shared smoke helper skip semantics, runner and command docs, endpoint inventory decisions, live smoke characterization recorded in this inventory, and `official-openapi.json` as inventory input only.
+- Fixture or prerequisite needs: live API/IAP env, tenant/API auth, usable QA queue data from `/qa/api/v1/queue`, a queue-derived correlation identifier for `/qa/api/v1/requests/{correlation_id}`, and a queue-derived correlation identifier that returns `200` for `/qa/api/v1/reviews/{correlation_id}`; no fixture-registry dependency is implied.
+- Artifact policy: current smoke coverage writes no artifacts and should not persist raw queue, review, request, report, threshold, export, or export-preview response bodies; future hub evidence should keep metadata, status, timing, safe dependency aliases, skip reasons, and rerun selectors unless owner-approved body retention exists.
+- Owner, blocker, or approval notes: setup-backed detail tests may skip only for missing queue-derived prerequisites, review-detail candidate `404` responses are candidate-selection misses rather than covered endpoint success, and no owner confirmation currently promotes this group into protected/default coverage or live `extended` execution.
+
+## Normalized Automation Hub Catalog: Tranche 4
+This tranche normalizes one additional smoke-covered endpoint group. It does not
+move coverage from `smoke` to `extended`, add a hub manifest node, change CI
+behavior, or approve broader live Automation Hub execution.
+
+### `parser-studio`
+- Suite lane: current opt-in GET smoke through `tools/run_regression.py --suite smoke`; future `extended` consideration is migration-planning only until parity and approval gates are complete.
+- Automation Hub status: currently covered through the delegated broad GET smoke lane; safe candidate for a future split hub node only after document-type, prompt-version, tenant-key dependency behavior, artifact policy, and rollback expectations are documented and tested.
+- Safety class: safe read-only and setup-backed read-only GET coverage for current Parser Studio API JSON endpoints; legacy unversioned aliases, `/parser_studio`, and `/parser_studio/auth/login` remain excluded.
+- Data sources: repo-owned GET smoke tests in `tests/endpoints/get_smoke/test_parser_studio.py` and `test_parser_studio_details.py`, shared smoke helper skip semantics, runner and command docs, endpoint inventory decisions, live smoke characterization recorded in this inventory, and `official-openapi.json` as inventory input only.
+- Fixture or prerequisite needs: live API/IAP env, tenant/API auth, active `document_type` from `/parser_studio/api/v1/document-types`, a usable `version_id` from `/parser_studio/api/v1/document-types/{doc_type}/prompt/versions`, and a tenant `api_key` from `/parser_studio/api/v1/tenants`; no fixture-registry dependency is implied.
+- Artifact policy: current smoke coverage writes no artifacts and should not persist raw document-type, prompt, audit, tenant, fraud-threshold, or configuration response bodies; future hub evidence should keep metadata, status, timing, safe dependency aliases, skip reasons, and rerun selectors unless owner-approved body retention exists.
+- Owner, blocker, or approval notes: setup-backed detail tests may skip only for missing active document types, prompt version references, or tenant API keys; no owner confirmation currently promotes this group into protected/default coverage or live `extended` execution.
+
+## Normalized Automation Hub Catalog: Tranche 5
+This tranche normalizes one mixed, partially covered endpoint group. It does not
+move coverage from `smoke` to `extended`, add a hub manifest node, change CI
+behavior, or approve broader live Automation Hub execution.
+
+### `other-service-surfaces`
+- Suite lane: current opt-in GET smoke through `tools/run_regression.py --suite smoke` for the selected gateway health, benchmark, and utility list/detail subset only; future `extended` consideration is migration-planning only until parity and approval gates are complete.
+- Automation Hub status: partially covered through the delegated broad GET smoke lane; any future split hub node needs scope review that separates covered read-only/status endpoints from storage, mutation, legacy, debug, and owner-unconfirmed surfaces before live execution is considered.
+- Safety class: mixed. Covered smoke endpoints are safe read-only or setup-backed read-only GET checks for `/ai-gateway/health/gateway-circuit-breakers`, `/api/v1/benchmark/jobs`, `/api/v1/benchmark/{job_id}/status`, `/api/v1/benchmark/{job_id}/result`, `/api/v1/benchmark/{job_id}/preview`, and `/api/v1/pii-cleanup/runs`. Gateway S3 list/download/presigned-url routes, legacy AI shortcut routes, debug routes, POST/DELETE gateway/application/benchmark/PII cleanup routes, and other mixed utility surfaces remain deferred, excluded, or future workflow candidates until explicitly classified.
+- Data sources: repo-owned GET smoke tests in `tests/endpoints/get_smoke/test_health.py`, `test_bls_api.py`, and `test_bls_api_details.py`, shared smoke helper skip semantics, runner and command docs, endpoint inventory decisions, OpenAPI runtime-drift classification notes, live smoke characterization recorded in this inventory, and `official-openapi.json` as inventory input only.
+- Fixture or prerequisite needs: live API/IAP env, tenant/API auth, and a usable `job_id` from `/api/v1/benchmark/jobs` for benchmark detail checks; no fixture-registry dependency is implied. Deferred storage and mutation surfaces need owner-approved request inputs, setup data, cleanup or rollback rules, and artifact policy before any live automation.
+- Artifact policy: current smoke coverage writes no artifacts and should not persist raw gateway, benchmark, PII cleanup, storage, file-path, or utility response bodies; future hub evidence should keep metadata, status, timing, safe dependency aliases, skip reasons, and rerun selectors unless owner-approved body retention exists.
+- Owner, blocker, or approval notes: `/ai-gateway/s3/s3/list` remains blocked by current status/setup behavior, S3 download and presigned-url routes require file-path identifiers plus storage/artifact review, debug routes stay excluded, and mutation/stateful routes belong only in a future blocked-by-default `workflow` lane after owner approval and safety gates. No owner confirmation currently promotes this mixed group into protected/default coverage or live `extended` execution.
+
 ## Current Coverage Notes
 - `official-openapi.json` currently exposes 218 paths.
 - The current repo's meaningful live coverage now includes `/v1/documents/parse`, `/v1/documents/batch`, and the opt-in GET smoke lane.
