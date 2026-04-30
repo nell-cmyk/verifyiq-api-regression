@@ -93,8 +93,16 @@ def test_synthetic_report_writer_filters_hub_group(tmp_path) -> None:
 
     payload = _read_payload(paths.run_dir)
     assert payload["selector"] == {"type": "hub-group", "value": "get-smoke"}
-    assert payload["selected_nodes"] == ["get-smoke.health.core", "get-smoke.safe-read-only"]
-    assert payload["dependency_order"] == ["get-smoke.health.core", "get-smoke.safe-read-only"]
+    assert payload["selected_nodes"] == [
+        "get-smoke.health.core",
+        "get-smoke.health.ready",
+        "get-smoke.safe-read-only",
+    ]
+    assert payload["dependency_order"] == [
+        "get-smoke.health.core",
+        "get-smoke.health.ready",
+        "get-smoke.safe-read-only",
+    ]
     assert payload["node_plans"][0]["inclusion"] == "selected endpoint-group node"
 
 
@@ -147,6 +155,45 @@ def test_live_report_writer_emits_metadata_only_health_result(tmp_path) -> None:
     assert "do not persist" not in raw_json
     assert "secret-cookie" not in raw_json
     assert "raw-id" not in raw_json
+
+
+def test_live_report_writer_emits_metadata_only_readiness_result(tmp_path) -> None:
+    paths = report_writer.write_live_report(
+        output_root=tmp_path,
+        run_id="unit-live-ready",
+        endpoint_result={
+            "node_id": "get-smoke.health.ready",
+            "endpoint_label": "GET /health/ready",
+            "method": "GET",
+            "path": "/health/ready",
+            "status_code": 200,
+            "expected_status_code": 200,
+            "duration_ms": 14.0,
+            "outcome": "passed",
+            "safe_response_headers": {
+                "content-type": "application/json",
+                "authorization": "ready-secret-auth-value",
+                "set-cookie": "ready-secret-cookie-value",
+            },
+            "started_at": "2026-04-30T00:00:00Z",
+            "completed_at": "2026-04-30T00:00:01Z",
+            "response_body": {"raw": "readiness body should not be persisted"},
+        },
+    )
+
+    payload = _read_payload(paths.run_dir)
+    assert payload["selector"] == {"type": "hub-node", "value": "get-smoke.health.ready"}
+    assert payload["selected_nodes"] == ["get-smoke.health.ready"]
+    assert payload["node_result_summaries"][0]["endpoint_label"] == "GET /health/ready"
+    assert payload["node_result_summaries"][0]["path"] == "/health/ready"
+    assert payload["rerun_selectors"] == {
+        "get-smoke.health.ready": "./.venv/bin/python tools/run_regression.py --suite extended --hub-node get-smoke.health.ready"
+    }
+    assert payload["safe_response_metadata"][0]["headers"] == {"content-type": "application/json"}
+    raw_json = paths.json_path.read_text(encoding="utf-8")
+    assert "readiness body should not be persisted" not in raw_json
+    assert "ready-secret-auth-value" not in raw_json
+    assert "ready-secret-cookie-value" not in raw_json
 
 
 def test_synthetic_report_writer_redacts_or_excludes_sensitive_metadata(tmp_path) -> None:

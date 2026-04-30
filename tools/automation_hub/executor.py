@@ -14,11 +14,33 @@ from tools.automation_hub.report_writer import HubReportPaths, write_live_report
 
 
 HEALTH_CORE_NODE_ID = "get-smoke.health.core"
+HEALTH_READY_NODE_ID = "get-smoke.health.ready"
+APPROVED_HEALTH_NODE_IDS = (HEALTH_CORE_NODE_ID, HEALTH_READY_NODE_ID)
 HEALTH_METHOD = "GET"
-HEALTH_PATH = "/health"
-HEALTH_ENDPOINT_LABEL = "GET /health"
 HEALTH_TIMEOUT_SECS = 30.0
 EXPECTED_HEALTH_STATUS_CODE = 200
+
+
+@dataclass(frozen=True)
+class HealthEndpointSpec:
+    node_id: str
+    path: str
+    endpoint_label: str
+    expected_status_code: int = EXPECTED_HEALTH_STATUS_CODE
+
+
+HEALTH_ENDPOINTS: Mapping[str, HealthEndpointSpec] = {
+    HEALTH_CORE_NODE_ID: HealthEndpointSpec(
+        node_id=HEALTH_CORE_NODE_ID,
+        path="/health",
+        endpoint_label="GET /health",
+    ),
+    HEALTH_READY_NODE_ID: HealthEndpointSpec(
+        node_id=HEALTH_READY_NODE_ID,
+        path="/health/ready",
+        endpoint_label="GET /health/ready",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -40,12 +62,13 @@ def execute_approved_live_node(
 
     if node_id not in APPROVED_LIVE_NODE_IDS:
         raise ValueError(f"Hub node is not approved for live execution: {node_id}")
-    if node_id != HEALTH_CORE_NODE_ID:
+    spec = HEALTH_ENDPOINTS.get(node_id)
+    if spec is None:
         raise ValueError(f"No executor is implemented for approved hub node: {node_id}")
 
     client = client_factory() if client_factory is not None else _default_client_factory()
     try:
-        endpoint_result = _execute_health_core(client)
+        endpoint_result = _execute_health_node(client, spec)
     finally:
         close = getattr(client, "close", None)
         if callable(close):
@@ -70,7 +93,7 @@ def _default_client_factory() -> Any:
     return make_client(timeout=HEALTH_TIMEOUT_SECS)
 
 
-def _execute_health_core(client: Any) -> dict[str, Any]:
+def _execute_health_node(client: Any, spec: HealthEndpointSpec) -> dict[str, Any]:
     started_at = _utc_now()
     start = perf_counter()
     status_code: int | None = None
@@ -80,13 +103,13 @@ def _execute_health_core(client: Any) -> dict[str, Any]:
     error_type = ""
 
     try:
-        response = client.get(HEALTH_PATH, timeout=HEALTH_TIMEOUT_SECS)
+        response = client.get(spec.path, timeout=HEALTH_TIMEOUT_SECS)
     except httpx.RequestError as exc:
         error_type = type(exc).__name__
     else:
         status_code = response.status_code
         safe_response_headers = _allowlisted_response_headers(response.headers)
-        if status_code == EXPECTED_HEALTH_STATUS_CODE:
+        if status_code == spec.expected_status_code:
             outcome = "passed"
             failure_type = ""
         else:
@@ -95,12 +118,12 @@ def _execute_health_core(client: Any) -> dict[str, Any]:
 
     duration_ms = round((perf_counter() - start) * 1000, 3)
     return {
-        "node_id": HEALTH_CORE_NODE_ID,
-        "endpoint_label": HEALTH_ENDPOINT_LABEL,
+        "node_id": spec.node_id,
+        "endpoint_label": spec.endpoint_label,
         "method": HEALTH_METHOD,
-        "path": HEALTH_PATH,
+        "path": spec.path,
         "status_code": status_code,
-        "expected_status_code": EXPECTED_HEALTH_STATUS_CODE,
+        "expected_status_code": spec.expected_status_code,
         "duration_ms": duration_ms,
         "outcome": outcome,
         "safe_response_headers": safe_response_headers,

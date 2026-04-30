@@ -40,7 +40,10 @@ EXECUTION_DRY_RUN_ONLY = "future hub dry-run only"
 EXECUTION_NOT_EXECUTABLE = "not executable pending audit or approval"
 EXECUTION_LIVE_APPROVED = "approved live hub execution"
 
-APPROVED_LIVE_NODE_IDS = ("get-smoke.health.core",)
+APPROVED_LIVE_NODE_IDS = ("get-smoke.health.core", "get-smoke.health.ready")
+APPROVED_LIVE_SELECTOR_HINT = (
+    "--hub-node get-smoke.health.core or --hub-node get-smoke.health.ready"
+)
 
 
 class ManifestValidationError(ValueError):
@@ -169,7 +172,31 @@ DEFAULT_HUB_MANIFEST = HubManifest(
             rerun_selector="./.venv/bin/python tools/run_regression.py --suite extended --hub-node get-smoke.health.core",
             notes=(
                 "First approved live Automation Hub node; limited to GET /health only.",
-                "This node does not include /health/live, /health/ready, /health/detailed, /health/startup, or health-like routes in other groups.",
+                "This node does not include /health/ready, /health/live, /health/detailed, /health/startup, or health-like routes in other groups.",
+            ),
+        ),
+        HubNode(
+            node_id="get-smoke.health.ready",
+            endpoint_group="get-smoke",
+            endpoint_label="GET /health/ready",
+            status=STATUS_CURRENTLY_COVERED,
+            dependencies=(),
+            produces=(
+                NamedOutput(
+                    name="health.ready_status_signal",
+                    description="Status and safe metadata signal from the readiness probe endpoint.",
+                ),
+            ),
+            consumes=(),
+            artifact_policy=metadata_only_policy(
+                "Live readiness-node reports persist metadata only: status, timing, outcome, and content-type."
+            ),
+            execution_availability=EXECUTION_LIVE_APPROVED,
+            rerun_selector="./.venv/bin/python tools/run_regression.py --suite extended --hub-node get-smoke.health.ready",
+            notes=(
+                "Second approved live Automation Hub health node; limited to GET /health/ready only.",
+                "Readiness is first-party health-tagged, has no path parameters or request body, and response bodies are not persisted.",
+                "This node does not include /health/live, /health/detailed, /health/startup, or health-like routes in other groups.",
             ),
         ),
         HubNode(
@@ -351,7 +378,7 @@ def render_extended_dry_run(*, hub_node: str = "", hub_group: str = "") -> str:
         lines.append(f"Selection scope: {selection.scope_label}.")
     lines.append("Description: Planned Automation Hub dependency graph preview.")
     lines.append(
-        "Live execution: approved only for --hub-node get-smoke.health.core; "
+        f"Live execution: approved only for {APPROVED_LIVE_SELECTOR_HINT}; "
         "this dry-run performs no endpoint calls."
     )
     lines.append("")
@@ -392,7 +419,10 @@ def render_extended_dry_run(*, hub_node: str = "", hub_group: str = "") -> str:
     lines.append("")
     lines.append("Notes:")
     lines.append("- this is an endpoint-group oriented plan, not a path-by-path coverage matrix")
-    lines.append("- get-smoke.health.core is the only approved live hub node and represents GET /health only")
+    lines.append(
+        "- get-smoke.health.core and get-smoke.health.ready are the only approved live hub nodes; "
+        "they represent GET /health and GET /health/ready only"
+    )
     lines.append("- legacy, unsafe, admin, destructive, internal/debug, storage-risk, artifact-risk, auth-blocked, owner-unconfirmed, setup-dependent, and unknown groups remain outside live hub scope until approved")
     return "\n".join(lines) + "\n"
 
