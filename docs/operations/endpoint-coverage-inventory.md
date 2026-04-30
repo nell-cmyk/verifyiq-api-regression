@@ -158,6 +158,21 @@ execution.
 - Artifact policy: current monitoring smoke coverage writes no artifacts and should not persist raw monitoring, request, golden-dataset, ground-truth, drift, export, GCS category, GCS object, or file response bodies. Future hub evidence should keep metadata, status, timing, safe dependency aliases, skip reasons, and rerun selectors unless owner-approved body retention exists. The provisional OpenAPI runtime-drift comparison for `GET /monitoring/api/v1/golden-dataset/gcs/types` covers only the top-level `types` array shape; concrete category values and child GCS endpoint schemas remain loose.
 - Owner, blocker, or approval notes: `/monitoring/api/v1/providers` remains blocked because current repo evidence has not found a legitimate `200` path. `/monitoring/api/v1/golden-dataset/export` remains deferred pending allowed format, fixture/filter strategy, sensitivity boundary, and artifact/output policy review. GCS child endpoints and preview routes carry storage and sensitive-data risk even when smoke persists no bodies. Mutating or stateful monitoring routes, including cleanup, drift run/scheduled-run/trigger-run, drift event acknowledge/resolve, drift settings or suppression-rule mutation, golden-dataset create/update/delete/evaluate/evaluate-live/benchmark/stream, GCS import/imported delete, ground-truth OCR/upload/export/review actions, request add-to-golden/retest/mark-reviewed/field/QA-review mutation, and related delete routes, remain blocked, future `workflow` candidates, or owner-confirmation-needed before any live automation. No owner confirmation currently promotes this group into protected/default coverage or live `extended` execution.
 
+## Normalized Automation Hub Catalog: Tranche 7
+This tranche normalizes one safety-blocked endpoint group. It does not move
+coverage from `smoke` to `extended`, add a hub manifest node, change runner
+behavior, change CI behavior, approve positive admin smoke expansion, or approve
+any live Automation Hub execution.
+
+### `admin`
+- Suite lane: blocked/deferred; no positive admin smoke expansion. Current narrow smoke evidence is limited to the existing `/v1/admin/cache/health` expected-`403` guard and the `/api/v1/admin/health` health-like `200` check through the health group.
+- Automation Hub status: blocked/deferred; no manifest node, no live execution, and no `extended` migration candidate until owner approval and safety gates exist.
+- Safety class: high-risk/admin mixed surface. Cache health/status routes expose operational state, cache delete routes mutate cache entries or tenant cache, and truncate routes are destructive data-deletion operations.
+- Data sources: admin group inventory, expected-status and health GET smoke tests, Automation Hub manifest exclusions and approved health-node list, runner/command docs, live smoke characterization recorded in this inventory, and `official-openapi.json` as inventory input only.
+- Fixture or prerequisite needs: none approved. Any future positive admin coverage would need owner-approved admin authentication, target environment, tenant or cache identifiers, disposable/isolated data where mutation is involved, cleanup or rollback rules, explicit selectors, and CI exclusion or approval.
+- Artifact policy: no raw admin, cache, tenant, metric, key, truncation, or operational response bodies should be persisted. Future evidence should be metadata-only unless owner-approved redaction and retention rules exist.
+- Owner, blocker, or approval notes: `/v1/admin/cache/stats` remains blocked by the admin-password gate; cache delete routes, tenant refresh-cache, document cache invalidation, and BLS truncate routes remain blocked, owner-confirmation-needed, or future `workflow` candidates. The existing health-like and expected-status smoke checks do not approve broader admin smoke coverage, broad `extended`, or live Automation Hub execution.
+
 ## Current Coverage Notes
 - `official-openapi.json` currently exposes 218 paths.
 - The current repo's meaningful live coverage now includes `/v1/documents/parse`, `/v1/documents/batch`, and the opt-in GET smoke lane.
