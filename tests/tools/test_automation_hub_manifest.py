@@ -56,6 +56,13 @@ def test_extended_dry_run_text_documents_dependency_and_reporting_contract() -> 
     assert "required sections: run_metadata, selected_nodes" in text
     assert "Raw response bodies are not automatically persisted" in text
     assert "get-smoke.health.core and get-smoke.health.ready are the only approved live hub nodes" in text
+    assert "get-smoke.health.live" in text
+    assert "label: GET /health/live" in text
+    assert "get-smoke.health.detailed" in text
+    assert "label: GET /health/detailed" in text
+    assert "get-smoke.health.startup" in text
+    assert "label: GET /health/startup" in text
+    assert "Candidate-only health sibling; not approved for live Automation Hub execution." in text
 
 
 def test_default_manifest_marks_only_split_health_nodes_live_capable() -> None:
@@ -73,6 +80,35 @@ def test_default_manifest_marks_only_split_health_nodes_live_capable() -> None:
     )
     assert not manifest.is_live_capable_node("get-smoke.safe-read-only")
     assert not manifest.is_live_capable_node("get-smoke.health.live")
+    assert not manifest.is_live_capable_node("get-smoke.health.detailed")
+    assert not manifest.is_live_capable_node("get-smoke.health.startup")
+
+
+def test_default_manifest_models_health_sibling_candidates_as_dry_run_only() -> None:
+    nodes = {node.node_id: node for node in manifest.DEFAULT_HUB_MANIFEST.ordered_nodes()}
+    candidate_ids = (
+        "get-smoke.health.live",
+        "get-smoke.health.detailed",
+        "get-smoke.health.startup",
+    )
+
+    for node_id in candidate_ids:
+        node = nodes[node_id]
+        assert node.endpoint_group == "get-smoke"
+        assert node.status == manifest.STATUS_SAFE_CANDIDATE
+        assert node.dependencies == ()
+        assert node.consumes == ()
+        assert node.execution_availability == manifest.EXECUTION_DRY_RUN_ONLY
+        assert node.artifact_policy.response_body_policy == "metadata_only"
+        assert node.artifact_policy.raw_body_allowed is False
+        assert node_id not in manifest.live_capable_node_ids()
+
+    assert nodes["get-smoke.health.live"].endpoint_label == "GET /health/live"
+    assert nodes["get-smoke.health.live"].produces[0].name == "health.live_status_signal"
+    assert nodes["get-smoke.health.detailed"].endpoint_label == "GET /health/detailed"
+    assert nodes["get-smoke.health.detailed"].produces[0].name == "health.detailed_status_signal"
+    assert nodes["get-smoke.health.startup"].endpoint_label == "GET /health/startup"
+    assert nodes["get-smoke.health.startup"].produces[0].name == "health.startup_status_signal"
 
 
 def test_node_selector_filters_to_selected_node_without_dependencies() -> None:
@@ -102,10 +138,20 @@ def test_group_selector_filters_to_matching_endpoint_group_nodes() -> None:
     assert [node.node_id for node in selection.nodes] == [
         "get-smoke.health.core",
         "get-smoke.health.ready",
+        "get-smoke.health.live",
+        "get-smoke.health.detailed",
+        "get-smoke.health.startup",
         "get-smoke.safe-read-only",
     ]
     assert selection.selected_node_ids == frozenset(
-        ("get-smoke.health.core", "get-smoke.health.ready", "get-smoke.safe-read-only")
+        (
+            "get-smoke.health.core",
+            "get-smoke.health.ready",
+            "get-smoke.health.live",
+            "get-smoke.health.detailed",
+            "get-smoke.health.startup",
+            "get-smoke.safe-read-only",
+        )
     )
     assert selection.prerequisite_node_ids == frozenset()
 

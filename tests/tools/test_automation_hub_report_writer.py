@@ -2,12 +2,39 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from tools.automation_hub import manifest, report_writer
 from tools.automation_hub.reporting import EXCLUDED_BY_POLICY, REDACTED
 
 
 def _read_payload(run_dir):
     return json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+
+
+HEALTH_SIBLING_CANDIDATES = (
+    (
+        "get-smoke.health.live",
+        "GET /health/live",
+        "health.live_status_signal",
+        "Candidate-only status and safe metadata signal from the liveness probe endpoint.",
+        "./.venv/bin/python tools/run_regression.py --suite smoke --k live",
+    ),
+    (
+        "get-smoke.health.detailed",
+        "GET /health/detailed",
+        "health.detailed_status_signal",
+        "Candidate-only status and safe metadata signal from the detailed health probe endpoint.",
+        "./.venv/bin/python tools/run_regression.py --suite smoke --k detailed",
+    ),
+    (
+        "get-smoke.health.startup",
+        "GET /health/startup",
+        "health.startup_status_signal",
+        "Candidate-only status and safe metadata signal from the startup health probe endpoint.",
+        "./.venv/bin/python tools/run_regression.py --suite smoke --k startup",
+    ),
+)
 
 
 def test_synthetic_report_writer_emits_full_extended_dry_run_report(tmp_path) -> None:
@@ -59,6 +86,68 @@ def test_synthetic_report_writer_filters_hub_node(tmp_path) -> None:
     assert payload["prerequisite_closure"] == []
 
 
+@pytest.mark.parametrize(
+    ("node_id", "endpoint_label", "output_name", "output_description", "rerun_selector"),
+    HEALTH_SIBLING_CANDIDATES,
+)
+def test_synthetic_report_writer_preserves_health_sibling_candidate_metadata(
+    tmp_path,
+    node_id: str,
+    endpoint_label: str,
+    output_name: str,
+    output_description: str,
+    rerun_selector: str,
+) -> None:
+    paths = report_writer.write_synthetic_report(
+        output_root=tmp_path,
+        hub_node=node_id,
+        run_id=f"unit-{node_id.replace('.', '-')}",
+    )
+
+    payload = _read_payload(paths.run_dir)
+    assert payload["selector"] == {"type": "hub-node", "value": node_id}
+    assert payload["selected_nodes"] == [node_id]
+    assert payload["dependency_order"] == [node_id]
+    assert payload["node_result_summaries"] == []
+    assert payload["request_metadata"] == []
+    assert payload["safe_response_metadata"] == []
+    assert payload["node_plans"] == [
+        {
+            "node_id": node_id,
+            "inclusion": "selected node",
+            "endpoint_group": "get-smoke",
+            "endpoint_label": endpoint_label,
+            "status": manifest.STATUS_SAFE_CANDIDATE,
+            "execution_availability": manifest.EXECUTION_DRY_RUN_ONLY,
+            "dependencies": [],
+            "consumes": [],
+            "produces": [
+                {
+                    "name": output_name,
+                    "description": output_description,
+                    "sensitivity": "safe_metadata",
+                }
+            ],
+            "artifact_policy": {
+                "response_body_policy": "metadata_only",
+                "raw_body_persistence": "disallowed",
+                "raw_body_allowed": False,
+                "notes": [
+                    "Candidate health-sibling reports must remain metadata-only and must not persist probe response bodies."
+                ],
+            },
+            "rerun_selector": rerun_selector,
+            "notes": [
+                "Candidate-only health sibling; not approved for live Automation Hub execution.",
+                "Current live fallback remains the opt-in GET smoke lane until smoke-to-extended gates are complete.",
+            ],
+        }
+    ]
+    assert payload["response_body_policy"]["raw_response_bodies_present"] is False
+    assert payload["response_body_policy"]["raw_response_body_persistence"] == "absent"
+    assert payload["rerun_selectors"] == {node_id: rerun_selector}
+
+
 def test_synthetic_report_writer_includes_prerequisite_closure(tmp_path) -> None:
     paths = report_writer.write_synthetic_report(
         output_root=tmp_path,
@@ -96,11 +185,17 @@ def test_synthetic_report_writer_filters_hub_group(tmp_path) -> None:
     assert payload["selected_nodes"] == [
         "get-smoke.health.core",
         "get-smoke.health.ready",
+        "get-smoke.health.live",
+        "get-smoke.health.detailed",
+        "get-smoke.health.startup",
         "get-smoke.safe-read-only",
     ]
     assert payload["dependency_order"] == [
         "get-smoke.health.core",
         "get-smoke.health.ready",
+        "get-smoke.health.live",
+        "get-smoke.health.detailed",
+        "get-smoke.health.startup",
         "get-smoke.safe-read-only",
     ]
     assert payload["node_plans"][0]["inclusion"] == "selected endpoint-group node"
@@ -194,6 +289,44 @@ def test_live_report_writer_emits_metadata_only_readiness_result(tmp_path) -> No
     assert "readiness body should not be persisted" not in raw_json
     assert "ready-secret-auth-value" not in raw_json
     assert "ready-secret-cookie-value" not in raw_json
+
+
+@pytest.mark.parametrize(
+    ("node_id", "endpoint_label", "path"),
+    [
+        ("get-smoke.health.live", "GET /health/live", "/health/live"),
+        ("get-smoke.health.detailed", "GET /health/detailed", "/health/detailed"),
+        ("get-smoke.health.startup", "GET /health/startup", "/health/startup"),
+    ],
+)
+def test_live_report_writer_rejects_health_sibling_candidate_nodes(
+    tmp_path,
+    node_id: str,
+    endpoint_label: str,
+    path: str,
+) -> None:
+    with pytest.raises(ValueError) as exc_info:
+        report_writer.write_live_report(
+            output_root=tmp_path,
+            run_id=f"unit-live-rejected-{node_id.rsplit('.', 1)[-1]}",
+            endpoint_result={
+                "node_id": node_id,
+                "endpoint_label": endpoint_label,
+                "method": "GET",
+                "path": path,
+                "status_code": 200,
+                "expected_status_code": 200,
+                "duration_ms": 3.5,
+                "outcome": "passed",
+                "safe_response_headers": {"content-type": "application/json"},
+                "started_at": "2026-04-30T00:00:00Z",
+                "completed_at": "2026-04-30T00:00:01Z",
+            },
+        )
+
+    assert "not approved for live reporting" in str(exc_info.value)
+    assert node_id in str(exc_info.value)
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_synthetic_report_writer_redacts_or_excludes_sensitive_metadata(tmp_path) -> None:

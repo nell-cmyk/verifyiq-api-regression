@@ -200,6 +200,75 @@ DEFAULT_HUB_MANIFEST = HubManifest(
             ),
         ),
         HubNode(
+            node_id="get-smoke.health.live",
+            endpoint_group="get-smoke",
+            endpoint_label="GET /health/live",
+            status=STATUS_SAFE_CANDIDATE,
+            dependencies=(),
+            produces=(
+                NamedOutput(
+                    name="health.live_status_signal",
+                    description="Candidate-only status and safe metadata signal from the liveness probe endpoint.",
+                ),
+            ),
+            consumes=(),
+            artifact_policy=metadata_only_policy(
+                "Candidate health-sibling reports must remain metadata-only and must not persist probe response bodies."
+            ),
+            execution_availability=EXECUTION_DRY_RUN_ONLY,
+            rerun_selector="./.venv/bin/python tools/run_regression.py --suite smoke --k live",
+            notes=(
+                "Candidate-only health sibling; not approved for live Automation Hub execution.",
+                "Current live fallback remains the opt-in GET smoke lane until smoke-to-extended gates are complete.",
+            ),
+        ),
+        HubNode(
+            node_id="get-smoke.health.detailed",
+            endpoint_group="get-smoke",
+            endpoint_label="GET /health/detailed",
+            status=STATUS_SAFE_CANDIDATE,
+            dependencies=(),
+            produces=(
+                NamedOutput(
+                    name="health.detailed_status_signal",
+                    description="Candidate-only status and safe metadata signal from the detailed health probe endpoint.",
+                ),
+            ),
+            consumes=(),
+            artifact_policy=metadata_only_policy(
+                "Candidate health-sibling reports must remain metadata-only and must not persist probe response bodies."
+            ),
+            execution_availability=EXECUTION_DRY_RUN_ONLY,
+            rerun_selector="./.venv/bin/python tools/run_regression.py --suite smoke --k detailed",
+            notes=(
+                "Candidate-only health sibling; not approved for live Automation Hub execution.",
+                "Current live fallback remains the opt-in GET smoke lane until smoke-to-extended gates are complete.",
+            ),
+        ),
+        HubNode(
+            node_id="get-smoke.health.startup",
+            endpoint_group="get-smoke",
+            endpoint_label="GET /health/startup",
+            status=STATUS_SAFE_CANDIDATE,
+            dependencies=(),
+            produces=(
+                NamedOutput(
+                    name="health.startup_status_signal",
+                    description="Candidate-only status and safe metadata signal from the startup health probe endpoint.",
+                ),
+            ),
+            consumes=(),
+            artifact_policy=metadata_only_policy(
+                "Candidate health-sibling reports must remain metadata-only and must not persist probe response bodies."
+            ),
+            execution_availability=EXECUTION_DRY_RUN_ONLY,
+            rerun_selector="./.venv/bin/python tools/run_regression.py --suite smoke --k startup",
+            notes=(
+                "Candidate-only health sibling; not approved for live Automation Hub execution.",
+                "Current live fallback remains the opt-in GET smoke lane until smoke-to-extended gates are complete.",
+            ),
+        ),
+        HubNode(
             node_id="get-smoke.safe-read-only",
             endpoint_group="get-smoke",
             endpoint_label="Delegated opt-in safe GET smoke groups outside approved health core",

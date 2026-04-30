@@ -177,6 +177,23 @@ any live Automation Hub execution.
 - Artifact policy: no raw admin, cache, tenant, metric, key, truncation, or operational response bodies should be persisted. Future evidence should be metadata-only unless owner-approved redaction and retention rules exist.
 - Owner, blocker, or approval notes: `/v1/admin/cache/stats` remains blocked by the admin-password gate; cache delete routes, tenant refresh-cache, document cache invalidation, and BLS truncate routes remain blocked, owner-confirmation-needed, or future `workflow` candidates. The existing health-like and expected-status smoke checks do not approve broader admin smoke coverage, broad `extended`, or live Automation Hub execution.
 
+## Smoke-To-Extended Candidate Tranche 1
+This planning tranche defines the first future `extended` candidate slice and
+has non-live candidate proof plus live-boundary rejection proof only. It does
+not move current `smoke` coverage, change live runner behavior, change CI,
+approve live `extended`, approve live `--hub-group`, approve smoke replacement,
+or approve body persistence.
+
+### Top-level health probe siblings
+- Candidate scope: already smoke-covered top-level health probes not already approved as live hub nodes: `GET /health/live`, `GET /health/detailed`, and `GET /health/startup`. This excludes `GET /health` and `GET /health/ready` because they already have explicit approved live hub nodes, and it excludes health-like application/admin/gateway routes, database-pool `401` guards, and admin cache `403` guards.
+- Current smoke coverage source: `tests/endpoints/get_smoke/test_health.py` through `./.venv/bin/python tools/run_regression.py --suite smoke`; current runner and Automation Hub tests prove that `extended` dry-run is non-live and that live execution is approved only for `get-smoke.health.core` and `get-smoke.health.ready`.
+- Current extended status: candidate only and dry-run-only. The hub manifest models `GET /health/live` as `get-smoke.health.live`, `GET /health/detailed` as `get-smoke.health.detailed`, and `GET /health/startup` as `get-smoke.health.startup`; non-live manifest, report-writer, and runner tests specify candidate metadata, dry-run selector behavior, and synthetic report payloads. Executor tests prove the candidate nodes are rejected as unapproved live nodes before client creation, report-writer tests prove they cannot produce live Automation Hub reports, and runner tests prove rejected live `--report` attempts do not write hub reports. These nodes are not live-approved Automation Hub nodes.
+- Dependency model: independent status probes with no producer prerequisites, no consumed named outputs, and no raw response-body coupling. The dry-run-only candidate nodes produce only safe status signals: `health.live_status_signal`, `health.detailed_status_signal`, and `health.startup_status_signal`.
+- Skip and failure semantics needed for parity: no setup skip and no missing-prerequisite skip. Match current smoke behavior by failing unexpected status, timeout, or request error, and keep failures independent rather than turning them into dependency skips.
+- Artifact policy and redaction boundary: metadata-only hub evidence limited to node id, method/path label, status code, content-type, timing, outcome, and rerun selector. Do not persist request bodies, response bodies, auth headers, cookies, tokens, tenant/API keys, or health payload details.
+- Rollback/fallback expectation: keep `./.venv/bin/python tools/run_regression.py --suite smoke` as the authoritative live fallback until functional parity, docs parity, artifact behavior review, direct-use audit, rollback path, and maintainer approval are complete. Future `extended` dry-run nodes must be removable without weakening current smoke coverage.
+- Blockers before live promotion, smoke replacement, or CI implementation: obtain maintainer approval for any live selector or smoke replacement; make a separate CI decision before any CI change; preserve metadata-only artifact behavior; keep live `--hub-group` blocked; and keep smoke as rollback/fallback until the migration gates are complete.
+
 ## Current Coverage Notes
 - `official-openapi.json` currently exposes 218 paths.
 - The current repo's meaningful live coverage now includes `/v1/documents/parse`, `/v1/documents/batch`, and the opt-in GET smoke lane.

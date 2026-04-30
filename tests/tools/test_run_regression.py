@@ -39,6 +39,13 @@ def _no_call_runner(*args, **kwargs):
     raise AssertionError("subprocess runner should not have been called")
 
 
+HEALTH_SIBLING_CANDIDATES = (
+    ("get-smoke.health.live", "GET /health/live", "health.live_status_signal"),
+    ("get-smoke.health.detailed", "GET /health/detailed", "health.detailed_status_signal"),
+    ("get-smoke.health.startup", "GET /health/startup", "health.startup_status_signal"),
+)
+
+
 def test_list_exits_zero_and_mentions_core_mappings():
     module = _load_module()
     module._run_command = _no_call_runner
@@ -965,6 +972,13 @@ def test_suite_extended_dry_run_prints_non_live_hub_plan():
         "or --hub-node get-smoke.health.ready"
     ) in stdout
     assert "get-smoke.health.core" in stdout
+    assert "get-smoke.health.live" in stdout
+    assert "label: GET /health/live" in stdout
+    assert "get-smoke.health.detailed" in stdout
+    assert "label: GET /health/detailed" in stdout
+    assert "get-smoke.health.startup" in stdout
+    assert "label: GET /health/startup" in stdout
+    assert "execution availability: future hub dry-run only" in stdout
     assert "parse.protected" in stdout
     assert "document-processing.fraud-status.producer" in stdout
     assert "document-processing.fraud-status.consumer" in stdout
@@ -995,6 +1009,38 @@ def test_suite_extended_hub_node_filters_to_selected_node():
     assert "document-processing.fraud-status.consumer" not in stdout
     assert "Dependency semantics:" in stdout
     assert "Reporting contract scaffold:" in stdout
+    assert "Executing command:" not in stdout
+
+
+@pytest.mark.parametrize(("node_id", "endpoint_label", "output_name"), HEALTH_SIBLING_CANDIDATES)
+def test_suite_extended_hub_node_filters_to_health_sibling_candidate_node(
+    node_id: str,
+    endpoint_label: str,
+    output_name: str,
+):
+    module = _load_module()
+    module._run_command = _no_call_runner
+
+    rc, stdout, stderr = _invoke(
+        module,
+        ["--suite", "extended", "--dry-run", "--hub-node", node_id],
+    )
+
+    assert rc == 0
+    assert stderr == ""
+    assert f"Hub selector: --hub-node {node_id}" in stdout
+    assert f"1. {node_id}" in stdout
+    assert f"label: {endpoint_label}" in stdout
+    assert "status: safe candidate" in stdout
+    assert "execution availability: future hub dry-run only" in stdout
+    assert f"produces: {output_name}" in stdout
+    assert "raw_body_persistence=disallowed" in stdout
+    assert "Candidate-only health sibling; not approved for live Automation Hub execution." in stdout
+    assert "1. get-smoke.health.core" not in stdout
+    assert "1. get-smoke.health.ready" not in stdout
+    assert "2. " not in stdout
+    assert "parse.protected" not in stdout
+    assert "get-smoke.safe-read-only" not in stdout
     assert "Executing command:" not in stdout
 
 
@@ -1076,7 +1122,10 @@ def test_suite_extended_hub_group_filters_to_endpoint_group_nodes():
     assert "Selection scope: endpoint-group nodes plus required prerequisite closure." in stdout
     assert "1. get-smoke.health.core" in stdout
     assert "2. get-smoke.health.ready" in stdout
-    assert "3. get-smoke.safe-read-only" in stdout
+    assert "3. get-smoke.health.live" in stdout
+    assert "4. get-smoke.health.detailed" in stdout
+    assert "5. get-smoke.health.startup" in stdout
+    assert "6. get-smoke.safe-read-only" in stdout
     assert "   inclusion: selected endpoint-group node" in stdout
     assert "endpoint group: get-smoke" in stdout
     assert "parse.protected" not in stdout
@@ -1132,6 +1181,41 @@ def test_suite_extended_report_hub_node_writes_filtered_report(tmp_path: Path):
     assert "Synthetic hub report:" in stdout
 
 
+@pytest.mark.parametrize(("node_id", "endpoint_label", "output_name"), HEALTH_SIBLING_CANDIDATES)
+def test_suite_extended_report_hub_node_writes_health_sibling_candidate_report(
+    tmp_path: Path,
+    node_id: str,
+    endpoint_label: str,
+    output_name: str,
+):
+    module = _load_module()
+    module._run_command = _no_call_runner
+    module.HUB_REPORT_ROOT = tmp_path
+
+    rc, stdout, stderr = _invoke(
+        module,
+        ["--suite", "extended", "--dry-run", "--report", "--hub-node", node_id],
+    )
+
+    assert rc == 0
+    assert stderr == ""
+    latest = tmp_path / "LATEST.txt"
+    payload = json.loads((tmp_path / latest.read_text(encoding="utf-8").strip() / "run.json").read_text(encoding="utf-8"))
+    assert payload["selector"] == {"type": "hub-node", "value": node_id}
+    assert payload["selected_nodes"] == [node_id]
+    assert payload["dependency_order"] == [node_id]
+    assert payload["run_metadata"]["endpoints_executed"] is False
+    assert payload["run_metadata"]["endpoint_call_count"] == 0
+    assert payload["node_result_summaries"] == []
+    assert payload["request_metadata"] == []
+    assert payload["safe_response_metadata"] == []
+    assert payload["node_plans"][0]["endpoint_label"] == endpoint_label
+    assert payload["node_plans"][0]["execution_availability"] == "future hub dry-run only"
+    assert payload["dependency_outputs"][node_id][0]["name"] == output_name
+    assert "Synthetic hub report:" in stdout
+    assert "no endpoints were executed" in stdout
+
+
 def test_suite_extended_report_hub_node_includes_dependency_closure(tmp_path: Path):
     module = _load_module()
     module._run_command = _no_call_runner
@@ -1177,11 +1261,17 @@ def test_suite_extended_report_hub_group_writes_filtered_report(tmp_path: Path):
     assert payload["selected_nodes"] == [
         "get-smoke.health.core",
         "get-smoke.health.ready",
+        "get-smoke.health.live",
+        "get-smoke.health.detailed",
+        "get-smoke.health.startup",
         "get-smoke.safe-read-only",
     ]
     assert payload["dependency_order"] == [
         "get-smoke.health.core",
         "get-smoke.health.ready",
+        "get-smoke.health.live",
+        "get-smoke.health.detailed",
+        "get-smoke.health.startup",
         "get-smoke.safe-read-only",
     ]
     assert "selected endpoint-group node" in stdout
@@ -1211,16 +1301,57 @@ def test_suite_extended_hub_group_live_fails_clearly():
     assert "--hub-node get-smoke.health.core or --hub-node get-smoke.health.ready" in stderr
 
 
-def test_suite_extended_other_hub_node_live_fails_clearly():
+def test_suite_extended_hub_group_live_report_fails_without_writing_report(tmp_path: Path):
+    module = _load_module()
+    module._run_command = _no_call_runner
+    module.HUB_REPORT_ROOT = tmp_path
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--hub-group", "get-smoke", "--report"])
+
+    assert rc == 2
+    assert stdout == ""
+    assert "Live extended Automation Hub execution does not support --hub-group" in stderr
+    assert "--hub-node get-smoke.health.core or --hub-node get-smoke.health.ready" in stderr
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "node_id",
+    [
+        "get-smoke.safe-read-only",
+        "get-smoke.health.live",
+        "get-smoke.health.detailed",
+        "get-smoke.health.startup",
+    ],
+)
+def test_suite_extended_other_hub_node_live_fails_clearly(node_id: str):
     module = _load_module()
     module._run_command = _no_call_runner
 
-    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--hub-node", "get-smoke.safe-read-only"])
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--hub-node", node_id])
 
     assert rc == 2
     assert stdout == ""
     assert "Live extended Automation Hub execution is approved only for explicit health nodes" in stderr
     assert "get-smoke.health.core, get-smoke.health.ready" in stderr
+
+
+@pytest.mark.parametrize("node_id", [candidate[0] for candidate in HEALTH_SIBLING_CANDIDATES])
+def test_suite_extended_health_sibling_live_report_fails_without_writing_report(
+    tmp_path: Path,
+    node_id: str,
+):
+    module = _load_module()
+    module._run_command = _no_call_runner
+    module.HUB_REPORT_ROOT = tmp_path
+
+    rc, stdout, stderr = _invoke(module, ["--suite", "extended", "--hub-node", node_id, "--report"])
+
+    assert rc == 2
+    assert stdout == ""
+    assert "Live extended Automation Hub execution is approved only for explicit health nodes" in stderr
+    assert "get-smoke.health.core, get-smoke.health.ready" in stderr
+    assert list(tmp_path.iterdir()) == []
 
 
 @pytest.mark.parametrize(

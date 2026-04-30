@@ -107,11 +107,26 @@ def test_health_core_executor_records_unexpected_status_without_body(tmp_path) -
     assert "body should not be persisted" not in result.report_paths.json_path.read_text(encoding="utf-8")
 
 
-def test_executor_rejects_unapproved_live_nodes(tmp_path) -> None:
+@pytest.mark.parametrize(
+    "node_id",
+    [
+        "get-smoke.safe-read-only",
+        "get-smoke.health.live",
+        "get-smoke.health.detailed",
+        "get-smoke.health.startup",
+    ],
+)
+def test_executor_rejects_unapproved_live_nodes_before_creating_client(
+    tmp_path,
+    node_id: str,
+) -> None:
+    def unexpected_client_factory() -> FakeHealthClient:
+        raise AssertionError(f"client factory must not be called for unapproved node {node_id}")
+
     with pytest.raises(ValueError, match="not approved for live execution"):
         executor.execute_approved_live_node(
-            node_id="get-smoke.safe-read-only",
+            node_id=node_id,
             output_root=tmp_path,
-            client_factory=lambda: FakeHealthClient(_response()),
+            client_factory=unexpected_client_factory,
             run_id="unit-rejected",
         )

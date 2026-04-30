@@ -150,10 +150,10 @@ Tranche sizing for documentation-only hub planning:
 - Stop at the first unsupported or approval-dependent boundary instead of padding the pass with speculative readiness language.
 
 Next-tranche sequence:
-1. Normalize the endpoint catalog in coherent passes with suite lane, hub status, safety class, data sources, fixture/prerequisite needs, artifact policy, and owner/blocker notes.
-2. Identify smoke-covered read-only candidates for `extended` without removing smoke coverage.
-3. Prove dry-run, selector, dependency, skip, and report behavior through non-live tests.
-4. Promote one narrow live-safe tranche at a time behind explicit selectors and a documented rollback path.
+1. Keep endpoint catalog normalization current as new evidence or endpoint groups appear; the current endpoint-group catalog is normalized.
+2. Identify the next smoke-covered read-only candidate slice for `extended` without moving current `smoke` coverage or starting a new endpoint tranche by default.
+3. Prove dry-run, selector, dependency, skip, blocked-live, and report behavior through non-live tests only for documented candidate slices.
+4. Promote one narrow live-safe tranche at a time behind explicit selectors only after approval and a documented rollback path.
 5. Leave `workflow` deferred until its blocked-by-default gates are approved.
 
 Automatic `Next Prompt` continuity:

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from tools.automation_hub.manifest import (
+    APPROVED_LIVE_NODE_IDS,
     DEFAULT_HUB_MANIFEST,
     HubNode,
     HubNodeSelection,
@@ -199,6 +200,8 @@ def build_live_report_payload(
     selection = DEFAULT_HUB_MANIFEST.select_nodes(hub_node=node_id)
     node_by_id = {node.node_id: node for node in selection.nodes}
     node = node_by_id[node_id]
+    if node.node_id not in APPROVED_LIVE_NODE_IDS:
+        raise ValueError(f"Hub node is not approved for live reporting: {node.node_id}")
     contract = default_evidence_contract()
     status_code = endpoint_result.get("status_code")
     duration_ms = endpoint_result.get("duration_ms")
